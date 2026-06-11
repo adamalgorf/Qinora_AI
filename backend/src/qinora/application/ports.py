@@ -8,6 +8,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentRecord,
 )
+from qinora.domain import TransportRequestInput
 
 
 class WebhookEventRepository(Protocol):
@@ -52,4 +53,17 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_agent_logs(self) -> list[AgentLogRecord]:
+        pass
+
+
+class RequestWriteRepository(Protocol):
+    async def create_transport_request(
+        self,
+        *,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
         pass

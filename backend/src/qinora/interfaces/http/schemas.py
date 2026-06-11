@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -50,6 +52,32 @@ class RequestListItem(BaseModel):
     mode: str
     status: str
     weight_kg: float
+
+
+class CargoLinePayload(BaseModel):
+    description: str = Field(min_length=1)
+    quantity: int | None = None
+    weight_kg: float | None = None
+    length_cm: float | None = None
+    width_cm: float | None = None
+    height_cm: float | None = None
+
+
+class CreateRequestPayload(BaseModel):
+    customer: str = Field(min_length=1)
+    origin: str = Field(min_length=1)
+    destination: str = Field(min_length=1)
+    mode: str
+    cargo: list[CargoLinePayload] = Field(min_length=1)
+    loading_time: datetime | None = None
+    unloading_time: datetime | None = None
+
+
+class CreateRequestResponse(BaseModel):
+    request: RequestListItem
+    complete: bool
+    review_reason: str | None
+    adr_un_numbers: list[str]
 
 
 class QuoteListItem(BaseModel):

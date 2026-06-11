@@ -39,6 +39,30 @@ export type RequestListItem = {
   weight_kg: number;
 };
 
+export type CreateRequestPayload = {
+  customer: string;
+  origin: string;
+  destination: string;
+  mode: string;
+  loading_time?: string;
+  unloading_time?: string;
+  cargo: Array<{
+    description: string;
+    quantity?: number;
+    weight_kg?: number;
+    length_cm?: number;
+    width_cm?: number;
+    height_cm?: number;
+  }>;
+};
+
+export type CreateRequestResponse = {
+  request: RequestListItem;
+  complete: boolean;
+  review_reason: string | null;
+  adr_un_numbers: string[];
+};
+
 export type QuoteListItem = {
   id: string;
   status: string;
@@ -93,4 +117,21 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export async function apiPost<TResponse, TPayload>(path: string, payload: TPayload): Promise<TResponse> {
+  const response = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw (await response.json()) as ApiProblem;
+  }
+
+  return (await response.json()) as TResponse;
 }

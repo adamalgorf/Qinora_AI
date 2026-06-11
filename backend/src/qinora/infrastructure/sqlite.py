@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentRecord,
 )
+from qinora.domain import TransportRequestInput
 
 
 class SQLiteDatabase:
@@ -52,7 +53,21 @@ class SQLiteDatabase:
                   lane text not null,
                   mode text not null,
                   status text not null,
-                  weight_kg real not null
+                  weight_kg real not null,
+                  review_reason text
+                );
+
+                create table if not exists request_cargo (
+                  id text primary key,
+                  request_id text not null,
+                  description text not null,
+                  quantity integer,
+                  weight_kg real,
+                  length_cm real,
+                  width_cm real,
+                  height_cm real,
+                  hazardous integer not null default 0,
+                  un_number text
                 );
 
                 create table if not exists quotes (
@@ -96,6 +111,12 @@ class SQLiteDatabase:
                   created_at text not null default current_timestamp
                 );
                 """
+            )
+            _add_column_if_missing(
+                connection,
+                "transport_requests",
+                "review_reason",
+                "text",
             )
             self._seed(connection)
 
@@ -413,9 +434,102 @@ class SQLiteOperationalReadRepository:
             return list(connection.execute(query, parameters).fetchall())
 
 
+class SQLiteRequestWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_transport_request(
+        self,
+        *,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
+        request_id = str(uuid4())
+
+        with self._database.connect() as connection:
+            public_id = _next_public_id(connection, "transport_requests", "REQ")
+            total_weight = sum(line.weight_kg or 0 for line in request.cargo)
+            connection.execute(
+                """
+                insert into transport_requests
+                  (id, public_id, customer, lane, mode, status, weight_kg, review_reason)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    request_id,
+                    public_id,
+                    customer,
+                    lane,
+                    request.mode.value,
+                    status,
+                    total_weight,
+                    review_reason,
+                ),
+            )
+
+            connection.executemany(
+                """
+                insert into request_cargo
+                  (
+                    id, request_id, description, quantity, weight_kg,
+                    length_cm, width_cm, height_cm, hazardous, un_number
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        str(uuid4()),
+                        request_id,
+                        line.description,
+                        line.quantity,
+                        line.weight_kg,
+                        line.length_cm,
+                        line.width_cm,
+                        line.height_cm,
+                        0,
+                        None,
+                    )
+                    for line in request.cargo
+                ],
+            )
+
+        return RequestRecord(
+            id=request_id,
+            public_id=public_id,
+            customer=customer,
+            lane=lane,
+            mode=request.mode.value,
+            status=status,
+            weight_kg=total_weight,
+        )
+
+
 def _count(connection: sqlite3.Connection, table: str) -> int:
     row = connection.execute(f"select count(*) as count from {table}").fetchone()
     return int(row["count"])
+
+
+def _next_public_id(connection: sqlite3.Connection, table: str, prefix: str) -> str:
+    row = connection.execute(f"select count(*) as count from {table}").fetchone()
+    sequence = int(row["count"]) + 1
+    return f"{prefix}-{sequence:04d}"
+
+
+def _add_column_if_missing(
+    connection: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute(f"pragma table_info({table})").fetchall()
+    }
+    if column not in columns:
+        connection.execute(f"alter table {table} add column {column} {definition}")
 
 
 def _split_csv(value: str) -> tuple[str, ...]:

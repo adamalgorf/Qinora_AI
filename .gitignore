@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 *.tsbuildinfo
+*.sqlite3
+backend/data/
 .env
 .env.*
 !.env.example

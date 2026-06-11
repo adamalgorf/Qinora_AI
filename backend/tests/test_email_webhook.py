@@ -77,6 +77,54 @@ def test_core_module_endpoints_return_seeded_records(client: TestClient) -> None
     assert client.get("/agents/logs").json()[0]["agent_name"] == "Nora Intake"
 
 
+def test_create_request_persists_complete_request(client: TestClient) -> None:
+    response = client.post(
+        "/requests",
+        json={
+            "customer": "Scania",
+            "origin": "Sodertalje",
+            "destination": "Berlin",
+            "mode": "ltl",
+            "loading_time": "2026-06-11T10:00:00Z",
+            "cargo": [
+                {
+                    "description": "Pallets",
+                    "quantity": 2,
+                    "weight_kg": 440,
+                    "length_cm": 120,
+                    "width_cm": 80,
+                    "height_cm": 150,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["complete"] is True
+    assert body["request"]["status"] == "parsed"
+    assert body["request"]["customer"] == "Scania"
+
+
+def test_create_request_marks_incomplete_request_for_clarification(client: TestClient) -> None:
+    response = client.post(
+        "/requests",
+        json={
+            "customer": "Scania",
+            "origin": "Sodertalje",
+            "destination": "Berlin",
+            "mode": "ltl",
+            "cargo": [{"description": "Paint UN1263"}],
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["complete"] is False
+    assert body["request"]["status"] == "needs_clarification"
+    assert body["adr_un_numbers"] == ["UN1263"]
+
+
 def test_carrier_intelligence_endpoint_runs_domain_pipeline(client: TestClient) -> None:
     response = client.post(
         "/carriers/intelligence",

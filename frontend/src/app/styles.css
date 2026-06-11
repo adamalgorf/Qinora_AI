@@ -258,6 +258,35 @@ h1 {
   overflow-x: auto;
 }
 
+.request-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.request-form input,
+.request-form select {
+  min-height: 40px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background) / 0.72);
+  color: hsl(var(--foreground));
+  padding: 0 12px;
+}
+
+.request-form input:focus,
+.request-form select:focus {
+  border-color: hsl(var(--ring));
+  outline: 3px solid hsl(var(--ring) / 0.18);
+}
+
+.form-feedback {
+  margin: -8px 0 18px;
+  color: hsl(45 93% 68%);
+  font-size: 0.9rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -348,10 +377,18 @@ tbody tr:hover {
   .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .request-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
   .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .request-form {
     grid-template-columns: 1fr;
   }
 }

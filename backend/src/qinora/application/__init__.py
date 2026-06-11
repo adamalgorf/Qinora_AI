@@ -5,7 +5,13 @@ from qinora.application.ports import (
     AgentDispatcher,
     InboundEmailRepository,
     OperationalReadRepository,
+    RequestWriteRepository,
     WebhookEventRepository,
+)
+from qinora.application.request_intake import (
+    CargoLineCommand,
+    CreateRequestCommand,
+    CreateRequestUseCase,
 )
 
 __all__ = [
@@ -18,7 +24,11 @@ __all__ = [
     "OperationalQueries",
     "OperationalReadRepository",
     "CarrierIntelligenceCommand",
+    "CargoLineCommand",
+    "CreateRequestCommand",
+    "CreateRequestUseCase",
     "Role",
+    "RequestWriteRepository",
     "WebhookEventRepository",
     "require_any_role",
 ]
