@@ -7,6 +7,7 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
     InboxRecord,
+    InvoiceRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentRecord,
@@ -116,6 +117,19 @@ class SQLiteDatabase:
                   step text not null,
                   entity_id text not null,
                   confidence real not null,
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists invoices (
+                  id text primary key,
+                  public_id text not null unique,
+                  shipment_id text not null,
+                  quote_id text not null,
+                  invoice_amount real not null,
+                  quote_amount real not null,
+                  currency text not null,
+                  status text not null,
+                  discrepancy_amount real not null,
                   created_at text not null default current_timestamp
                 );
                 """
@@ -382,6 +396,20 @@ class SQLiteOperationalReadRepository:
                 """
                 select id, public_id, quote_id, carrier_id, lane, status, eta
                 from shipments
+                order by public_id
+                """
+            )
+        ]
+
+    async def list_invoices(self) -> list[InvoiceRecord]:
+        return [
+            InvoiceRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select
+                  id, public_id, shipment_id, quote_id, invoice_amount, quote_amount,
+                  currency, status, discrepancy_amount
+                from invoices
                 order by public_id
                 """
             )
@@ -677,6 +705,84 @@ class SQLiteShipmentWriteRepository:
             lane=row["lane"],
             status=status,
             eta=row["eta"],
+        )
+
+
+class SQLiteInvoiceWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_invoice_audit(
+        self,
+        *,
+        shipment_id: str,
+        invoice_amount: float,
+        max_discrepancy: float,
+    ) -> InvoiceRecord:
+        invoice_id = str(uuid4())
+
+        with self._database.connect() as connection:
+            shipment = connection.execute(
+                """
+                select quote_id
+                from shipments
+                where id = ?
+                """,
+                (shipment_id,),
+            ).fetchone()
+
+            if shipment is None:
+                raise LookupError(f"Shipment not found: {shipment_id}")
+
+            quote = connection.execute(
+                """
+                select id, customer_price, currency
+                from quotes
+                where id = ?
+                """,
+                (shipment["quote_id"],),
+            ).fetchone()
+
+            if quote is None:
+                raise LookupError(f"Quote not found: {shipment['quote_id']}")
+
+            public_id = _next_public_id(connection, "invoices", "INV")
+            quote_amount = float(quote["customer_price"])
+            discrepancy_amount = round(invoice_amount - quote_amount, 2)
+            status = "approved" if abs(discrepancy_amount) <= max_discrepancy else "disputed"
+
+            connection.execute(
+                """
+                insert into invoices
+                  (
+                    id, public_id, shipment_id, quote_id, invoice_amount, quote_amount,
+                    currency, status, discrepancy_amount
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    invoice_id,
+                    public_id,
+                    shipment_id,
+                    quote["id"],
+                    invoice_amount,
+                    quote_amount,
+                    quote["currency"],
+                    status,
+                    discrepancy_amount,
+                ),
+            )
+
+        return InvoiceRecord(
+            id=invoice_id,
+            public_id=public_id,
+            shipment_id=shipment_id,
+            quote_id=quote["id"],
+            invoice_amount=invoice_amount,
+            quote_amount=quote_amount,
+            currency=quote["currency"],
+            status=status,
+            discrepancy_amount=discrepancy_amount,
         )
 
 

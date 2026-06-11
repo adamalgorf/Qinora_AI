@@ -34,6 +34,19 @@ class ShipmentRecord:
 
 
 @dataclass(frozen=True)
+class InvoiceRecord:
+    id: str
+    public_id: str
+    shipment_id: str
+    quote_id: str
+    invoice_amount: float
+    quote_amount: float
+    currency: str
+    status: str
+    discrepancy_amount: float
+
+
+@dataclass(frozen=True)
 class CarrierRecord:
     id: str
     display_name: str

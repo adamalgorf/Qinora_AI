@@ -5,6 +5,7 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
     InboxRecord,
+    InvoiceRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentRecord,
@@ -71,6 +72,9 @@ class OperationalQueries:
 
     async def list_shipments(self) -> list[ShipmentRecord]:
         return await self._repository.list_shipments()
+
+    async def list_invoices(self) -> list[InvoiceRecord]:
+        return await self._repository.list_invoices()
 
     async def list_carriers(self) -> list[CarrierRecord]:
         return await self._repository.list_carriers()

@@ -4,6 +4,7 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
     InboxRecord,
+    InvoiceRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentRecord,
@@ -44,6 +45,9 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_shipments(self) -> list[ShipmentRecord]:
+        pass
+
+    async def list_invoices(self) -> list[InvoiceRecord]:
         pass
 
     async def list_carriers(self) -> list[CarrierRecord]:
@@ -102,4 +106,15 @@ class ShipmentWriteRepository(Protocol):
         pass
 
     async def update_status(self, shipment_id: str, status: str) -> ShipmentRecord | None:
+        pass
+
+
+class InvoiceWriteRepository(Protocol):
+    async def create_invoice_audit(
+        self,
+        *,
+        shipment_id: str,
+        invoice_amount: float,
+        max_discrepancy: float,
+    ) -> InvoiceRecord:
         pass

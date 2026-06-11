@@ -105,6 +105,28 @@ class ShipmentListItem(BaseModel):
     eta: str
 
 
+class InvoiceListItem(BaseModel):
+    id: str
+    public_id: str
+    shipment_id: str
+    quote_id: str
+    invoice_amount: float
+    quote_amount: float
+    currency: str
+    status: str
+    discrepancy_amount: float
+
+
+class CreateInvoicePayload(BaseModel):
+    invoice_amount: float
+    max_discrepancy: float = 250
+
+
+class CreateInvoiceResponse(BaseModel):
+    invoice: InvoiceListItem
+    shipment_status: str
+
+
 class AcceptQuotePayload(BaseModel):
     mode: str = "ftl"
     total_weight_kg: float

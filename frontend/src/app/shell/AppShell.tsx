@@ -1,4 +1,13 @@
-import { Activity, FileText, Inbox, RadioTower, Settings, Truck, Users } from "lucide-react";
+import {
+  Activity,
+  FileCheck2,
+  FileText,
+  Inbox,
+  RadioTower,
+  Settings,
+  Truck,
+  Users,
+} from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,6 +21,7 @@ const navItems = [
   { label: "Requests", href: "/requests", icon: RadioTower },
   { label: "Quotes", href: "/quotes", icon: FileText },
   { label: "Shipments", href: "/shipments", icon: Truck },
+  { label: "Invoices", href: "/invoices", icon: FileCheck2 },
   { label: "Carriers", href: "/carriers", icon: Users },
   { label: "Admin", href: "/admin", icon: Settings },
 ];

@@ -6,11 +6,13 @@ from qinora.application import (
     BookQuoteCommand,
     CargoLineCommand,
     CarrierIntelligenceCommand,
+    CreateInvoiceAuditCommand,
     CreateQuoteCommand,
     CreateRequestCommand,
     CreateRequestUseCase,
     EmailWebhookCommand,
     EmailWebhookUseCase,
+    InvoiceAuditWorkflow,
     OperationalQueries,
     PricingGateError,
     QuoteNotFoundError,
@@ -23,6 +25,7 @@ from qinora.infrastructure.settings import Settings
 from qinora.infrastructure.sqlite import (
     SQLiteDatabase,
     SQLiteInboundEmailRepository,
+    SQLiteInvoiceWriteRepository,
     SQLiteOperationalReadRepository,
     SQLiteQuoteWriteRepository,
     SQLiteRequestWriteRepository,
@@ -38,6 +41,8 @@ from qinora.interfaces.http.schemas import (
     CarrierIntelligenceRequest,
     CarrierIntelligenceResponse,
     CarrierListItem,
+    CreateInvoicePayload,
+    CreateInvoiceResponse,
     CreateQuotePayload,
     CreateRequestPayload,
     CreateRequestResponse,
@@ -45,6 +50,7 @@ from qinora.interfaces.http.schemas import (
     EmailWebhookPayload,
     EmailWebhookResponse,
     InboxListItem,
+    InvoiceListItem,
     QuoteListItem,
     RequestListItem,
     ShipmentListItem,
@@ -73,6 +79,10 @@ def create_app() -> FastAPI:
         SQLiteShipmentWriteRepository(database),
         operational_queries,
     )
+    invoice_audit = InvoiceAuditWorkflow(
+        SQLiteInvoiceWriteRepository(database),
+        SQLiteShipmentWriteRepository(database),
+    )
 
     app.state.settings = settings
     app.state.database = database
@@ -82,6 +92,7 @@ def create_app() -> FastAPI:
     app.state.create_request = create_request
     app.state.quote_workflow = quote_workflow
     app.state.booking_workflow = booking_workflow
+    app.state.invoice_audit = invoice_audit
     app.state.shipment_repository = SQLiteShipmentWriteRepository(database)
 
     @app.get("/health")
@@ -225,6 +236,11 @@ def create_app() -> FastAPI:
         queries: OperationalQueries = request.app.state.operational_queries
         return [ShipmentListItem(**item.__dict__) for item in await queries.list_shipments()]
 
+    @app.get("/invoices", response_model=list[InvoiceListItem])
+    async def list_invoices(request: Request) -> list[InvoiceListItem]:
+        queries: OperationalQueries = request.app.state.operational_queries
+        return [InvoiceListItem(**item.__dict__) for item in await queries.list_invoices()]
+
     @app.post("/shipments/{shipment_id}/status", response_model=ShipmentListItem)
     async def update_shipment_status(
         shipment_id: str,
@@ -247,6 +263,37 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipment not found")
 
         return ShipmentListItem(**shipment.__dict__)
+
+    @app.post("/shipments/{shipment_id}/invoice", response_model=CreateInvoiceResponse)
+    async def create_invoice(
+        shipment_id: str,
+        payload: CreateInvoicePayload,
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
+    ) -> CreateInvoiceResponse:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+        workflow: InvoiceAuditWorkflow = request.app.state.invoice_audit
+
+        try:
+            result = await workflow.audit_invoice(
+                CreateInvoiceAuditCommand(
+                    shipment_id=shipment_id,
+                    invoice_amount=payload.invoice_amount,
+                    max_discrepancy=payload.max_discrepancy,
+                )
+            )
+        except LookupError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+        return CreateInvoiceResponse(
+            invoice=InvoiceListItem(**result.invoice.__dict__),
+            shipment_status=result.shipment_status,
+        )
 
     @app.get("/carriers", response_model=list[CarrierListItem])
     async def list_carriers(request: Request) -> list[CarrierListItem]:

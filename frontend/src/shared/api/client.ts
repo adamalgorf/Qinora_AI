@@ -102,6 +102,28 @@ export type ShipmentListItem = {
   eta: string;
 };
 
+export type InvoiceListItem = {
+  id: string;
+  public_id: string;
+  shipment_id: string;
+  quote_id: string;
+  invoice_amount: number;
+  quote_amount: number;
+  currency: string;
+  status: string;
+  discrepancy_amount: number;
+};
+
+export type CreateInvoicePayload = {
+  invoice_amount: number;
+  max_discrepancy?: number;
+};
+
+export type CreateInvoiceResponse = {
+  invoice: InvoiceListItem;
+  shipment_status: string;
+};
+
 export type UpdateShipmentStatusPayload = {
   status: string;
 };

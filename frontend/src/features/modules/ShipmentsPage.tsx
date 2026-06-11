@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import {
   apiGet,
   apiPost,
+  type CreateInvoicePayload,
+  type CreateInvoiceResponse,
   type ShipmentListItem,
   type UpdateShipmentStatusPayload,
 } from "@/shared/api/client";
@@ -24,6 +26,19 @@ export function ShipmentsPage() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["shipments"] });
+    },
+  });
+  const invoiceMutation = useMutation({
+    mutationFn: (shipment: ShipmentListItem) =>
+      apiPost<CreateInvoiceResponse, CreateInvoicePayload>(`/shipments/${shipment.id}/invoice`, {
+        invoice_amount: 7350,
+        max_discrepancy: 250,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["shipments"] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+      ]);
     },
   });
 
@@ -66,6 +81,17 @@ export function ShipmentsPage() {
             </Button>
           );
         })}
+        {(query.data ?? [])
+          .filter((shipment) => shipment.status === "delivered")
+          .map((shipment) => (
+            <Button
+              key={`invoice-${shipment.id}`}
+              onClick={() => invoiceMutation.mutate(shipment)}
+              type="button"
+            >
+              Audit invoice for {shipment.public_id}
+            </Button>
+          ))}
       </div>
     </ModuleScaffold>
   );

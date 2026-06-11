@@ -180,6 +180,36 @@ def test_update_shipment_status_rejects_invalid_transition(client: TestClient) -
     assert response.status_code == 422
 
 
+def test_invoice_audit_approves_within_discrepancy(client: TestClient) -> None:
+    client.post("/shipments/shp-001/status", json={"status": "in_transit"})
+    client.post("/shipments/shp-001/status", json={"status": "delivered"})
+
+    response = client.post(
+        "/shipments/shp-001/invoice",
+        json={"invoice_amount": 7350, "max_discrepancy": 250},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["invoice"]["status"] == "approved"
+    assert body["shipment_status"] == "invoice_approved"
+
+
+def test_invoice_audit_disputes_large_discrepancy(client: TestClient) -> None:
+    client.post("/shipments/shp-001/status", json={"status": "in_transit"})
+    client.post("/shipments/shp-001/status", json={"status": "delivered"})
+
+    response = client.post(
+        "/shipments/shp-001/invoice",
+        json={"invoice_amount": 9000, "max_discrepancy": 250},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["invoice"]["status"] == "disputed"
+    assert body["shipment_status"] == "invoice_disputed"
+
+
 def test_carrier_intelligence_endpoint_runs_domain_pipeline(client: TestClient) -> None:
     response = client.post(
         "/carriers/intelligence",

@@ -8,6 +8,7 @@ import { ControlTowerPage } from "../features/control-tower/ControlTowerPage";
 import { AdminPage } from "../features/modules/AdminPage";
 import { CarriersPage } from "../features/modules/CarriersPage";
 import { InboxPage } from "../features/modules/InboxPage";
+import { InvoicesPage } from "../features/modules/InvoicesPage";
 import { QuotesPage } from "../features/modules/QuotesPage";
 import { RequestsPage } from "../features/modules/RequestsPage";
 import { ShipmentsPage } from "../features/modules/ShipmentsPage";
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: "requests", element: <RequestsPage /> },
       { path: "quotes", element: <QuotesPage /> },
       { path: "shipments", element: <ShipmentsPage /> },
+      { path: "invoices", element: <InvoicesPage /> },
       { path: "carriers", element: <CarriersPage /> },
       { path: "admin", element: <AdminPage /> },
     ],
