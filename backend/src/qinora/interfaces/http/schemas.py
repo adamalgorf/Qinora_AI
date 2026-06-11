@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -71,18 +72,18 @@ class RequestListItem(BaseModel):
 
 class CargoLinePayload(BaseModel):
     description: str = Field(min_length=1)
-    quantity: int | None = None
-    weight_kg: float | None = None
-    length_cm: float | None = None
-    width_cm: float | None = None
-    height_cm: float | None = None
+    quantity: int | None = Field(default=None, ge=1)
+    weight_kg: float | None = Field(default=None, gt=0)
+    length_cm: float | None = Field(default=None, gt=0)
+    width_cm: float | None = Field(default=None, gt=0)
+    height_cm: float | None = Field(default=None, gt=0)
 
 
 class CreateRequestPayload(BaseModel):
     customer: str = Field(min_length=1)
     origin: str = Field(min_length=1)
     destination: str = Field(min_length=1)
-    mode: str
+    mode: Literal["ftl", "ltl", "ocean", "air", "rail", "intermodal"]
     cargo: list[CargoLinePayload] = Field(min_length=1)
     loading_time: datetime | None = None
     unloading_time: datetime | None = None

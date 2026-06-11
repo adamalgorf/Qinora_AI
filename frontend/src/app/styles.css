@@ -266,13 +266,70 @@ h1 {
 
 .request-form {
   display: grid;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.request-section {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(222 38% 10% / 0.62);
+  padding: 16px;
+}
+
+.request-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.request-section-header div,
+.request-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.request-section-header span,
+.request-form label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.request-section-header strong {
+  color: hsl(var(--foreground));
+  font-size: 1rem;
+  text-transform: none;
+}
+
+.request-grid {
+  display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));
   gap: 10px;
-  margin-bottom: 22px;
+}
+
+.cargo-lines {
+  display: grid;
+  gap: 10px;
+}
+
+.cargo-line {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) repeat(5, minmax(70px, 1fr)) 40px;
+  gap: 10px;
+  align-items: end;
+}
+
+.cargo-description {
+  min-width: 0;
 }
 
 .request-form input,
 .request-form select {
+  width: 100%;
   min-height: 40px;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
@@ -287,9 +344,20 @@ h1 {
   outline: 3px solid hsl(var(--ring) / 0.18);
 }
 
+.request-submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .form-feedback {
   margin: -8px 0 18px;
   color: hsl(45 93% 68%);
+  font-size: 0.9rem;
+}
+
+.form-success {
+  margin: -8px 0 18px;
+  color: hsl(157 100% 70%);
   font-size: 0.9rem;
 }
 
@@ -423,8 +491,13 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .request-form {
+  .request-grid,
+  .cargo-line {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cargo-line button {
+    justify-self: end;
   }
 }
 
@@ -433,7 +506,8 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .request-form {
+  .request-grid,
+  .cargo-line {
     grid-template-columns: 1fr;
   }
 }

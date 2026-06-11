@@ -166,6 +166,31 @@ def test_create_request_marks_incomplete_request_for_clarification(client: TestC
     assert "weight_kg is required" in task["reason"]
 
 
+def test_create_request_rejects_unknown_transport_mode(client: TestClient) -> None:
+    response = client.post(
+        "/requests",
+        json={
+            "customer": "Scania",
+            "origin": "Sodertalje",
+            "destination": "Berlin",
+            "mode": "space",
+            "loading_time": "2026-06-11T10:00:00Z",
+            "cargo": [
+                {
+                    "description": "Pallets",
+                    "quantity": 2,
+                    "weight_kg": 440,
+                    "length_cm": 120,
+                    "width_cm": 80,
+                    "height_cm": 150,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_create_and_send_quote(client: TestClient) -> None:
     created = client.post(
         "/quotes",

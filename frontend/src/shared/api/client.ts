@@ -56,7 +56,7 @@ export type CreateRequestPayload = {
   customer: string;
   origin: string;
   destination: string;
-  mode: string;
+  mode: "ftl" | "ltl" | "ocean" | "air" | "rail" | "intermodal";
   loading_time?: string;
   unloading_time?: string;
   cargo: Array<{
