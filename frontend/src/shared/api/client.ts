@@ -166,6 +166,25 @@ export type AgentLogListItem = {
   confidence: number;
 };
 
+export type OperationalTaskItem = {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  priority: string;
+  reason: string;
+  status: string;
+  created_at: string;
+};
+
+export type ShipmentEventItem = {
+  id: string;
+  shipment_id: string;
+  from_status: string | null;
+  to_status: string;
+  reason: string | null;
+  created_at: string;
+};
+
 const AUTH_TOKEN_KEY = "qinora.authToken";
 
 export function getAuthToken(): string | null {

@@ -6,8 +6,10 @@ from qinora.application.read_models import (
     CarrierRecord,
     InboxRecord,
     InvoiceRecord,
+    OperationalTaskRecord,
     QuoteRecord,
     RequestRecord,
+    ShipmentEventRecord,
     ShipmentRecord,
 )
 from qinora.domain import CarrierCandidate, CarrierEvaluationInput, TransportMode, evaluate_carriers
@@ -34,9 +36,9 @@ class OperationalQueries:
 
     async def dashboard_summary(self) -> DashboardSummary:
         requests = await self._repository.list_requests()
-        shipments = await self._repository.list_shipments()
         agent_logs = await self._repository.list_agent_logs()
-        exceptions = len([item for item in shipments if item.status == "needs_review"])
+        tasks = await self._repository.list_operational_tasks()
+        exceptions = len([item for item in tasks if item.status == "open"])
         open_requests = len([item for item in requests if item.status != "converted"])
 
         return DashboardSummary(
@@ -84,6 +86,12 @@ class OperationalQueries:
 
     async def list_agent_logs(self) -> list[AgentLogRecord]:
         return await self._repository.list_agent_logs()
+
+    async def list_operational_tasks(self) -> list[OperationalTaskRecord]:
+        return await self._repository.list_operational_tasks()
+
+    async def list_shipment_events(self, shipment_id: str) -> list[ShipmentEventRecord]:
+        return await self._repository.list_shipment_events(shipment_id)
 
     async def run_carrier_intelligence(self, command: CarrierIntelligenceCommand):
         carriers = await self._repository.list_carriers()

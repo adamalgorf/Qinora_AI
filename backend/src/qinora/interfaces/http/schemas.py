@@ -183,6 +183,25 @@ class AgentLogListItem(BaseModel):
     confidence: float
 
 
+class OperationalTaskItem(BaseModel):
+    id: str
+    entity_type: str
+    entity_id: str
+    priority: str
+    reason: str
+    status: str
+    created_at: str
+
+
+class ShipmentEventItem(BaseModel):
+    id: str
+    shipment_id: str
+    from_status: str | None
+    to_status: str
+    reason: str | None
+    created_at: str
+
+
 class CarrierIntelligenceRequest(BaseModel):
     mode: str
     total_weight_kg: float

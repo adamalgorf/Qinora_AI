@@ -8,8 +8,10 @@ from qinora.application.read_models import (
     CarrierRecord,
     InboxRecord,
     InvoiceRecord,
+    OperationalTaskRecord,
     QuoteRecord,
     RequestRecord,
+    ShipmentEventRecord,
     ShipmentRecord,
 )
 from qinora.domain import (
@@ -132,6 +134,25 @@ class SQLiteDatabase:
                   discrepancy_amount real not null,
                   created_at text not null default current_timestamp
                 );
+
+                create table if not exists operational_tasks (
+                  id text primary key,
+                  entity_type text not null,
+                  entity_id text not null,
+                  priority text not null,
+                  reason text not null,
+                  status text not null default 'open',
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists shipment_events (
+                  id text primary key,
+                  shipment_id text not null,
+                  from_status text,
+                  to_status text not null,
+                  reason text,
+                  created_at text not null default current_timestamp
+                );
                 """
             )
             _add_column_if_missing(
@@ -141,6 +162,7 @@ class SQLiteDatabase:
                 "text",
             )
             self._seed(connection)
+            self._seed_operational_tasks(connection)
 
     def _seed(self, connection: sqlite3.Connection) -> None:
         if _count(connection, "transport_requests") > 0:
@@ -311,6 +333,25 @@ class SQLiteDatabase:
                 ),
             ],
         )
+    def _seed_operational_tasks(self, connection: sqlite3.Connection) -> None:
+        if _count(connection, "operational_tasks") > 0:
+            return
+
+        connection.execute(
+            """
+            insert into operational_tasks
+              (id, entity_type, entity_id, priority, reason, status)
+            values (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "task-001",
+                "transport_request",
+                "req-003",
+                "high",
+                "Missing cargo dimensions and loading time",
+                "open",
+            ),
+        )
 
 
 class SQLiteWebhookEventRepository:
@@ -462,6 +503,32 @@ class SQLiteOperationalReadRepository:
                 from agent_logs
                 order by created_at desc
                 """
+            )
+        ]
+
+    async def list_operational_tasks(self) -> list[OperationalTaskRecord]:
+        return [
+            OperationalTaskRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select id, entity_type, entity_id, priority, reason, status, created_at
+                from operational_tasks
+                order by created_at desc
+                """
+            )
+        ]
+
+    async def list_shipment_events(self, shipment_id: str) -> list[ShipmentEventRecord]:
+        return [
+            ShipmentEventRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select id, shipment_id, from_status, to_status, reason, created_at
+                from shipment_events
+                where shipment_id = ?
+                order by created_at desc
+                """,
+                (shipment_id,),
             )
         ]
 
@@ -642,6 +709,21 @@ class SQLiteShipmentWriteRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
         self._database = database
 
+    async def get_shipment(self, shipment_id: str) -> ShipmentRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, public_id, quote_id, carrier_id, lane, status, eta
+                from shipments
+                where id = ?
+                """,
+                (shipment_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return ShipmentRecord(**dict(row))
+
     async def create_shipment(
         self,
         *,
@@ -784,6 +866,60 @@ class SQLiteInvoiceWriteRepository:
             status=status,
             discrepancy_amount=discrepancy_amount,
         )
+
+
+class SQLiteOperationalTaskWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_task(
+        self,
+        *,
+        entity_type: str,
+        entity_id: str,
+        reason: str,
+        priority: str = "normal",
+    ) -> OperationalTaskRecord:
+        task_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into operational_tasks
+                  (id, entity_type, entity_id, priority, reason, status)
+                values (?, ?, ?, ?, ?, ?)
+                returning id, entity_type, entity_id, priority, reason, status, created_at
+                """,
+                (task_id, entity_type, entity_id, priority, reason, "open"),
+            ).fetchone()
+
+        return OperationalTaskRecord(**dict(row))
+
+
+class SQLiteShipmentEventRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def record_status_change(
+        self,
+        *,
+        shipment_id: str,
+        from_status: str | None,
+        to_status: str,
+        reason: str | None = None,
+    ) -> ShipmentEventRecord:
+        event_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into shipment_events
+                  (id, shipment_id, from_status, to_status, reason)
+                values (?, ?, ?, ?, ?)
+                returning id, shipment_id, from_status, to_status, reason, created_at
+                """,
+                (event_id, shipment_id, from_status, to_status, reason),
+            ).fetchone()
+
+        return ShipmentEventRecord(**dict(row))
 
 
 def _count(connection: sqlite3.Connection, table: str) -> int:

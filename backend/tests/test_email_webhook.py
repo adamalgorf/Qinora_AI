@@ -160,6 +160,11 @@ def test_create_request_marks_incomplete_request_for_clarification(client: TestC
     assert body["request"]["status"] == "needs_clarification"
     assert body["adr_un_numbers"] == ["UN1263"]
 
+    tasks = client.get("/tasks").json()
+    task = next(item for item in tasks if item["entity_id"] == body["request"]["id"])
+    assert task["priority"] == "high"
+    assert "weight_kg is required" in task["reason"]
+
 
 def test_create_and_send_quote(client: TestClient) -> None:
     created = client.post(
@@ -208,6 +213,11 @@ def test_update_shipment_status_uses_fsm(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "in_transit"
+
+    timeline = client.get("/shipments/shp-001/timeline")
+    assert timeline.status_code == 200
+    assert timeline.json()[0]["from_status"] == "booked"
+    assert timeline.json()[0]["to_status"] == "in_transit"
 
 
 def test_update_shipment_status_rejects_invalid_transition(client: TestClient) -> None:

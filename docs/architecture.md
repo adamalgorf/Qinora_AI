@@ -44,6 +44,8 @@ frontend -> HTTP API contract
 
 - Shipment status transitions are encoded as a domain FSM.
 - Request intake validation checks weight, dimensions, timing, and ADR UN-number detection.
+- Incomplete request intake creates `operational_tasks` for Control Tower exception handling.
+- Shipment status updates write `shipment_events` through an application workflow for case timeline auditability.
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Carrier intelligence is deterministic and stores confidence components for auditability.
 - Email webhooks require HMAC and idempotency at the API boundary.

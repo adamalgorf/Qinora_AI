@@ -75,3 +75,24 @@ class InboxRecord:
     subject: str
     received_at: str
     classification: str
+
+
+@dataclass(frozen=True)
+class OperationalTaskRecord:
+    id: str
+    entity_type: str
+    entity_id: str
+    priority: str
+    reason: str
+    status: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class ShipmentEventRecord:
+    id: str
+    shipment_id: str
+    from_status: str | None
+    to_status: str
+    reason: str | None
+    created_at: str

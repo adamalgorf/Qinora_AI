@@ -1,6 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 
-from qinora.application import AuthContext, CreateInvoiceAuditCommand, Role
+from qinora.application import (
+    AuthContext,
+    CreateInvoiceAuditCommand,
+    Role,
+    UpdateShipmentStatusCommand,
+)
 from qinora.interfaces.http.auth import require_roles
 from qinora.interfaces.http.container import AppContainer
 from qinora.interfaces.http.dependencies import AUTH_CONTEXT, CONTAINER
@@ -8,6 +13,7 @@ from qinora.interfaces.http.schemas import (
     CreateInvoicePayload,
     CreateInvoiceResponse,
     InvoiceListItem,
+    ShipmentEventItem,
     ShipmentListItem,
     UpdateShipmentStatusPayload,
 )
@@ -31,6 +37,17 @@ async def list_invoices(container: AppContainer = CONTAINER) -> list[InvoiceList
     ]
 
 
+@router.get("/shipments/{shipment_id}/timeline", response_model=list[ShipmentEventItem])
+async def shipment_timeline(
+    shipment_id: str,
+    container: AppContainer = CONTAINER,
+) -> list[ShipmentEventItem]:
+    return [
+        ShipmentEventItem(**item.__dict__)
+        for item in await container.operational_queries.list_shipment_events(shipment_id)
+    ]
+
+
 @router.post("/shipments/{shipment_id}/status", response_model=ShipmentListItem)
 async def update_shipment_status(
     shipment_id: str,
@@ -41,7 +58,13 @@ async def update_shipment_status(
     require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
 
     try:
-        shipment = await container.shipment_repository.update_status(shipment_id, payload.status)
+        shipment = await container.shipment_workflow.update_status(
+            UpdateShipmentStatusCommand(
+                shipment_id=shipment_id,
+                status=payload.status,
+                reason="Manual status update",
+            )
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

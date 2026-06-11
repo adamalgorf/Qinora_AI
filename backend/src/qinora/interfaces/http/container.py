@@ -8,6 +8,7 @@ from qinora.application import (
     InvoiceAuditWorkflow,
     OperationalQueries,
     QuoteWorkflow,
+    ShipmentWorkflow,
 )
 from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
@@ -16,8 +17,10 @@ from qinora.infrastructure.postgres import (
     PostgresInboundEmailRepository,
     PostgresInvoiceWriteRepository,
     PostgresOperationalReadRepository,
+    PostgresOperationalTaskWriteRepository,
     PostgresQuoteWriteRepository,
     PostgresRequestWriteRepository,
+    PostgresShipmentEventRepository,
     PostgresShipmentWriteRepository,
     PostgresWebhookEventRepository,
 )
@@ -27,8 +30,10 @@ from qinora.infrastructure.sqlite import (
     SQLiteInboundEmailRepository,
     SQLiteInvoiceWriteRepository,
     SQLiteOperationalReadRepository,
+    SQLiteOperationalTaskWriteRepository,
     SQLiteQuoteWriteRepository,
     SQLiteRequestWriteRepository,
+    SQLiteShipmentEventRepository,
     SQLiteShipmentWriteRepository,
     SQLiteWebhookEventRepository,
 )
@@ -44,6 +49,7 @@ class AppContainer:
     create_request: CreateRequestUseCase
     quote_workflow: QuoteWorkflow
     booking_workflow: BookingWorkflow
+    shipment_workflow: ShipmentWorkflow
     invoice_audit: InvoiceAuditWorkflow
     shipment_repository: ShipmentWriteRepository
 
@@ -61,6 +67,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
     quote_repository = SQLiteQuoteWriteRepository(database)
     shipment_repository = SQLiteShipmentWriteRepository(database)
+    shipment_event_repository = SQLiteShipmentEventRepository(database)
+    task_repository = SQLiteOperationalTaskWriteRepository(database)
 
     return AppContainer(
         settings=settings,
@@ -72,13 +80,17 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             dispatcher,
         ),
         operational_queries=operational_queries,
-        create_request=CreateRequestUseCase(SQLiteRequestWriteRepository(database)),
+        create_request=CreateRequestUseCase(
+            SQLiteRequestWriteRepository(database),
+            task_repository,
+        ),
         quote_workflow=QuoteWorkflow(quote_repository),
         booking_workflow=BookingWorkflow(
             quote_repository,
             shipment_repository,
             operational_queries,
         ),
+        shipment_workflow=ShipmentWorkflow(shipment_repository, shipment_event_repository),
         invoice_audit=InvoiceAuditWorkflow(
             SQLiteInvoiceWriteRepository(database),
             shipment_repository,
@@ -96,6 +108,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     operational_queries = OperationalQueries(PostgresOperationalReadRepository(database))
     quote_repository = PostgresQuoteWriteRepository(database)
     shipment_repository = PostgresShipmentWriteRepository(database)
+    shipment_event_repository = PostgresShipmentEventRepository(database)
+    task_repository = PostgresOperationalTaskWriteRepository(database)
 
     return AppContainer(
         settings=settings,
@@ -107,13 +121,17 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             dispatcher,
         ),
         operational_queries=operational_queries,
-        create_request=CreateRequestUseCase(PostgresRequestWriteRepository(database)),
+        create_request=CreateRequestUseCase(
+            PostgresRequestWriteRepository(database),
+            task_repository,
+        ),
         quote_workflow=QuoteWorkflow(quote_repository),
         booking_workflow=BookingWorkflow(
             quote_repository,
             shipment_repository,
             operational_queries,
         ),
+        shipment_workflow=ShipmentWorkflow(shipment_repository, shipment_event_repository),
         invoice_audit=InvoiceAuditWorkflow(
             PostgresInvoiceWriteRepository(database),
             shipment_repository,

@@ -4,7 +4,7 @@ import { AlertTriangle, Bot, CheckCircle2, Clock3, RadioTower, Sparkles } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiGet, type DashboardSummary } from "@/shared/api/client";
+import { apiGet, type DashboardSummary, type OperationalTaskItem } from "@/shared/api/client";
 
 const iconByMetric = [Clock3, CheckCircle2, AlertTriangle, Bot];
 
@@ -13,7 +13,12 @@ export function ControlTowerPage() {
     queryKey: ["dashboard-summary"],
     queryFn: () => apiGet<DashboardSummary>("/dashboard/summary"),
   });
+  const tasksQuery = useQuery({
+    queryKey: ["operational-tasks"],
+    queryFn: () => apiGet<OperationalTaskItem[]>("/tasks"),
+  });
   const summary = summaryQuery.data;
+  const tasks = tasksQuery.data ?? [];
 
   return (
     <section className="tower-page">
@@ -68,27 +73,53 @@ export function ControlTowerPage() {
         ))}
       </div>
 
-      <Card className="agent-card">
-        <CardHeader>
-          <CardDescription>Agent activity</CardDescription>
-          <CardTitle>Latest autonomous decisions</CardTitle>
-        </CardHeader>
-        <CardContent className="agent-list">
-          {summaryQuery.isLoading ? (
-            <p className="muted">Syncing with backend...</p>
-          ) : (
-            (summary?.agentActivity ?? []).map((activity) => (
-              <div className="agent-row" key={`${activity.agent}-${activity.event}`}>
-                <div>
-                  <strong>{activity.agent}</strong>
-                  <span>{activity.event}</span>
+      <div className="tower-split">
+        <Card className="agent-card">
+          <CardHeader>
+            <CardDescription>Exception feed</CardDescription>
+            <CardTitle>Open operational tasks</CardTitle>
+          </CardHeader>
+          <CardContent className="agent-list">
+            {tasksQuery.isLoading ? (
+              <p className="muted">Syncing exceptions...</p>
+            ) : (
+              tasks.map((task) => (
+                <div className="agent-row" key={task.id}>
+                  <div>
+                    <strong>{task.entity_id}</strong>
+                    <span>{task.reason}</span>
+                  </div>
+                  <Badge variant={task.priority === "high" ? "destructive" : "outline"}>
+                    {task.priority}
+                  </Badge>
                 </div>
-                <Badge variant="outline">{Math.round(activity.confidence * 100)}%</Badge>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="agent-card">
+          <CardHeader>
+            <CardDescription>Agent activity</CardDescription>
+            <CardTitle>Latest autonomous decisions</CardTitle>
+          </CardHeader>
+          <CardContent className="agent-list">
+            {summaryQuery.isLoading ? (
+              <p className="muted">Syncing with backend...</p>
+            ) : (
+              (summary?.agentActivity ?? []).map((activity) => (
+                <div className="agent-row" key={`${activity.agent}-${activity.event}`}>
+                  <div>
+                    <strong>{activity.agent}</strong>
+                    <span>{activity.event}</span>
+                  </div>
+                  <Badge variant="outline">{Math.round(activity.confidence * 100)}%</Badge>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </section>
   );
 }

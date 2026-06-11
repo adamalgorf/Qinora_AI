@@ -5,8 +5,10 @@ from qinora.application.read_models import (
     CarrierRecord,
     InboxRecord,
     InvoiceRecord,
+    OperationalTaskRecord,
     QuoteRecord,
     RequestRecord,
+    ShipmentEventRecord,
     ShipmentRecord,
 )
 from qinora.domain import Quote, TransportRequestInput
@@ -59,6 +61,12 @@ class OperationalReadRepository(Protocol):
     async def list_agent_logs(self) -> list[AgentLogRecord]:
         pass
 
+    async def list_operational_tasks(self) -> list[OperationalTaskRecord]:
+        pass
+
+    async def list_shipment_events(self, shipment_id: str) -> list[ShipmentEventRecord]:
+        pass
+
 
 class RequestWriteRepository(Protocol):
     async def create_transport_request(
@@ -94,6 +102,9 @@ class QuoteWriteRepository(Protocol):
 
 
 class ShipmentWriteRepository(Protocol):
+    async def get_shipment(self, shipment_id: str) -> ShipmentRecord | None:
+        pass
+
     async def create_shipment(
         self,
         *,
@@ -117,4 +128,28 @@ class InvoiceWriteRepository(Protocol):
         invoice_amount: float,
         max_discrepancy: float,
     ) -> InvoiceRecord:
+        pass
+
+
+class OperationalTaskWriteRepository(Protocol):
+    async def create_task(
+        self,
+        *,
+        entity_type: str,
+        entity_id: str,
+        reason: str,
+        priority: str = "normal",
+    ) -> OperationalTaskRecord:
+        pass
+
+
+class ShipmentEventRepository(Protocol):
+    async def record_status_change(
+        self,
+        *,
+        shipment_id: str,
+        from_status: str | None,
+        to_status: str,
+        reason: str | None = None,
+    ) -> ShipmentEventRecord:
         pass

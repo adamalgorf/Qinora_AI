@@ -29,6 +29,7 @@ from qinora.application.request_intake import (
     CreateRequestCommand,
     CreateRequestUseCase,
 )
+from qinora.application.shipment_workflow import ShipmentWorkflow, UpdateShipmentStatusCommand
 
 __all__ = [
     "AgentDispatcher",
@@ -58,6 +59,8 @@ __all__ = [
     "SendQuoteCommand",
     "RequestWriteRepository",
     "ShipmentWriteRepository",
+    "ShipmentWorkflow",
+    "UpdateShipmentStatusCommand",
     "QuoteWriteRepository",
     "WebhookEventRepository",
     "require_any_role",

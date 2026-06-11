@@ -8,8 +8,10 @@ from qinora.application.read_models import (
     CarrierRecord,
     InboxRecord,
     InvoiceRecord,
+    OperationalTaskRecord,
     QuoteRecord,
     RequestRecord,
+    ShipmentEventRecord,
     ShipmentRecord,
 )
 from qinora.domain import (
@@ -262,6 +264,49 @@ class PostgresOperationalReadRepository:
             )
         ]
 
+    async def list_operational_tasks(self) -> list[OperationalTaskRecord]:
+        return [
+            OperationalTaskRecord(
+                id=str(row["id"]),
+                entity_type=row["entity_type"],
+                entity_id=row["entity_id"],
+                priority=row["priority"],
+                reason=row["reason"],
+                status=row["status"],
+                created_at=row["created_at"].isoformat(),
+            )
+            for row in self._fetch_all(
+                """
+                select id, entity_type, entity_id, priority, reason, status, created_at
+                from public.operational_tasks
+                where tenant_id = %s
+                order by created_at desc
+                """,
+                (self._database.tenant_id,),
+            )
+        ]
+
+    async def list_shipment_events(self, shipment_id: str) -> list[ShipmentEventRecord]:
+        return [
+            ShipmentEventRecord(
+                id=str(row["id"]),
+                shipment_id=str(row["shipment_id"]),
+                from_status=row["from_status"],
+                to_status=row["to_status"],
+                reason=row["reason"],
+                created_at=row["created_at"].isoformat(),
+            )
+            for row in self._fetch_all(
+                """
+                select id, shipment_id, from_status, to_status, reason, created_at
+                from public.shipment_events
+                where tenant_id = %s and shipment_id = %s
+                order by created_at desc
+                """,
+                (self._database.tenant_id, shipment_id),
+            )
+        ]
+
     def _fetch_all(self, query: str, parameters: tuple[Any, ...]) -> list[dict[str, Any]]:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(query, parameters)
@@ -451,6 +496,30 @@ class PostgresShipmentWriteRepository:
     def __init__(self, database: PostgresDatabase) -> None:
         self._database = database
 
+    async def get_shipment(self, shipment_id: str) -> ShipmentRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, public_id, quote_id, carrier_id, lane, status, eta_label, eta
+                from public.shipments
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, shipment_id),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return None
+        return ShipmentRecord(
+            id=str(row["id"]),
+            public_id=row["public_id"],
+            quote_id=str(row["quote_id"]) if row["quote_id"] else "",
+            carrier_id=str(row["carrier_id"]) if row["carrier_id"] else None,
+            lane=row["lane"] or "Pending lane confirmation",
+            status=row["status"],
+            eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Pending"),
+        )
+
     async def create_shipment(
         self,
         *,
@@ -615,6 +684,75 @@ class PostgresInvoiceWriteRepository:
             currency=quote["currency"],
             status=status,
             discrepancy_amount=discrepancy_amount,
+        )
+
+
+class PostgresOperationalTaskWriteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_task(
+        self,
+        *,
+        entity_type: str,
+        entity_id: str,
+        reason: str,
+        priority: str = "normal",
+    ) -> OperationalTaskRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.operational_tasks
+                  (tenant_id, entity_type, entity_id, priority, reason, status)
+                values (%s, %s, %s, %s, %s, %s)
+                returning id, entity_type, entity_id, priority, reason, status, created_at
+                """,
+                (self._database.tenant_id, entity_type, entity_id, priority, reason, "open"),
+            )
+            row = cursor.fetchone()
+
+        return OperationalTaskRecord(
+            id=str(row["id"]),
+            entity_type=row["entity_type"],
+            entity_id=row["entity_id"],
+            priority=row["priority"],
+            reason=row["reason"],
+            status=row["status"],
+            created_at=row["created_at"].isoformat(),
+        )
+
+
+class PostgresShipmentEventRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def record_status_change(
+        self,
+        *,
+        shipment_id: str,
+        from_status: str | None,
+        to_status: str,
+        reason: str | None = None,
+    ) -> ShipmentEventRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.shipment_events
+                  (tenant_id, shipment_id, from_status, to_status, reason)
+                values (%s, %s, %s, %s, %s)
+                returning id, shipment_id, from_status, to_status, reason, created_at
+                """,
+                (self._database.tenant_id, shipment_id, from_status, to_status, reason),
+            )
+            row = cursor.fetchone()
+
+        return ShipmentEventRecord(
+            id=str(row["id"]),
+            shipment_id=str(row["shipment_id"]),
+            from_status=row["from_status"],
+            to_status=row["to_status"],
+            reason=row["reason"],
+            created_at=row["created_at"].isoformat(),
         )
 
 

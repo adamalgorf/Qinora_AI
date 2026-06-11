@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from qinora.application.ports import RequestWriteRepository
+from qinora.application.ports import OperationalTaskWriteRepository, RequestWriteRepository
 from qinora.application.read_models import RequestRecord
 from qinora.domain import CargoLineInput, TransportMode, TransportRequestInput
 from qinora.domain.transport_request import validate_transport_request
@@ -37,8 +37,13 @@ class CreateRequestResult:
 
 
 class CreateRequestUseCase:
-    def __init__(self, repository: RequestWriteRepository) -> None:
+    def __init__(
+        self,
+        repository: RequestWriteRepository,
+        task_repository: OperationalTaskWriteRepository,
+    ) -> None:
         self._repository = repository
+        self._task_repository = task_repository
 
     async def execute(self, command: CreateRequestCommand) -> CreateRequestResult:
         request_input = TransportRequestInput(
@@ -70,6 +75,13 @@ class CreateRequestUseCase:
             status="parsed" if validation.complete else "needs_clarification",
             review_reason=review_reason,
         )
+        if not validation.complete and review_reason:
+            await self._task_repository.create_task(
+                entity_type="transport_request",
+                entity_id=request.id,
+                priority="high",
+                reason=review_reason,
+            )
 
         return CreateRequestResult(
             request=request,
