@@ -162,7 +162,9 @@ class SQLiteDatabase:
                   subject text not null,
                   body_text text not null,
                   status text not null default 'queued',
-                  created_at text not null default current_timestamp
+                  created_at text not null default current_timestamp,
+                  sent_at text,
+                  error_message text
                 );
                 """
             )
@@ -172,6 +174,8 @@ class SQLiteDatabase:
                 "review_reason",
                 "text",
             )
+            _add_column_if_missing(connection, "outbound_reply_queue", "sent_at", "text")
+            _add_column_if_missing(connection, "outbound_reply_queue", "error_message", "text")
             self._seed(connection)
             self._seed_operational_tasks(connection)
 
@@ -548,7 +552,9 @@ class SQLiteOperationalReadRepository:
             OutboundReplyRecord(**dict(row))
             for row in self._fetch_all(
                 """
-                select id, quote_id, recipient, subject, body_text, status, created_at
+                select
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
                 from outbound_reply_queue
                 order by created_at desc
                 """
@@ -964,11 +970,66 @@ class SQLiteOutboundReplyRepository:
                 insert into outbound_reply_queue
                   (id, quote_id, recipient, subject, body_text, status)
                 values (?, ?, ?, ?, ?, ?)
-                returning id, quote_id, recipient, subject, body_text, status, created_at
+                returning
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
                 """,
                 (reply_id, quote_id, recipient, subject, body_text, "queued"),
             ).fetchone()
 
+        return OutboundReplyRecord(**dict(row))
+
+    async def next_queued(self, limit: int) -> list[OutboundReplyRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from outbound_reply_queue
+                where status = ?
+                order by created_at
+                limit ?
+                """,
+                ("queued", limit),
+            ).fetchall()
+
+        return [OutboundReplyRecord(**dict(row)) for row in rows]
+
+    async def mark_sent(self, reply_id: str) -> OutboundReplyRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update outbound_reply_queue
+                set status = ?, sent_at = current_timestamp, error_message = null
+                where id = ?
+                returning
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("sent", reply_id),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(f"Outbound reply not found: {reply_id}")
+        return OutboundReplyRecord(**dict(row))
+
+    async def mark_failed(self, reply_id: str, error_message: str) -> OutboundReplyRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update outbound_reply_queue
+                set status = ?, error_message = ?
+                where id = ?
+                returning
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("failed", error_message, reply_id),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(f"Outbound reply not found: {reply_id}")
         return OutboundReplyRecord(**dict(row))
 
 

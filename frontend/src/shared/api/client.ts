@@ -93,11 +93,18 @@ export type OutboundReplyItem = {
   body_text: string;
   status: string;
   created_at: string;
+  sent_at: string | null;
+  error_message: string | null;
 };
 
 export type SendQuoteResponse = {
   quote: QuoteListItem;
   outbound_reply: OutboundReplyItem;
+};
+
+export type ProcessOutboundQueueResponse = {
+  sent: OutboundReplyItem[];
+  failed: OutboundReplyItem[];
 };
 
 export type CreateQuotePayload = {

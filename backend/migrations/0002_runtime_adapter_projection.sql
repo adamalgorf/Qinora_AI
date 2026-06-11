@@ -31,3 +31,7 @@ alter table public.agent_logs
 
 alter table public.invoices
   add column if not exists quote_amount numeric(12, 2) not null default 0;
+
+alter table public.outbound_reply_queue
+  add column if not exists sent_at timestamptz,
+  add column if not exists error_message text;

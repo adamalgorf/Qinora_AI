@@ -318,10 +318,14 @@ class PostgresOperationalReadRepository:
                 body_text=row["body_text"],
                 status=row["status"],
                 created_at=row["created_at"].isoformat(),
+                sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+                error_message=row["error_message"],
             )
             for row in self._fetch_all(
                 """
-                select id, quote_id, recipient, subject, body_text, status, created_at
+                select
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
                 from public.outbound_reply_queue
                 where tenant_id = %s
                 order by created_at desc
@@ -797,7 +801,9 @@ class PostgresOutboundReplyRepository:
                 insert into public.outbound_reply_queue
                   (tenant_id, quote_id, recipient, subject, body_text, status)
                 values (%s, %s, %s, %s, %s, %s)
-                returning id, quote_id, recipient, subject, body_text, status, created_at
+                returning
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
                 """,
                 (self._database.tenant_id, quote_id, recipient, subject, body_text, "queued"),
             )
@@ -811,7 +817,65 @@ class PostgresOutboundReplyRepository:
             body_text=row["body_text"],
             status=row["status"],
             created_at=row["created_at"].isoformat(),
+            sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+            error_message=row["error_message"],
         )
+
+    async def next_queued(self, limit: int) -> list[OutboundReplyRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from public.outbound_reply_queue
+                where tenant_id = %s and status = %s
+                order by created_at
+                limit %s
+                """,
+                (self._database.tenant_id, "queued", limit),
+            )
+            rows = cursor.fetchall()
+
+        return [_outbound_reply_record(row) for row in rows]
+
+    async def mark_sent(self, reply_id: str) -> OutboundReplyRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.outbound_reply_queue
+                set status = %s, sent_at = now(), error_message = null
+                where tenant_id = %s and id = %s
+                returning
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("sent", self._database.tenant_id, reply_id),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            raise LookupError(f"Outbound reply not found: {reply_id}")
+        return _outbound_reply_record(row)
+
+    async def mark_failed(self, reply_id: str, error_message: str) -> OutboundReplyRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.outbound_reply_queue
+                set status = %s, error_message = %s
+                where tenant_id = %s and id = %s
+                returning
+                  id, quote_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("failed", error_message, self._database.tenant_id, reply_id),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            raise LookupError(f"Outbound reply not found: {reply_id}")
+        return _outbound_reply_record(row)
 
 
 def _quote_record(row: dict[str, Any]) -> QuoteRecord:
@@ -822,6 +886,20 @@ def _quote_record(row: dict[str, Any]) -> QuoteRecord:
         customer_price=float(row["customer_price"]),
         currency=row["currency"],
         parent_quote_id=str(row["parent_quote_id"]) if row["parent_quote_id"] else None,
+    )
+
+
+def _outbound_reply_record(row: dict[str, Any]) -> OutboundReplyRecord:
+    return OutboundReplyRecord(
+        id=str(row["id"]),
+        quote_id=str(row["quote_id"]) if row["quote_id"] else "",
+        recipient=row["recipient"],
+        subject=row["subject"],
+        body_text=row["body_text"],
+        status=row["status"],
+        created_at=row["created_at"].isoformat(),
+        sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+        error_message=row["error_message"],
     )
 
 

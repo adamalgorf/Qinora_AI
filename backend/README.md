@@ -30,3 +30,10 @@ python -m qinora.infrastructure.migrations
 cd backend
 python -m pytest
 ```
+
+## Workers
+
+```powershell
+cd backend
+python -m qinora.workers.outbound_mailer
+```

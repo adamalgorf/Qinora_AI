@@ -107,3 +107,5 @@ class OutboundReplyRecord:
     body_text: str
     status: str
     created_at: str
+    sent_at: str | None = None
+    error_message: str | None = None

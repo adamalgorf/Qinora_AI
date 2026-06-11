@@ -169,3 +169,17 @@ class OutboundReplyRepository(Protocol):
         body_text: str,
     ) -> OutboundReplyRecord:
         pass
+
+    async def next_queued(self, limit: int) -> list[OutboundReplyRecord]:
+        pass
+
+    async def mark_sent(self, reply_id: str) -> OutboundReplyRecord:
+        pass
+
+    async def mark_failed(self, reply_id: str, error_message: str) -> OutboundReplyRecord:
+        pass
+
+
+class OutboundMailer(Protocol):
+    async def send(self, reply: OutboundReplyRecord) -> None:
+        pass

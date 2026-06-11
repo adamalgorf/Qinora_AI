@@ -110,11 +110,22 @@ class OutboundReplyItem(BaseModel):
     body_text: str
     status: str
     created_at: str
+    sent_at: str | None = None
+    error_message: str | None = None
 
 
 class SendQuoteResponse(BaseModel):
     quote: QuoteListItem
     outbound_reply: OutboundReplyItem
+
+
+class ProcessOutboundQueuePayload(BaseModel):
+    limit: int = Field(default=10, ge=1, le=100)
+
+
+class ProcessOutboundQueueResponse(BaseModel):
+    sent: list[OutboundReplyItem]
+    failed: list[OutboundReplyItem]
 
 
 class CreateQuotePayload(BaseModel):

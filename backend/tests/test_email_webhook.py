@@ -192,6 +192,30 @@ def test_create_and_send_quote(client: TestClient) -> None:
     assert outbound.json()[0]["quote_id"] == quote_id
 
 
+def test_process_outbound_queue_marks_replies_sent(client: TestClient) -> None:
+    created = client.post(
+        "/quotes",
+        json={
+            "request_id": "req-001",
+            "customer_price": 12300,
+            "currency": "SEK",
+        },
+    )
+    quote_id = created.json()["id"]
+    client.post(f"/quotes/{quote_id}/send")
+
+    processed = client.post("/emails/outbound/process", json={"limit": 10})
+
+    assert processed.status_code == 200
+    assert processed.json()["sent"][0]["quote_id"] == quote_id
+    assert processed.json()["sent"][0]["status"] == "sent"
+    assert processed.json()["failed"] == []
+
+    outbound = client.get("/emails/outbound").json()
+    assert outbound[0]["status"] == "sent"
+    assert outbound[0]["sent_at"] is not None
+
+
 def test_send_quote_blocks_zero_price(client: TestClient) -> None:
     response = client.post("/quotes/quo-002/send")
 

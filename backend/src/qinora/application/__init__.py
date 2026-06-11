@@ -7,6 +7,11 @@ from qinora.application.invoice_audit import (
     InvoiceAuditWorkflow,
 )
 from qinora.application.operational_queries import CarrierIntelligenceCommand, OperationalQueries
+from qinora.application.outbound_mailer import (
+    ProcessOutboundQueueCommand,
+    ProcessOutboundQueueResult,
+    ProcessOutboundQueueUseCase,
+)
 from qinora.application.ports import (
     AgentDispatcher,
     InboundEmailRepository,
@@ -51,6 +56,9 @@ __all__ = [
     "CreateRequestUseCase",
     "CreateQuoteCommand",
     "PricingGateError",
+    "ProcessOutboundQueueCommand",
+    "ProcessOutboundQueueResult",
+    "ProcessOutboundQueueUseCase",
     "InvoiceAuditResult",
     "InvoiceAuditWorkflow",
     "InvoiceWriteRepository",

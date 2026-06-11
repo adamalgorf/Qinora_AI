@@ -5,6 +5,7 @@ from qinora.application import (
     BookQuoteCommand,
     CreateQuoteCommand,
     PricingGateError,
+    ProcessOutboundQueueCommand,
     QuoteNotFoundError,
     Role,
     SendQuoteCommand,
@@ -17,6 +18,8 @@ from qinora.interfaces.http.schemas import (
     AcceptQuoteResponse,
     CreateQuotePayload,
     OutboundReplyItem,
+    ProcessOutboundQueuePayload,
+    ProcessOutboundQueueResponse,
     QuoteListItem,
     SendQuoteResponse,
     ShipmentListItem,
@@ -58,6 +61,22 @@ async def list_outbound_replies(
         OutboundReplyItem(**item.__dict__)
         for item in await container.operational_queries.list_outbound_replies()
     ]
+
+
+@router.post("/emails/outbound/process", response_model=ProcessOutboundQueueResponse)
+async def process_outbound_replies(
+    payload: ProcessOutboundQueuePayload,
+    container: AppContainer = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> ProcessOutboundQueueResponse:
+    require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+    result = await container.process_outbound_queue.execute(
+        ProcessOutboundQueueCommand(limit=payload.limit)
+    )
+    return ProcessOutboundQueueResponse(
+        sent=[OutboundReplyItem(**item.__dict__) for item in result.sent],
+        failed=[OutboundReplyItem(**item.__dict__) for item in result.failed],
+    )
 
 
 @router.post("/quotes/{quote_id}/send", response_model=SendQuoteResponse)

@@ -9,6 +9,7 @@ import {
   type AcceptQuoteResponse,
   type CreateQuotePayload,
   type OutboundReplyItem,
+  type ProcessOutboundQueueResponse,
   type QuoteListItem,
   type SendQuoteResponse,
 } from "@/shared/api/client";
@@ -70,6 +71,19 @@ export function QuotesPage() {
     },
     onError: (problem: { detail?: string }) => {
       setError(problem.detail ?? "Quote could not be accepted");
+    },
+  });
+  const processQueueMutation = useMutation({
+    mutationFn: () =>
+      apiPost<ProcessOutboundQueueResponse, { limit: number }>("/emails/outbound/process", {
+        limit: 10,
+      }),
+    onSuccess: async () => {
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["outbound-replies"] });
+    },
+    onError: (problem: { detail?: string }) => {
+      setError(problem.detail ?? "Outbound queue could not be processed");
     },
   });
 
@@ -160,7 +174,17 @@ export function QuotesPage() {
           ))}
       </div>
       <section className="queue-panel" aria-label="Outbound reply queue">
-        <h3>Outbound reply queue</h3>
+        <div className="queue-panel-header">
+          <h3>Outbound reply queue</h3>
+          <Button
+            disabled={processQueueMutation.isPending}
+            onClick={() => processQueueMutation.mutate()}
+            type="button"
+            variant="secondary"
+          >
+            {processQueueMutation.isPending ? "Processing..." : "Process queue"}
+          </Button>
+        </div>
         <div className="agent-list">
           {(outboundQuery.data ?? []).map((reply) => (
             <div className="agent-row" key={reply.id}>

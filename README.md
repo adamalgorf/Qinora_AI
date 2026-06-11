@@ -54,6 +54,15 @@ npm.cmd run dev:web
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8000`.
 
+## Run Workers
+
+Process queued outbound customer replies:
+
+```powershell
+cd backend
+python -m qinora.workers.outbound_mailer
+```
+
 ## Run Full Stack With Docker
 
 ```powershell
@@ -85,6 +94,8 @@ before starting the backend against that database.
 - `POST /webhooks/email`
 - `GET /auth/me`
 - `POST /auth/dev-token`
+- `GET /emails/outbound`
+- `POST /emails/outbound/process`
 
 ## Verify
 

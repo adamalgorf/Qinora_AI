@@ -7,11 +7,13 @@ from qinora.application import (
     EmailWebhookUseCase,
     InvoiceAuditWorkflow,
     OperationalQueries,
+    ProcessOutboundQueueUseCase,
     QuoteWorkflow,
     ShipmentWorkflow,
 )
 from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
+from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
     PostgresDatabase,
     PostgresInboundEmailRepository,
@@ -46,6 +48,7 @@ class AppContainer:
     settings: Settings
     database: Any
     dispatcher: RecordingAgentDispatcher
+    outbound_mailer: RecordingOutboundMailer
     email_webhook: EmailWebhookUseCase
     operational_queries: OperationalQueries
     create_request: CreateRequestUseCase
@@ -53,6 +56,7 @@ class AppContainer:
     booking_workflow: BookingWorkflow
     shipment_workflow: ShipmentWorkflow
     invoice_audit: InvoiceAuditWorkflow
+    process_outbound_queue: ProcessOutboundQueueUseCase
     shipment_repository: ShipmentWriteRepository
 
 
@@ -66,6 +70,7 @@ def build_container(settings: Settings | None = None) -> AppContainer:
 def _build_sqlite_container(settings: Settings) -> AppContainer:
     database = SQLiteDatabase(settings.sqlite_path)
     dispatcher = RecordingAgentDispatcher()
+    outbound_mailer = RecordingOutboundMailer()
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
     quote_repository = SQLiteQuoteWriteRepository(database)
     outbound_repository = SQLiteOutboundReplyRepository(database)
@@ -77,6 +82,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         settings=settings,
         database=database,
         dispatcher=dispatcher,
+        outbound_mailer=outbound_mailer,
         email_webhook=EmailWebhookUseCase(
             SQLiteWebhookEventRepository(database),
             SQLiteInboundEmailRepository(database),
@@ -98,6 +104,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             SQLiteInvoiceWriteRepository(database),
             shipment_repository,
         ),
+        process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
         shipment_repository=shipment_repository,
     )
 
@@ -108,6 +115,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
 
     database = PostgresDatabase(settings.database_url, settings.postgres_tenant_id)
     dispatcher = RecordingAgentDispatcher()
+    outbound_mailer = RecordingOutboundMailer()
     operational_queries = OperationalQueries(PostgresOperationalReadRepository(database))
     quote_repository = PostgresQuoteWriteRepository(database)
     outbound_repository = PostgresOutboundReplyRepository(database)
@@ -119,6 +127,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         settings=settings,
         database=database,
         dispatcher=dispatcher,
+        outbound_mailer=outbound_mailer,
         email_webhook=EmailWebhookUseCase(
             PostgresWebhookEventRepository(database),
             PostgresInboundEmailRepository(database),
@@ -140,5 +149,6 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             PostgresInvoiceWriteRepository(database),
             shipment_repository,
         ),
+        process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
         shipment_repository=shipment_repository,
     )
