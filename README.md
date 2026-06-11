@@ -45,6 +45,15 @@ npm.cmd run dev:web
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8000`.
 
+## Run Full Stack With Docker
+
+```powershell
+docker compose up --build
+```
+
+The containerized frontend is served at `http://127.0.0.1:8080` and proxies `/api` to the
+backend service. The backend remains reachable at `http://127.0.0.1:8000`.
+
 ## API Modules
 
 - `GET /dashboard/summary`

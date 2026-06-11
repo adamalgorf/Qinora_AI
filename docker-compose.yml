@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      EMAIL_WEBHOOK_SECRET: ${EMAIL_WEBHOOK_SECRET:-dev-secret}
+      QINORA_AUTH_TOKEN_SECRET: ${QINORA_AUTH_TOKEN_SECRET:-dev-auth-secret}
+      QINORA_SQLITE_PATH: /app/data/qinora.sqlite3
+    ports:
+      - "8000:8000"
+    volumes:
+      - qinora_data:/app/data
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  qinora_data:

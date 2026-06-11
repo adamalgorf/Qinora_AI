@@ -13,6 +13,7 @@ QiNora is implemented with a Python backend and TypeScript frontend, following c
 - `backend/src/qinora/workers`: scheduled and queued job entrypoints for agents, outbound email, tracking simulation, invoice audit, and stale escalation.
 - `frontend/src`: React/Vite operator interface with feature slices.
 - `backend/migrations`: Postgres/Supabase schema migrations.
+- `docker-compose.yml`: local full-stack deployment wiring Nginx, React, FastAPI, and SQLite volume persistence.
 
 The local development adapter uses SQLite so the app runs without external services. Production
 persistence is intended to use the Postgres schema in `backend/migrations`, behind the same
@@ -35,6 +36,7 @@ frontend -> HTTP API contract
 - Backend tests: pytest
 - Workers: Python async workers behind application ports
 - Frontend: TypeScript, React, Vite
+- Container runtime: Docker Compose with Nginx proxying `/api` to FastAPI
 - Database target: Postgres 15+ with RLS
 
 ## Core Rules Captured First
