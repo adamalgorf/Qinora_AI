@@ -12,6 +12,10 @@ QiNora is implemented with a Python backend and TypeScript frontend, following c
 - `frontend/src`: React/Vite operator interface with feature slices.
 - `backend/migrations`: Postgres/Supabase schema migrations.
 
+The local development adapter uses SQLite so the app runs without external services. Production
+persistence is intended to use the Postgres schema in `backend/migrations`, behind the same
+application ports.
+
 ## Dependency Rule
 
 Outer layers may depend inward. Inner layers must not import outer layers.

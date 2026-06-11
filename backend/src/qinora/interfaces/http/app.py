@@ -1,17 +1,20 @@
-import os
-
 from fastapi import FastAPI, Header, HTTPException, Request, status
 
-from qinora.application import EmailWebhookCommand, EmailWebhookUseCase
-from qinora.domain import CarrierEvaluationInput, TransportMode, evaluate_carriers
-from qinora.infrastructure.in_memory import (
-    InMemoryInboundEmailRepository,
-    InMemoryWebhookEventRepository,
-    RecordingAgentDispatcher,
+from qinora.application import (
+    CarrierIntelligenceCommand,
+    EmailWebhookCommand,
+    EmailWebhookUseCase,
+    OperationalQueries,
 )
-from qinora.infrastructure.seed_data import SeedDataStore
+from qinora.infrastructure.in_memory import RecordingAgentDispatcher
+from qinora.infrastructure.settings import Settings
+from qinora.infrastructure.sqlite import (
+    SQLiteDatabase,
+    SQLiteInboundEmailRepository,
+    SQLiteOperationalReadRepository,
+    SQLiteWebhookEventRepository,
+)
 from qinora.interfaces.http.schemas import (
-    AgentActivityItem,
     AgentLogListItem,
     CarrierIntelligenceRequest,
     CarrierIntelligenceResponse,
@@ -20,8 +23,6 @@ from qinora.interfaces.http.schemas import (
     EmailWebhookPayload,
     EmailWebhookResponse,
     InboxListItem,
-    KpiItem,
-    PipelineItem,
     QuoteListItem,
     RequestListItem,
     ShipmentListItem,
@@ -31,17 +32,21 @@ from qinora.interfaces.http.security import verify_hmac_signature
 
 def create_app() -> FastAPI:
     app = FastAPI(title="QiNora TMS API", version="0.1.0")
-    webhook_events = InMemoryWebhookEventRepository()
-    inbound_emails = InMemoryInboundEmailRepository()
+    settings = Settings.from_env()
+    database = SQLiteDatabase(settings.sqlite_path)
     dispatcher = RecordingAgentDispatcher()
-    email_webhook = EmailWebhookUseCase(webhook_events, inbound_emails, dispatcher)
-    data_store = SeedDataStore.create()
+    email_webhook = EmailWebhookUseCase(
+        SQLiteWebhookEventRepository(database),
+        SQLiteInboundEmailRepository(database),
+        dispatcher,
+    )
+    operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
 
-    app.state.webhook_events = webhook_events
-    app.state.inbound_emails = inbound_emails
+    app.state.settings = settings
+    app.state.database = database
     app.state.dispatcher = dispatcher
     app.state.email_webhook = email_webhook
-    app.state.data_store = data_store
+    app.state.operational_queries = operational_queries
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -49,109 +54,51 @@ def create_app() -> FastAPI:
 
     @app.get("/dashboard/summary", response_model=DashboardSummaryResponse)
     async def dashboard_summary(request: Request) -> DashboardSummaryResponse:
-        store: SeedDataStore = request.app.state.data_store
-        open_requests = len([item for item in store.requests if item.status != "converted"])
-        exceptions = len([item for item in store.shipments if item.status.value == "needs_review"])
-
-        return DashboardSummaryResponse(
-            kpis=[
-                KpiItem(label="Open requests", value=str(open_requests), trend="+12%"),
-                KpiItem(label="On-time", value="96%", trend="+3%"),
-                KpiItem(label="Exceptions", value=str(exceptions), trend="-18%"),
-                KpiItem(label="Agent health", value="98%", trend="+1%"),
-            ],
-            pipeline=[
-                PipelineItem(status="New", count=8),
-                PipelineItem(status="Parsing", count=3),
-                PipelineItem(status="Quoted", count=12),
-                PipelineItem(status="Booked", count=9),
-                PipelineItem(status="In transit", count=17),
-                PipelineItem(status="Needs review", count=exceptions),
-            ],
-            agent_activity=[
-                AgentActivityItem(
-                    agent=log.agent_name,
-                    event=log.step,
-                    confidence=log.confidence,
-                )
-                for log in store.agent_logs
-            ],
-        )
+        queries: OperationalQueries = request.app.state.operational_queries
+        summary = await queries.dashboard_summary()
+        return DashboardSummaryResponse.model_validate(summary.__dict__)
 
     @app.get("/requests", response_model=list[RequestListItem])
     async def list_requests(request: Request) -> list[RequestListItem]:
-        store: SeedDataStore = request.app.state.data_store
-        return [
-            RequestListItem(
-                id=item.id,
-                public_id=item.public_id,
-                customer=item.customer,
-                lane=item.lane,
-                mode=item.mode.value,
-                status=item.status,
-                weight_kg=item.weight_kg,
-            )
-            for item in store.requests
-        ]
+        queries: OperationalQueries = request.app.state.operational_queries
+        return [RequestListItem(**item.__dict__) for item in await queries.list_requests()]
 
     @app.get("/quotes", response_model=list[QuoteListItem])
     async def list_quotes(request: Request) -> list[QuoteListItem]:
-        store: SeedDataStore = request.app.state.data_store
-        return [
-            QuoteListItem(
-                id=item.id,
-                status=item.status.value,
-                version=item.version,
-                customer_price=item.customer_price.amount,
-                currency=item.customer_price.currency.value,
-                parent_quote_id=item.parent_quote_id,
-            )
-            for item in store.quotes
-        ]
+        queries: OperationalQueries = request.app.state.operational_queries
+        return [QuoteListItem(**item.__dict__) for item in await queries.list_quotes()]
 
     @app.get("/shipments", response_model=list[ShipmentListItem])
     async def list_shipments(request: Request) -> list[ShipmentListItem]:
-        store: SeedDataStore = request.app.state.data_store
-        return [
-            ShipmentListItem(
-                id=item.id,
-                public_id=item.public_id,
-                quote_id=item.quote_id,
-                carrier_id=item.carrier_id,
-                lane=item.lane,
-                status=item.status.value,
-                eta=item.eta,
-            )
-            for item in store.shipments
-        ]
+        queries: OperationalQueries = request.app.state.operational_queries
+        return [ShipmentListItem(**item.__dict__) for item in await queries.list_shipments()]
 
     @app.get("/carriers", response_model=list[CarrierListItem])
     async def list_carriers(request: Request) -> list[CarrierListItem]:
-        store: SeedDataStore = request.app.state.data_store
+        queries: OperationalQueries = request.app.state.operational_queries
         return [
             CarrierListItem(
                 id=item.id,
                 display_name=item.display_name,
-                modes=[mode.value for mode in item.modes],
+                modes=list(item.modes),
                 lane_score=item.lane_score,
                 performance_score=item.performance_score,
                 preferred=item.preferred,
             )
-            for item in store.carriers
+            for item in await queries.list_carriers()
         ]
 
     @app.post("/carriers/intelligence", response_model=CarrierIntelligenceResponse)
     async def run_carrier_intelligence(
         payload: CarrierIntelligenceRequest, request: Request
     ) -> CarrierIntelligenceResponse:
-        store: SeedDataStore = request.app.state.data_store
-        result = evaluate_carriers(
-            CarrierEvaluationInput(
-                mode=TransportMode(payload.mode),
+        queries: OperationalQueries = request.app.state.operational_queries
+        result = await queries.run_carrier_intelligence(
+            CarrierIntelligenceCommand(
+                mode=payload.mode,
                 total_weight_kg=payload.total_weight_kg,
                 requested_carrier_name=payload.requested_carrier_name,
                 min_confidence=payload.min_confidence,
-                candidates=tuple(store.carriers),
             )
         )
 
@@ -173,13 +120,13 @@ def create_app() -> FastAPI:
 
     @app.get("/inbox/pending", response_model=list[InboxListItem])
     async def pending_inbox(request: Request) -> list[InboxListItem]:
-        store: SeedDataStore = request.app.state.data_store
-        return [InboxListItem(**item.__dict__) for item in store.inbox]
+        queries: OperationalQueries = request.app.state.operational_queries
+        return [InboxListItem(**item.__dict__) for item in await queries.list_inbox()]
 
     @app.get("/agents/logs", response_model=list[AgentLogListItem])
     async def agent_logs(request: Request) -> list[AgentLogListItem]:
-        store: SeedDataStore = request.app.state.data_store
-        return [AgentLogListItem(**item.__dict__) for item in store.agent_logs]
+        queries: OperationalQueries = request.app.state.operational_queries
+        return [AgentLogListItem(**item.__dict__) for item in await queries.list_agent_logs()]
 
     @app.post(
         "/webhooks/email",
@@ -192,10 +139,10 @@ def create_app() -> FastAPI:
         idempotency_key: str = Header(alias="x-idempotency-key"),
         signature: str | None = Header(default=None, alias="x-qinora-signature"),
     ) -> EmailWebhookResponse:
-        secret = os.getenv("EMAIL_WEBHOOK_SECRET", "")
+        settings: Settings = request.app.state.settings
         body = await request.body()
 
-        if not verify_hmac_signature(secret, body, signature):
+        if not verify_hmac_signature(settings.email_webhook_secret, body, signature):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid signature",

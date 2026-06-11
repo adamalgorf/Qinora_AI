@@ -29,6 +29,9 @@ It defines the tenant-scoped core schema, operational indexes, shipment status t
 idempotency table and RLS enablement. The current API uses a seed adapter while the Postgres
 repository adapter is wired in.
 
+For local development, the API also boots a SQLite adapter at `data/qinora.dev.sqlite3` by
+default. Override it with `QINORA_SQLITE_PATH`.
+
 ## Run Frontend
 
 ```powershell
