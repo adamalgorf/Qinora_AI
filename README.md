@@ -17,6 +17,18 @@ python -m pip install -e ".[dev]"
 python -m uvicorn qinora.interfaces.http.app:create_app --factory --reload
 ```
 
+## Database
+
+The first Postgres/Supabase migration lives in:
+
+```text
+backend/migrations/0001_initial.sql
+```
+
+It defines the tenant-scoped core schema, operational indexes, shipment status trigger, webhook
+idempotency table and RLS enablement. The current API uses a seed adapter while the Postgres
+repository adapter is wired in.
+
 ## Run Frontend
 
 ```powershell
@@ -25,6 +37,18 @@ npm.cmd run dev:web
 ```
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8000`.
+
+## API Modules
+
+- `GET /dashboard/summary`
+- `GET /requests`
+- `GET /quotes`
+- `GET /shipments`
+- `GET /carriers`
+- `POST /carriers/intelligence`
+- `GET /inbox/pending`
+- `GET /agents/logs`
+- `POST /webhooks/email`
 
 ## Verify
 

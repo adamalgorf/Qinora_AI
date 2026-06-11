@@ -5,6 +5,12 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom";
 
 import { AppShell } from "./shell/AppShell";
 import { ControlTowerPage } from "../features/control-tower/ControlTowerPage";
+import { AdminPage } from "../features/modules/AdminPage";
+import { CarriersPage } from "../features/modules/CarriersPage";
+import { InboxPage } from "../features/modules/InboxPage";
+import { QuotesPage } from "../features/modules/QuotesPage";
+import { RequestsPage } from "../features/modules/RequestsPage";
+import { ShipmentsPage } from "../features/modules/ShipmentsPage";
 import "./styles.css";
 
 const queryClient = new QueryClient();
@@ -12,7 +18,15 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <AppShell />,
-    children: [{ index: true, element: <ControlTowerPage /> }],
+    children: [
+      { index: true, element: <ControlTowerPage /> },
+      { path: "inbox", element: <InboxPage /> },
+      { path: "requests", element: <RequestsPage /> },
+      { path: "quotes", element: <QuotesPage /> },
+      { path: "shipments", element: <ShipmentsPage /> },
+      { path: "carriers", element: <CarriersPage /> },
+      { path: "admin", element: <AdminPage /> },
+    ],
   },
 ]);
 

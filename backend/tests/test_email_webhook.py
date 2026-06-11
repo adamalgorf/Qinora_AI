@@ -46,3 +46,30 @@ def test_dashboard_summary_returns_control_tower_data() -> None:
 
     assert response.status_code == 200
     assert response.json()["kpis"][0]["label"] == "Open requests"
+
+
+def test_core_module_endpoints_return_seeded_records() -> None:
+    client = TestClient(create_app())
+
+    assert client.get("/requests").json()[0]["public_id"] == "REQ-0001"
+    assert client.get("/quotes").json()[0]["currency"] == "SEK"
+    assert client.get("/shipments").json()[0]["public_id"] == "SHP-0001"
+    assert client.get("/carriers").json()[0]["display_name"] == "Nordic Freight"
+    assert client.get("/inbox/pending").json()[0]["classification"] == "transport_request"
+    assert client.get("/agents/logs").json()[0]["agent_name"] == "Nora Intake"
+
+
+def test_carrier_intelligence_endpoint_runs_domain_pipeline() -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/carriers/intelligence",
+        json={
+            "mode": "ftl",
+            "total_weight_kg": 500,
+            "requested_carrier_name": "Nordic",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["selected_carrier_id"] == "car-001"

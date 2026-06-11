@@ -112,9 +112,14 @@ button {
   text-align: left;
 }
 
+.nav-item.nav-item.active,
 .nav-item:hover {
   background: hsl(var(--secondary));
   color: hsl(var(--foreground));
+}
+
+.nav-item svg {
+  color: hsl(186 100% 72%);
 }
 
 .main-surface {
@@ -125,6 +130,17 @@ button {
   display: grid;
   gap: 24px;
   max-width: 1320px;
+}
+
+.module-page {
+  display: grid;
+  gap: 24px;
+  max-width: 1180px;
+}
+
+.module-header {
+  display: grid;
+  gap: 12px;
 }
 
 .page-header {
@@ -215,6 +231,46 @@ h1 {
 
 .agent-card {
   max-width: 860px;
+}
+
+.data-card.data-card {
+  overflow: hidden;
+  border-color: hsl(var(--border) / 0.9);
+  background: linear-gradient(180deg, hsl(222 38% 10% / 0.94), hsl(222 47% 6% / 0.94));
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+th,
+td {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 14px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+td {
+  color: hsl(var(--foreground));
+  font-size: 0.92rem;
+}
+
+tbody tr:hover {
+  background: hsl(var(--secondary) / 0.38);
 }
 
 .agent-list {

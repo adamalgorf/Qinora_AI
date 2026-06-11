@@ -1,13 +1,16 @@
-import { Activity, Inbox, Settings, Truck } from "lucide-react";
-import { Outlet } from "react-router-dom";
+import { Activity, FileText, Inbox, RadioTower, Settings, Truck, Users } from "lucide-react";
+import { NavLink, Outlet } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { label: "Tower", icon: Activity },
-  { label: "Inbox", icon: Inbox },
-  { label: "Shipments", icon: Truck },
-  { label: "Admin", icon: Settings },
+  { label: "Tower", href: "/", icon: Activity },
+  { label: "Inbox", href: "/inbox", icon: Inbox },
+  { label: "Requests", href: "/requests", icon: RadioTower },
+  { label: "Quotes", href: "/quotes", icon: FileText },
+  { label: "Shipments", href: "/shipments", icon: Truck },
+  { label: "Carriers", href: "/carriers", icon: Users },
+  { label: "Admin", href: "/admin", icon: Settings },
 ];
 
 export function AppShell() {
@@ -21,14 +24,16 @@ export function AppShell() {
         <nav className="nav-list">
           {navItems.map((item) => (
             <Button
+              asChild
               className="nav-item"
               key={item.label}
-              type="button"
               title={item.label}
               variant="ghost"
             >
-              <item.icon aria-hidden="true" size={18} />
-              <span>{item.label}</span>
+              <NavLink to={item.href}>
+                <item.icon aria-hidden="true" size={18} />
+                <span>{item.label}</span>
+              </NavLink>
             </Button>
           ))}
         </nav>

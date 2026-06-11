@@ -10,6 +10,7 @@ QiNora is implemented with a Python backend and TypeScript frontend, following c
 - `backend/src/qinora/interfaces/http`: FastAPI routes, auth, HMAC, idempotency, and HTTP DTO mapping.
 - `backend/src/qinora/workers`: scheduled and queued job entrypoints for agents, outbound email, tracking simulation, invoice audit, and stale escalation.
 - `frontend/src`: React/Vite operator interface with feature slices.
+- `backend/migrations`: Postgres/Supabase schema migrations.
 
 ## Dependency Rule
 
@@ -37,3 +38,4 @@ frontend -> HTTP API contract
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Carrier intelligence is deterministic and stores confidence components for auditability.
 - Email webhooks require HMAC and idempotency at the API boundary.
+- Frontend modules consume backend API endpoints through the Vite `/api` proxy.
