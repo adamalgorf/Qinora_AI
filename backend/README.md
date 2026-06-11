@@ -7,8 +7,11 @@ Python backend for the QiNora TMS.
 ```powershell
 cd backend
 python -m pip install -e ".[dev]"
-python -m uvicorn qinora.interfaces.http.app:create_app --factory --reload
+python -m uvicorn qinora.interfaces.http.app:app --reload
 ```
+
+Set `QINORA_AUTH_TOKEN_SECRET` outside local development. Bearer tokens are verified at the HTTP
+boundary and converted into the application `AuthContext`.
 
 ## Test
 

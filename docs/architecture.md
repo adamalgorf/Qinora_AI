@@ -7,7 +7,7 @@ QiNora is implemented with a Python backend and TypeScript frontend, following c
 - `backend/src/qinora/domain`: pure business rules, entities, value objects, status machines, validations, and deterministic scoring. It has no framework, database, HTTP, or LLM dependencies.
 - `backend/src/qinora/application`: use cases and ports. Use cases depend on domain rules and abstract repositories/gateways.
 - `backend/src/qinora/infrastructure`: adapters for persistence, queues, LLM providers, email relays, and clocks.
-- `backend/src/qinora/interfaces/http`: FastAPI routes, auth, HMAC, idempotency, and HTTP DTO mapping.
+- `backend/src/qinora/interfaces/http`: FastAPI routes, signed Bearer auth, HMAC webhooks, idempotency, and HTTP DTO mapping.
 - `backend/src/qinora/interfaces/http/routers`: feature routers that keep HTTP endpoints modular.
 - `backend/src/qinora/interfaces/http/container.py`: composition root for application use cases and infrastructure adapters.
 - `backend/src/qinora/workers`: scheduled and queued job entrypoints for agents, outbound email, tracking simulation, invoice audit, and stale escalation.
@@ -44,4 +44,5 @@ frontend -> HTTP API contract
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Carrier intelligence is deterministic and stores confidence components for auditability.
 - Email webhooks require HMAC and idempotency at the API boundary.
+- HTTP auth accepts signed Bearer tokens and maps them into framework-free RBAC context.
 - Frontend modules consume backend API endpoints through the Vite `/api` proxy.

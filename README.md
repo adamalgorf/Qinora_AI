@@ -14,7 +14,7 @@ AI-driven Transport Management System for 4PL operators and freight forwarders.
 ```powershell
 cd backend
 python -m pip install -e ".[dev]"
-python -m uvicorn qinora.interfaces.http.app:create_app --factory --reload
+python -m uvicorn qinora.interfaces.http.app:app --reload
 ```
 
 ## Database
@@ -31,6 +31,10 @@ repository adapter is wired in.
 
 For local development, the API also boots a SQLite adapter at `data/qinora.dev.sqlite3` by
 default. Override it with `QINORA_SQLITE_PATH`.
+
+Set `QINORA_AUTH_TOKEN_SECRET` for signed Bearer tokens. The development UI can issue a local
+dev token through `POST /auth/dev-token`; production auth can replace that endpoint without
+changing the RBAC use cases.
 
 ## Run Frontend
 
@@ -52,6 +56,8 @@ The Vite dev server proxies `/api` to `http://127.0.0.1:8000`.
 - `GET /inbox/pending`
 - `GET /agents/logs`
 - `POST /webhooks/email`
+- `GET /auth/me`
+- `POST /auth/dev-token`
 
 ## Verify
 

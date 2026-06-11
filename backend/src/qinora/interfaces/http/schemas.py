@@ -21,6 +21,19 @@ class AuthMeResponse(BaseModel):
     roles: list[str]
 
 
+class DevTokenRequest(BaseModel):
+    user_id: str = "dev-user"
+    tenant_id: str = "dev-tenant"
+    roles: list[str] = Field(default_factory=lambda: ["admin"])
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: AuthMeResponse
+
+
 class KpiItem(BaseModel):
     label: str
     value: str

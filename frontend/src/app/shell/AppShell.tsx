@@ -13,7 +13,15 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { apiGet, type AuthMe } from "@/shared/api/client";
+import {
+  apiGet,
+  apiPost,
+  getAuthToken,
+  setAuthToken,
+  type AuthMe,
+  type DevTokenPayload,
+  type TokenResponse,
+} from "@/shared/api/client";
 
 const navItems = [
   { label: "Tower", href: "/", icon: Activity },
@@ -29,7 +37,20 @@ const navItems = [
 export function AppShell() {
   const authQuery = useQuery({
     queryKey: ["auth-me"],
-    queryFn: () => apiGet<AuthMe>("/auth/me"),
+    queryFn: async () => {
+      const currentUser = await apiGet<AuthMe>("/auth/me");
+      if (getAuthToken()) {
+        return currentUser;
+      }
+
+      const session = await apiPost<TokenResponse, DevTokenPayload>("/auth/dev-token", {
+        user_id: currentUser.user_id,
+        tenant_id: currentUser.tenant_id,
+        roles: currentUser.roles,
+      });
+      setAuthToken(session.access_token);
+      return session.user;
+    },
   });
 
   return (

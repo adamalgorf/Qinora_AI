@@ -67,6 +67,42 @@ def test_auth_me_returns_server_side_context(client: TestClient) -> None:
     }
 
 
+def test_auth_dev_token_can_authorize_me_request(client: TestClient) -> None:
+    token_response = client.post(
+        "/auth/dev-token",
+        json={"user_id": "user-2", "tenant_id": "tenant-2", "roles": ["4pl_tower"]},
+    )
+
+    assert token_response.status_code == 200
+
+    response = client.get(
+        "/auth/me",
+        headers={"authorization": f"Bearer {token_response.json()['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": "user-2",
+        "tenant_id": "tenant-2",
+        "roles": ["4pl_tower"],
+    }
+
+
+def test_auth_me_rejects_tampered_bearer_token(client: TestClient) -> None:
+    token_response = client.post(
+        "/auth/dev-token",
+        json={"user_id": "user-2", "tenant_id": "tenant-2", "roles": ["admin"]},
+    )
+    token = token_response.json()["access_token"]
+
+    response = client.get(
+        "/auth/me",
+        headers={"authorization": f"Bearer {token[:-1]}x"},
+    )
+
+    assert response.status_code == 401
+
+
 def test_core_module_endpoints_return_seeded_records(client: TestClient) -> None:
     assert client.get("/requests").json()[0]["public_id"] == "REQ-0001"
     assert client.get("/quotes").json()[0]["currency"] == "SEK"

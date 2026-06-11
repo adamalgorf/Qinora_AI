@@ -29,6 +29,19 @@ export type AuthMe = {
   roles: string[];
 };
 
+export type DevTokenPayload = {
+  user_id: string;
+  tenant_id: string;
+  roles: string[];
+};
+
+export type TokenResponse = {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+  user: AuthMe;
+};
+
 export type RequestListItem = {
   id: string;
   public_id: string;
@@ -153,9 +166,22 @@ export type AgentLogListItem = {
   confidence: number;
 };
 
+const AUTH_TOKEN_KEY = "qinora.authToken";
+
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string): void {
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`/api${path}`, {
-    headers: { accept: "application/json" },
+    headers: jsonHeaders(),
   });
 
   if (!response.ok) {
@@ -168,10 +194,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<TResponse, TPayload>(path: string, payload: TPayload): Promise<TResponse> {
   const response = await fetch(`/api${path}`, {
     method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-    },
+    headers: jsonHeaders(),
     body: JSON.stringify(payload),
   });
 
@@ -180,4 +203,13 @@ export async function apiPost<TResponse, TPayload>(path: string, payload: TPaylo
   }
 
   return (await response.json()) as TResponse;
+}
+
+function jsonHeaders(): HeadersInit {
+  const token = getAuthToken();
+  return {
+    accept: "application/json",
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    "content-type": "application/json",
+  };
 }
