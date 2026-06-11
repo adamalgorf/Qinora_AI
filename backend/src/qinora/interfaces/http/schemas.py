@@ -222,6 +222,11 @@ class UpdateShipmentStatusPayload(BaseModel):
     status: str
 
 
+class OverrideShipmentPayload(BaseModel):
+    status: str
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class CarrierListItem(BaseModel):
     id: str
     display_name: str

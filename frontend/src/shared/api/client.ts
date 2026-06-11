@@ -191,6 +191,11 @@ export type UpdateShipmentStatusPayload = {
   status: string;
 };
 
+export type OverrideShipmentPayload = {
+  status: string;
+  reason: string;
+};
+
 export type CarrierListItem = {
   id: string;
   display_name: string;

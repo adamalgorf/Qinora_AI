@@ -14,6 +14,7 @@ from qinora.interfaces.http.schemas import (
     CreateInvoicePayload,
     CreateInvoiceResponse,
     InvoiceListItem,
+    OverrideShipmentPayload,
     RunTrackingSimulatorPayload,
     RunTrackingSimulatorResponse,
     ShipmentEventItem,
@@ -85,6 +86,35 @@ async def update_shipment_status(
                 shipment_id=shipment_id,
                 status=payload.status,
                 reason="Manual status update",
+            )
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
+    if shipment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipment not found")
+
+    return ShipmentListItem(**shipment.__dict__)
+
+
+@router.post("/shipments/{shipment_id}/override", response_model=ShipmentListItem)
+async def override_shipment_status(
+    shipment_id: str,
+    payload: OverrideShipmentPayload,
+    container: AppContainer = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> ShipmentListItem:
+    require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+
+    try:
+        shipment = await container.shipment_workflow.update_status(
+            UpdateShipmentStatusCommand(
+                shipment_id=shipment_id,
+                status=payload.status,
+                reason=f"Manual override: {payload.reason}",
             )
         )
     except ValueError as error:

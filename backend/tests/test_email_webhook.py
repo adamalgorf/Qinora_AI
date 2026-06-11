@@ -357,6 +357,25 @@ def test_update_shipment_status_rejects_invalid_transition(client: TestClient) -
     assert response.status_code == 422
 
 
+def test_manual_shipment_override_records_reason(client: TestClient) -> None:
+    response = client.post(
+        "/shipments/shp-001/override",
+        json={
+            "status": "needs_review",
+            "reason": "Carrier confirmation requires operator review",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "needs_review"
+
+    timeline = client.get("/shipments/shp-001/timeline").json()
+    assert timeline[0]["to_status"] == "needs_review"
+    assert timeline[0]["reason"] == (
+        "Manual override: Carrier confirmation requires operator review"
+    )
+
+
 def test_invoice_audit_approves_within_discrepancy(client: TestClient) -> None:
     client.post("/shipments/shp-001/status", json={"status": "in_transit"})
     client.post("/shipments/shp-001/status", json={"status": "delivered"})

@@ -46,6 +46,7 @@ frontend -> HTTP API contract
 - Request intake validation checks weight, dimensions, timing, and ADR UN-number detection.
 - Incomplete request intake creates `operational_tasks` for Control Tower exception handling.
 - Shipment status updates write `shipment_events` through an application workflow for case timeline auditability.
+- Manual shipment overrides reuse the shipment workflow and require an operator reason in the timeline.
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Successful quote sending enqueues `outbound_reply_queue` records after the pricing gate passes.
 - Quote replies are interpreted by `QuoteResponseWorkflow`, recording reply events and routing accepted, revised, or rejected quotes.

@@ -95,6 +95,7 @@ before starting the backend against that database.
 - `GET /contacts`
 - `GET /quotes`
 - `GET /shipments`
+- `POST /shipments/{id}/override`
 - `GET /carriers`
 - `POST /carriers/intelligence`
 - `GET /inbox/pending`

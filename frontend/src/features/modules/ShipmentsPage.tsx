@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ShieldAlert } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -6,6 +8,7 @@ import {
   apiPost,
   type CreateInvoicePayload,
   type CreateInvoiceResponse,
+  type OverrideShipmentPayload,
   type RunTrackingSimulatorResponse,
   type ShipmentListItem,
   type UpdateShipmentStatusPayload,
@@ -16,6 +19,11 @@ import { ModuleScaffold } from "./ModuleScaffold";
 
 export function ShipmentsPage() {
   const queryClient = useQueryClient();
+  const [overrideForm, setOverrideForm] = useState({
+    shipmentId: "shp-001",
+    status: "needs_review",
+    reason: "Carrier confirmation requires operator review",
+  });
   const query = useQuery({
     queryKey: ["shipments"],
     queryFn: () => apiGet<ShipmentListItem[]>("/shipments"),
@@ -40,6 +48,16 @@ export function ShipmentsPage() {
         queryClient.invalidateQueries({ queryKey: ["shipments"] }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
       ]);
+    },
+  });
+  const overrideMutation = useMutation({
+    mutationFn: (payload: OverrideShipmentPayload & { id: string }) =>
+      apiPost<ShipmentListItem, OverrideShipmentPayload>(`/shipments/${payload.id}/override`, {
+        status: payload.status,
+        reason: payload.reason,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["shipments"] });
     },
   });
   const trackingMutation = useMutation({
@@ -117,6 +135,70 @@ export function ShipmentsPage() {
             </Button>
           ))}
       </div>
+      <form
+        className="override-panel"
+        onSubmit={(event) => {
+          event.preventDefault();
+          overrideMutation.mutate({
+            id: overrideForm.shipmentId,
+            status: overrideForm.status,
+            reason: overrideForm.reason,
+          });
+        }}
+      >
+        <div className="override-heading">
+          <ShieldAlert aria-hidden="true" />
+          <div>
+            <span>Manual override</span>
+            <strong>Record an audited shipment exception</strong>
+          </div>
+        </div>
+        <label>
+          Shipment
+          <select
+            aria-label="Override shipment"
+            value={overrideForm.shipmentId}
+            onChange={(event) =>
+              setOverrideForm((current) => ({ ...current, shipmentId: event.target.value }))
+            }
+          >
+            {(query.data ?? []).map((shipment) => (
+              <option key={shipment.id} value={shipment.id}>
+                {shipment.public_id} - {shipment.status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select
+            aria-label="Override status"
+            value={overrideForm.status}
+            onChange={(event) =>
+              setOverrideForm((current) => ({ ...current, status: event.target.value }))
+            }
+          >
+            <option value="needs_review">Needs review</option>
+            <option value="manual_review">Manual review</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="booked">Booked</option>
+            <option value="in_transit">In transit</option>
+          </select>
+        </label>
+        <label className="override-reason">
+          Reason
+          <input
+            aria-label="Override reason"
+            value={overrideForm.reason}
+            onChange={(event) =>
+              setOverrideForm((current) => ({ ...current, reason: event.target.value }))
+            }
+          />
+        </label>
+        <Button disabled={overrideMutation.isPending} type="submit" variant="secondary">
+          {overrideMutation.isPending ? "Recording..." : "Record override"}
+        </Button>
+      </form>
     </ModuleScaffold>
   );
 }
