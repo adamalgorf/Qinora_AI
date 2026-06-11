@@ -23,6 +23,7 @@ from qinora.application.quote_workflow import (
     QuoteNotFoundError,
     QuoteWorkflow,
     SendQuoteCommand,
+    SendQuoteResult,
 )
 from qinora.application.request_intake import (
     CargoLineCommand,
@@ -57,6 +58,7 @@ __all__ = [
     "QuoteWorkflow",
     "Role",
     "SendQuoteCommand",
+    "SendQuoteResult",
     "RequestWriteRepository",
     "ShipmentWriteRepository",
     "ShipmentWorkflow",

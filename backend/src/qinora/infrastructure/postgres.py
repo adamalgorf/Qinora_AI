@@ -9,6 +9,7 @@ from qinora.application.read_models import (
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
+    OutboundReplyRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -304,6 +305,28 @@ class PostgresOperationalReadRepository:
                 order by created_at desc
                 """,
                 (self._database.tenant_id, shipment_id),
+            )
+        ]
+
+    async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
+        return [
+            OutboundReplyRecord(
+                id=str(row["id"]),
+                quote_id=str(row["quote_id"]) if row["quote_id"] else "",
+                recipient=row["recipient"],
+                subject=row["subject"],
+                body_text=row["body_text"],
+                status=row["status"],
+                created_at=row["created_at"].isoformat(),
+            )
+            for row in self._fetch_all(
+                """
+                select id, quote_id, recipient, subject, body_text, status, created_at
+                from public.outbound_reply_queue
+                where tenant_id = %s
+                order by created_at desc
+                """,
+                (self._database.tenant_id,),
             )
         ]
 
@@ -752,6 +775,41 @@ class PostgresShipmentEventRepository:
             from_status=row["from_status"],
             to_status=row["to_status"],
             reason=row["reason"],
+            created_at=row["created_at"].isoformat(),
+        )
+
+
+class PostgresOutboundReplyRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def enqueue_quote(
+        self,
+        *,
+        quote_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> OutboundReplyRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.outbound_reply_queue
+                  (tenant_id, quote_id, recipient, subject, body_text, status)
+                values (%s, %s, %s, %s, %s, %s)
+                returning id, quote_id, recipient, subject, body_text, status, created_at
+                """,
+                (self._database.tenant_id, quote_id, recipient, subject, body_text, "queued"),
+            )
+            row = cursor.fetchone()
+
+        return OutboundReplyRecord(
+            id=str(row["id"]),
+            quote_id=str(row["quote_id"]) if row["quote_id"] else "",
+            recipient=row["recipient"],
+            subject=row["subject"],
+            body_text=row["body_text"],
+            status=row["status"],
             created_at=row["created_at"].isoformat(),
         )
 

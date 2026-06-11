@@ -6,6 +6,7 @@ from qinora.application.read_models import (
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
+    OutboundReplyRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -65,6 +66,9 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_shipment_events(self, shipment_id: str) -> list[ShipmentEventRecord]:
+        pass
+
+    async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
         pass
 
 
@@ -152,4 +156,16 @@ class ShipmentEventRepository(Protocol):
         to_status: str,
         reason: str | None = None,
     ) -> ShipmentEventRecord:
+        pass
+
+
+class OutboundReplyRepository(Protocol):
+    async def enqueue_quote(
+        self,
+        *,
+        quote_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> OutboundReplyRecord:
         pass

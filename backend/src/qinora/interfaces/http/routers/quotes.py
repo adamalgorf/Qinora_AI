@@ -16,7 +16,9 @@ from qinora.interfaces.http.schemas import (
     AcceptQuotePayload,
     AcceptQuoteResponse,
     CreateQuotePayload,
+    OutboundReplyItem,
     QuoteListItem,
+    SendQuoteResponse,
     ShipmentListItem,
 )
 
@@ -48,16 +50,26 @@ async def create_quote(
     return QuoteListItem(**quote.__dict__)
 
 
-@router.post("/quotes/{quote_id}/send", response_model=QuoteListItem)
+@router.get("/emails/outbound", response_model=list[OutboundReplyItem])
+async def list_outbound_replies(
+    container: AppContainer = CONTAINER,
+) -> list[OutboundReplyItem]:
+    return [
+        OutboundReplyItem(**item.__dict__)
+        for item in await container.operational_queries.list_outbound_replies()
+    ]
+
+
+@router.post("/quotes/{quote_id}/send", response_model=SendQuoteResponse)
 async def send_quote(
     quote_id: str,
     container: AppContainer = CONTAINER,
     context: AuthContext = AUTH_CONTEXT,
-) -> QuoteListItem:
+) -> SendQuoteResponse:
     require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
 
     try:
-        quote = await container.quote_workflow.send_quote(SendQuoteCommand(quote_id=quote_id))
+        result = await container.quote_workflow.send_quote(SendQuoteCommand(quote_id=quote_id))
     except QuoteNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -69,7 +81,10 @@ async def send_quote(
             detail=str(error),
         ) from error
 
-    return QuoteListItem(**quote.__dict__)
+    return SendQuoteResponse(
+        quote=QuoteListItem(**result.quote.__dict__),
+        outbound_reply=OutboundReplyItem(**result.outbound_reply.__dict__),
+    )
 
 
 @router.post("/quotes/{quote_id}/accept", response_model=AcceptQuoteResponse)

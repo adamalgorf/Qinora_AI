@@ -47,6 +47,7 @@ frontend -> HTTP API contract
 - Incomplete request intake creates `operational_tasks` for Control Tower exception handling.
 - Shipment status updates write `shipment_events` through an application workflow for case timeline auditability.
 - Quote sending is blocked when the customer price is less than or equal to zero.
+- Successful quote sending enqueues `outbound_reply_queue` records after the pricing gate passes.
 - Carrier intelligence is deterministic and stores confidence components for auditability.
 - Email webhooks require HMAC and idempotency at the API boundary.
 - HTTP auth accepts signed Bearer tokens and maps them into framework-free RBAC context.

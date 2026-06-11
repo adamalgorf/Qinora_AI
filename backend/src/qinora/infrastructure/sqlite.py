@@ -9,6 +9,7 @@ from qinora.application.read_models import (
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
+    OutboundReplyRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -151,6 +152,16 @@ class SQLiteDatabase:
                   from_status text,
                   to_status text not null,
                   reason text,
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists outbound_reply_queue (
+                  id text primary key,
+                  quote_id text not null,
+                  recipient text not null,
+                  subject text not null,
+                  body_text text not null,
+                  status text not null default 'queued',
                   created_at text not null default current_timestamp
                 );
                 """
@@ -529,6 +540,18 @@ class SQLiteOperationalReadRepository:
                 order by created_at desc
                 """,
                 (shipment_id,),
+            )
+        ]
+
+    async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
+        return [
+            OutboundReplyRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select id, quote_id, recipient, subject, body_text, status, created_at
+                from outbound_reply_queue
+                order by created_at desc
+                """
             )
         ]
 
@@ -920,6 +943,33 @@ class SQLiteShipmentEventRepository:
             ).fetchone()
 
         return ShipmentEventRecord(**dict(row))
+
+
+class SQLiteOutboundReplyRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def enqueue_quote(
+        self,
+        *,
+        quote_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> OutboundReplyRecord:
+        reply_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into outbound_reply_queue
+                  (id, quote_id, recipient, subject, body_text, status)
+                values (?, ?, ?, ?, ?, ?)
+                returning id, quote_id, recipient, subject, body_text, status, created_at
+                """,
+                (reply_id, quote_id, recipient, subject, body_text, "queued"),
+            ).fetchone()
+
+        return OutboundReplyRecord(**dict(row))
 
 
 def _count(connection: sqlite3.Connection, table: str) -> int:

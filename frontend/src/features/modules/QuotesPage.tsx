@@ -8,7 +8,9 @@ import {
   type AcceptQuotePayload,
   type AcceptQuoteResponse,
   type CreateQuotePayload,
+  type OutboundReplyItem,
   type QuoteListItem,
+  type SendQuoteResponse,
 } from "@/shared/api/client";
 
 import { DataTable } from "./DataTable";
@@ -19,6 +21,10 @@ export function QuotesPage() {
   const query = useQuery({
     queryKey: ["quotes"],
     queryFn: () => apiGet<QuoteListItem[]>("/quotes"),
+  });
+  const outboundQuery = useQuery({
+    queryKey: ["outbound-replies"],
+    queryFn: () => apiGet<OutboundReplyItem[]>("/emails/outbound"),
   });
   const [form, setForm] = useState({
     requestId: "req-001",
@@ -35,10 +41,14 @@ export function QuotesPage() {
     },
   });
   const sendMutation = useMutation({
-    mutationFn: (quoteId: string) => apiPost<QuoteListItem, Record<string, never>>(`/quotes/${quoteId}/send`, {}),
+    mutationFn: (quoteId: string) =>
+      apiPost<SendQuoteResponse, Record<string, never>>(`/quotes/${quoteId}/send`, {}),
     onSuccess: async () => {
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["quotes"] }),
+        queryClient.invalidateQueries({ queryKey: ["outbound-replies"] }),
+      ]);
     },
     onError: (problem: { detail?: string }) => {
       setError(problem.detail ?? "Quote could not be sent");
@@ -149,6 +159,23 @@ export function QuotesPage() {
             </Button>
           ))}
       </div>
+      <section className="queue-panel" aria-label="Outbound reply queue">
+        <h3>Outbound reply queue</h3>
+        <div className="agent-list">
+          {(outboundQuery.data ?? []).map((reply) => (
+            <div className="agent-row" key={reply.id}>
+              <div>
+                <strong>{reply.subject}</strong>
+                <span>{reply.recipient}</span>
+              </div>
+              <span>{reply.status}</span>
+            </div>
+          ))}
+          {!outboundQuery.isLoading && (outboundQuery.data ?? []).length === 0 ? (
+            <p className="muted">No queued replies.</p>
+          ) : null}
+        </div>
+      </section>
     </ModuleScaffold>
   );
 }

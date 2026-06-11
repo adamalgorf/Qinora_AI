@@ -96,3 +96,14 @@ class ShipmentEventRecord:
     to_status: str
     reason: str | None
     created_at: str
+
+
+@dataclass(frozen=True)
+class OutboundReplyRecord:
+    id: str
+    quote_id: str
+    recipient: str
+    subject: str
+    body_text: str
+    status: str
+    created_at: str

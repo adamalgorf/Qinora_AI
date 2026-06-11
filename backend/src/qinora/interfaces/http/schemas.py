@@ -102,6 +102,21 @@ class QuoteListItem(BaseModel):
     parent_quote_id: str | None = None
 
 
+class OutboundReplyItem(BaseModel):
+    id: str
+    quote_id: str
+    recipient: str
+    subject: str
+    body_text: str
+    status: str
+    created_at: str
+
+
+class SendQuoteResponse(BaseModel):
+    quote: QuoteListItem
+    outbound_reply: OutboundReplyItem
+
+
 class CreateQuotePayload(BaseModel):
     request_id: str
     customer_price: float

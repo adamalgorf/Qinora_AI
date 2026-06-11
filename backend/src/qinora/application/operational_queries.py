@@ -7,6 +7,7 @@ from qinora.application.read_models import (
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
+    OutboundReplyRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -92,6 +93,9 @@ class OperationalQueries:
 
     async def list_shipment_events(self, shipment_id: str) -> list[ShipmentEventRecord]:
         return await self._repository.list_shipment_events(shipment_id)
+
+    async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
+        return await self._repository.list_outbound_replies()
 
     async def run_carrier_intelligence(self, command: CarrierIntelligenceCommand):
         carriers = await self._repository.list_carriers()

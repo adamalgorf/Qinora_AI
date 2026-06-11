@@ -182,7 +182,14 @@ def test_create_and_send_quote(client: TestClient) -> None:
     sent = client.post(f"/quotes/{quote_id}/send")
 
     assert sent.status_code == 200
-    assert sent.json()["status"] == "sent"
+    body = sent.json()
+    assert body["quote"]["status"] == "sent"
+    assert body["outbound_reply"]["quote_id"] == quote_id
+    assert body["outbound_reply"]["status"] == "queued"
+
+    outbound = client.get("/emails/outbound")
+    assert outbound.status_code == 200
+    assert outbound.json()[0]["quote_id"] == quote_id
 
 
 def test_send_quote_blocks_zero_price(client: TestClient) -> None:
@@ -190,6 +197,7 @@ def test_send_quote_blocks_zero_price(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"] == "Quote customer price must be greater than zero"
+    assert client.get("/emails/outbound").json() == []
 
 
 def test_accept_quote_books_shipment_with_carrier_intelligence(client: TestClient) -> None:

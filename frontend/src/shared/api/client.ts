@@ -85,6 +85,21 @@ export type QuoteListItem = {
   parent_quote_id: string | null;
 };
 
+export type OutboundReplyItem = {
+  id: string;
+  quote_id: string;
+  recipient: string;
+  subject: string;
+  body_text: string;
+  status: string;
+  created_at: string;
+};
+
+export type SendQuoteResponse = {
+  quote: QuoteListItem;
+  outbound_reply: OutboundReplyItem;
+};
+
 export type CreateQuotePayload = {
   request_id: string;
   customer_price: number;

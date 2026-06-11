@@ -18,6 +18,7 @@ from qinora.infrastructure.postgres import (
     PostgresInvoiceWriteRepository,
     PostgresOperationalReadRepository,
     PostgresOperationalTaskWriteRepository,
+    PostgresOutboundReplyRepository,
     PostgresQuoteWriteRepository,
     PostgresRequestWriteRepository,
     PostgresShipmentEventRepository,
@@ -31,6 +32,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteInvoiceWriteRepository,
     SQLiteOperationalReadRepository,
     SQLiteOperationalTaskWriteRepository,
+    SQLiteOutboundReplyRepository,
     SQLiteQuoteWriteRepository,
     SQLiteRequestWriteRepository,
     SQLiteShipmentEventRepository,
@@ -66,6 +68,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     dispatcher = RecordingAgentDispatcher()
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
     quote_repository = SQLiteQuoteWriteRepository(database)
+    outbound_repository = SQLiteOutboundReplyRepository(database)
     shipment_repository = SQLiteShipmentWriteRepository(database)
     shipment_event_repository = SQLiteShipmentEventRepository(database)
     task_repository = SQLiteOperationalTaskWriteRepository(database)
@@ -84,7 +87,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             SQLiteRequestWriteRepository(database),
             task_repository,
         ),
-        quote_workflow=QuoteWorkflow(quote_repository),
+        quote_workflow=QuoteWorkflow(quote_repository, outbound_repository),
         booking_workflow=BookingWorkflow(
             quote_repository,
             shipment_repository,
@@ -107,6 +110,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     dispatcher = RecordingAgentDispatcher()
     operational_queries = OperationalQueries(PostgresOperationalReadRepository(database))
     quote_repository = PostgresQuoteWriteRepository(database)
+    outbound_repository = PostgresOutboundReplyRepository(database)
     shipment_repository = PostgresShipmentWriteRepository(database)
     shipment_event_repository = PostgresShipmentEventRepository(database)
     task_repository = PostgresOperationalTaskWriteRepository(database)
@@ -125,7 +129,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             PostgresRequestWriteRepository(database),
             task_repository,
         ),
-        quote_workflow=QuoteWorkflow(quote_repository),
+        quote_workflow=QuoteWorkflow(quote_repository, outbound_repository),
         booking_workflow=BookingWorkflow(
             quote_repository,
             shipment_repository,
