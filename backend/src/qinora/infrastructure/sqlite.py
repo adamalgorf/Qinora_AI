@@ -11,7 +11,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentRecord,
 )
-from qinora.domain import TransportRequestInput
+from qinora.domain import CurrencyCode, Money, Quote, QuoteStatus, TransportRequestInput
 
 
 class SQLiteDatabase:
@@ -505,6 +505,81 @@ class SQLiteRequestWriteRepository:
             status=status,
             weight_kg=total_weight,
         )
+
+
+class SQLiteQuoteWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_quote(
+        self,
+        *,
+        request_id: str,
+        customer_price: float,
+        currency: str,
+    ) -> QuoteRecord:
+        quote_id = str(uuid4())
+
+        with self._database.connect() as connection:
+            connection.execute(
+                """
+                insert into quotes
+                  (id, status, version, customer_price, currency, parent_quote_id)
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (quote_id, "draft", 1, customer_price, currency, None),
+            )
+
+        return QuoteRecord(
+            id=quote_id,
+            status="draft",
+            version=1,
+            customer_price=customer_price,
+            currency=currency,
+            parent_quote_id=None,
+        )
+
+    async def get_quote(self, quote_id: str) -> Quote | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, status, version, customer_price, currency, parent_quote_id
+                from quotes
+                where id = ?
+                """,
+                (quote_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return Quote(
+            id=row["id"],
+            status=QuoteStatus(row["status"]),
+            version=row["version"],
+            customer_price=Money(
+                amount=row["customer_price"],
+                currency=CurrencyCode(row["currency"]),
+            ),
+            parent_quote_id=row["parent_quote_id"],
+        )
+
+    async def mark_quote_sent(self, quote_id: str) -> QuoteRecord:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update quotes set status = ? where id = ?",
+                ("sent", quote_id),
+            )
+            row = connection.execute(
+                """
+                select id, status, version, customer_price, currency, parent_quote_id
+                from quotes
+                where id = ?
+                """,
+                (quote_id,),
+            ).fetchone()
+
+        return QuoteRecord(**dict(row))
 
 
 def _count(connection: sqlite3.Connection, table: str) -> int:

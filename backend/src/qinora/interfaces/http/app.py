@@ -4,12 +4,17 @@ from qinora.application import (
     AuthContext,
     CargoLineCommand,
     CarrierIntelligenceCommand,
+    CreateQuoteCommand,
     CreateRequestCommand,
     CreateRequestUseCase,
     EmailWebhookCommand,
     EmailWebhookUseCase,
     OperationalQueries,
+    PricingGateError,
+    QuoteNotFoundError,
+    QuoteWorkflow,
     Role,
+    SendQuoteCommand,
 )
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
 from qinora.infrastructure.settings import Settings
@@ -17,6 +22,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteDatabase,
     SQLiteInboundEmailRepository,
     SQLiteOperationalReadRepository,
+    SQLiteQuoteWriteRepository,
     SQLiteRequestWriteRepository,
     SQLiteWebhookEventRepository,
 )
@@ -27,6 +33,7 @@ from qinora.interfaces.http.schemas import (
     CarrierIntelligenceRequest,
     CarrierIntelligenceResponse,
     CarrierListItem,
+    CreateQuotePayload,
     CreateRequestPayload,
     CreateRequestResponse,
     DashboardSummaryResponse,
@@ -54,6 +61,7 @@ def create_app() -> FastAPI:
     )
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
     create_request = CreateRequestUseCase(SQLiteRequestWriteRepository(database))
+    quote_workflow = QuoteWorkflow(SQLiteQuoteWriteRepository(database))
 
     app.state.settings = settings
     app.state.database = database
@@ -61,6 +69,7 @@ def create_app() -> FastAPI:
     app.state.email_webhook = email_webhook
     app.state.operational_queries = operational_queries
     app.state.create_request = create_request
+    app.state.quote_workflow = quote_workflow
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -130,6 +139,47 @@ def create_app() -> FastAPI:
     async def list_quotes(request: Request) -> list[QuoteListItem]:
         queries: OperationalQueries = request.app.state.operational_queries
         return [QuoteListItem(**item.__dict__) for item in await queries.list_quotes()]
+
+    @app.post("/quotes", response_model=QuoteListItem, status_code=status.HTTP_201_CREATED)
+    async def create_quote(
+        payload: CreateQuotePayload,
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
+    ) -> QuoteListItem:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+        workflow: QuoteWorkflow = request.app.state.quote_workflow
+        quote = await workflow.create_quote(
+            CreateQuoteCommand(
+                request_id=payload.request_id,
+                customer_price=payload.customer_price,
+                currency=payload.currency,
+            )
+        )
+        return QuoteListItem(**quote.__dict__)
+
+    @app.post("/quotes/{quote_id}/send", response_model=QuoteListItem)
+    async def send_quote(
+        quote_id: str,
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
+    ) -> QuoteListItem:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+        workflow: QuoteWorkflow = request.app.state.quote_workflow
+
+        try:
+            quote = await workflow.send_quote(SendQuoteCommand(quote_id=quote_id))
+        except QuoteNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quote not found",
+            ) from error
+        except PricingGateError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+        return QuoteListItem(**quote.__dict__)
 
     @app.get("/shipments", response_model=list[ShipmentListItem])
     async def list_shipments(request: Request) -> list[ShipmentListItem]:

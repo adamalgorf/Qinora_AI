@@ -8,7 +8,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentRecord,
 )
-from qinora.domain import TransportRequestInput
+from qinora.domain import Quote, TransportRequestInput
 
 
 class WebhookEventRepository(Protocol):
@@ -66,4 +66,21 @@ class RequestWriteRepository(Protocol):
         status: str,
         review_reason: str | None,
     ) -> RequestRecord:
+        pass
+
+
+class QuoteWriteRepository(Protocol):
+    async def create_quote(
+        self,
+        *,
+        request_id: str,
+        customer_price: float,
+        currency: str,
+    ) -> QuoteRecord:
+        pass
+
+    async def get_quote(self, quote_id: str) -> Quote | None:
+        pass
+
+    async def mark_quote_sent(self, quote_id: str) -> QuoteRecord:
         pass

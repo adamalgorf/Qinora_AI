@@ -5,8 +5,16 @@ from qinora.application.ports import (
     AgentDispatcher,
     InboundEmailRepository,
     OperationalReadRepository,
+    QuoteWriteRepository,
     RequestWriteRepository,
     WebhookEventRepository,
+)
+from qinora.application.quote_workflow import (
+    CreateQuoteCommand,
+    PricingGateError,
+    QuoteNotFoundError,
+    QuoteWorkflow,
+    SendQuoteCommand,
 )
 from qinora.application.request_intake import (
     CargoLineCommand,
@@ -27,8 +35,14 @@ __all__ = [
     "CargoLineCommand",
     "CreateRequestCommand",
     "CreateRequestUseCase",
+    "CreateQuoteCommand",
+    "PricingGateError",
+    "QuoteNotFoundError",
+    "QuoteWorkflow",
     "Role",
+    "SendQuoteCommand",
     "RequestWriteRepository",
+    "QuoteWriteRepository",
     "WebhookEventRepository",
     "require_any_role",
 ]

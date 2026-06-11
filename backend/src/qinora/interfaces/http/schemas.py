@@ -89,6 +89,12 @@ class QuoteListItem(BaseModel):
     parent_quote_id: str | None = None
 
 
+class CreateQuotePayload(BaseModel):
+    request_id: str
+    customer_price: float
+    currency: str = "SEK"
+
+
 class ShipmentListItem(BaseModel):
     id: str
     public_id: str

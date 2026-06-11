@@ -125,6 +125,32 @@ def test_create_request_marks_incomplete_request_for_clarification(client: TestC
     assert body["adr_un_numbers"] == ["UN1263"]
 
 
+def test_create_and_send_quote(client: TestClient) -> None:
+    created = client.post(
+        "/quotes",
+        json={
+            "request_id": "req-001",
+            "customer_price": 12300,
+            "currency": "SEK",
+        },
+    )
+
+    assert created.status_code == 201
+    quote_id = created.json()["id"]
+
+    sent = client.post(f"/quotes/{quote_id}/send")
+
+    assert sent.status_code == 200
+    assert sent.json()["status"] == "sent"
+
+
+def test_send_quote_blocks_zero_price(client: TestClient) -> None:
+    response = client.post("/quotes/quo-002/send")
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Quote customer price must be greater than zero"
+
+
 def test_carrier_intelligence_endpoint_runs_domain_pipeline(client: TestClient) -> None:
     response = client.post(
         "/carriers/intelligence",

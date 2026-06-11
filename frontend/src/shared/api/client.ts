@@ -72,6 +72,12 @@ export type QuoteListItem = {
   parent_quote_id: string | null;
 };
 
+export type CreateQuotePayload = {
+  request_id: string;
+  customer_price: number;
+  currency: string;
+};
+
 export type ShipmentListItem = {
   id: string;
   public_id: string;
