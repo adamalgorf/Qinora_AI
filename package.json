@@ -1,0 +1,13 @@
+{
+  "name": "qinora-tms",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w @qinora/frontend",
+    "dev:web": "npm run dev -w @qinora/frontend",
+    "typecheck": "npm run typecheck -w @qinora/frontend"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.local

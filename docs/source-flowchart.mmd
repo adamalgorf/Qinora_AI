@@ -1,0 +1,24 @@
+flowchart TD
+    A[Inbound Email] -->|HMAC + idempotency-key| B[email-webhook]
+    B --> C[Nora Intake<br/>classify intent + language]
+    C --> D[Miles Match<br/>sender -> CRM contact]
+    D --> E[Parsek<br/>extract logistics fields]
+    E --> F{Vera Validate<br/>weight, dims, times complete?}
+    F -- No --> G[Cy Dispatch<br/>operational_tasks escalation]
+    F -- Yes --> H[Quinn Quote<br/>resolve pricing + create quote]
+    H --> I{Pricing gate<br/>price > 0?}
+    I -- No --> G
+    I -- Yes --> J[outbound_reply_queue<br/>send quote to customer]
+    J --> K[Rex Response<br/>interpret reply]
+    K -- accepted --> L[Carrier Intelligence<br/>4-stage pipeline]
+    K -- revise --> H
+    K -- reject --> Z1[quote: rejected]
+    L --> M{Overall confidence<br/>>= min_confidence?}
+    M -- No --> N[requires_manual_review]
+    M -- Yes --> O[Bex Booking<br/>shipment: booked]
+    N --> O
+    O --> P[Trak Flow<br/>in_transit -> delivered]
+    P --> Q[tracking-simulator<br/>auto-create invoice]
+    Q --> R[Auri Audit<br/>discrepancy vs quote]
+    R -- <= max_discrepancy --> S[invoice_approved]
+    R -- > max_discrepancy --> T[invoice_disputed]
