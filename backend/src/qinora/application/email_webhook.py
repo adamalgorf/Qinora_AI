@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from qinora.application.contact_matching import ContactMatchingUseCase, MatchContactCommand
 from qinora.application.ports import (
     AgentDispatcher,
     InboundEmailRepository,
@@ -28,10 +29,12 @@ class EmailWebhookUseCase:
         webhook_events: WebhookEventRepository,
         inbound_emails: InboundEmailRepository,
         dispatcher: AgentDispatcher,
+        contact_matching: ContactMatchingUseCase | None = None,
     ) -> None:
         self._webhook_events = webhook_events
         self._inbound_emails = inbound_emails
         self._dispatcher = dispatcher
+        self._contact_matching = contact_matching
 
     async def execute(self, command: EmailWebhookCommand) -> EmailWebhookResult:
         if await self._webhook_events.exists(command.idempotency_key):
@@ -44,6 +47,13 @@ class EmailWebhookUseCase:
             body_text=command.body_text,
         )
         await self._webhook_events.record(command.idempotency_key, "email.received")
+        if self._contact_matching is not None:
+            await self._contact_matching.execute(
+                MatchContactCommand(
+                    sender=command.sender,
+                    inbound_email_id=inbound_email_id,
+                )
+            )
         await self._dispatcher.dispatch(event_type="email.received", entity_id=inbound_email_id)
 
         return EmailWebhookResult(accepted=True, inbound_email_id=inbound_email_id)

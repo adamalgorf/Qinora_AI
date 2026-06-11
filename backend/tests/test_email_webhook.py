@@ -42,6 +42,28 @@ def test_email_webhook_is_idempotent(client: TestClient) -> None:
     assert second.json()["duplicate"] is True
 
 
+def test_email_webhook_matches_sender_to_crm_contact(client: TestClient) -> None:
+    payload = b'{"sender":"logistics@volvo.example","subject":"Quote","body_text":"Need pickup"}'
+    signature = hmac.new(b"secret", payload, sha256).hexdigest()
+
+    response = client.post(
+        "/webhooks/email",
+        headers={
+            "content-type": "application/json",
+            "x-idempotency-key": "email-crm-1",
+            "x-qinora-signature": f"sha256={signature}",
+        },
+        content=payload,
+    )
+
+    assert response.status_code == 202
+    logs = client.get("/agents/logs").json()
+    match_log = next(item for item in logs if item["agent_key"] == "customer_match_agent")
+    assert match_log["agent_name"] == "Miles Match"
+    assert match_log["entity_id"] == "CNT-0001"
+    assert "Volvo Parts" in match_log["step"]
+
+
 def test_dashboard_summary_returns_control_tower_data(client: TestClient) -> None:
     response = client.get("/dashboard/summary")
 
@@ -107,6 +129,7 @@ def test_core_module_endpoints_return_seeded_records(client: TestClient) -> None
     assert client.get("/requests").json()[0]["public_id"] == "REQ-0001"
     assert client.get("/quotes").json()[0]["currency"] == "SEK"
     assert client.get("/shipments").json()[0]["public_id"] == "SHP-0001"
+    assert client.get("/contacts").json()[0]["public_id"] == "CNT-0003"
     carrier_names = {carrier["display_name"] for carrier in client.get("/carriers").json()}
     assert "Nordic Freight" in carrier_names
     assert client.get("/inbox/pending").json()[0]["classification"] == "transport_request"

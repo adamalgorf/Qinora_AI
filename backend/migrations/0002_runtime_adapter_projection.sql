@@ -25,6 +25,10 @@ alter table public.carriers
   add column if not exists performance_score numeric(8, 2),
   add column if not exists sample_size integer not null default 0;
 
+alter table public.contacts
+  add column if not exists default_incoterms text,
+  add column if not exists payment_terms text;
+
 alter table public.agent_logs
   add column if not exists agent_name text,
   add column if not exists confidence numeric(5, 4) not null default 0;

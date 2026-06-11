@@ -231,6 +231,17 @@ class CarrierListItem(BaseModel):
     preferred: bool
 
 
+class ContactListItem(BaseModel):
+    id: str
+    public_id: str
+    display_name: str
+    email: str | None
+    domain: str | None
+    default_markup_percent: float
+    default_incoterms: str | None
+    payment_terms: str | None
+
+
 class InboxListItem(BaseModel):
     id: str
     sender: str

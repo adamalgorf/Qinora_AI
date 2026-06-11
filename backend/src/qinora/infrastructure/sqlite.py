@@ -6,6 +6,7 @@ from uuid import uuid4
 from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
+    ContactRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -115,6 +116,18 @@ class SQLiteDatabase:
                   sample_size integer not null
                 );
 
+                create table if not exists contacts (
+                  id text primary key,
+                  public_id text not null unique,
+                  display_name text not null,
+                  email text,
+                  domain text,
+                  default_markup_percent real not null default 0,
+                  default_incoterms text,
+                  payment_terms text,
+                  is_active integer not null default 1
+                );
+
                 create table if not exists agent_logs (
                   id text primary key,
                   agent_key text not null,
@@ -186,9 +199,23 @@ class SQLiteDatabase:
             )
             _add_column_if_missing(connection, "outbound_reply_queue", "sent_at", "text")
             _add_column_if_missing(connection, "outbound_reply_queue", "error_message", "text")
+            _add_column_if_missing(
+                connection,
+                "contacts",
+                "default_incoterms",
+                "text",
+            )
+            _add_column_if_missing(connection, "contacts", "payment_terms", "text")
+            _add_column_if_missing(
+                connection,
+                "contacts",
+                "is_active",
+                "integer not null default 1",
+            )
             self._seed(connection)
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
+            self._seed_contacts(connection)
 
     def _seed(self, connection: sqlite3.Connection) -> None:
         if _count(connection, "transport_requests") > 0:
@@ -361,6 +388,56 @@ class SQLiteDatabase:
             ],
         )
 
+    def _seed_contacts(self, connection: sqlite3.Connection) -> None:
+        if _count(connection, "contacts") > 0:
+            return
+
+        connection.executemany(
+            """
+            insert into contacts
+              (
+                id, public_id, display_name, email, domain, default_markup_percent,
+                default_incoterms, payment_terms, is_active
+              )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "cnt-001",
+                    "CNT-0001",
+                    "Volvo Parts",
+                    "logistics@volvo.example",
+                    "volvo.example",
+                    12.5,
+                    "DAP",
+                    "30 days net",
+                    1,
+                ),
+                (
+                    "cnt-002",
+                    "CNT-0002",
+                    "Northvolt",
+                    "ops@northvolt.example",
+                    "northvolt.example",
+                    10.0,
+                    "FCA",
+                    "20 days net",
+                    1,
+                ),
+                (
+                    "cnt-003",
+                    "CNT-0003",
+                    "Astra Nordic",
+                    "transport@astra.example",
+                    "astra.example",
+                    15.0,
+                    "DAP",
+                    "45 days net",
+                    1,
+                ),
+            ],
+        )
+
     def _seed_runtime_relationships(self, connection: sqlite3.Connection) -> None:
         if _exists_by_id(connection, "quotes", "quo-004"):
             return
@@ -523,6 +600,30 @@ class SQLiteOperationalReadRepository:
             for row in rows
         ]
 
+    async def list_contacts(self) -> list[ContactRecord]:
+        return [
+            ContactRecord(
+                id=row["id"],
+                public_id=row["public_id"],
+                display_name=row["display_name"],
+                email=row["email"],
+                domain=row["domain"],
+                default_markup_percent=row["default_markup_percent"],
+                default_incoterms=row["default_incoterms"],
+                payment_terms=row["payment_terms"],
+            )
+            for row in self._fetch_all(
+                """
+                select
+                  id, public_id, display_name, email, domain, default_markup_percent,
+                  default_incoterms, payment_terms
+                from contacts
+                where is_active = 1
+                order by display_name
+                """
+            )
+        ]
+
     async def list_inbox(self) -> list[InboxRecord]:
         return [
             InboxRecord(**dict(row))
@@ -590,6 +691,66 @@ class SQLiteOperationalReadRepository:
     def _fetch_all(self, query: str, parameters: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         with self._database.connect() as connection:
             return list(connection.execute(query, parameters).fetchall())
+
+
+class SQLiteContactReadRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def find_by_sender(self, sender: str) -> ContactRecord | None:
+        email = sender.strip().lower()
+        domain = email.rsplit("@", 1)[1] if "@" in email else email
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select
+                  id, public_id, display_name, email, domain, default_markup_percent,
+                  default_incoterms, payment_terms
+                from contacts
+                where is_active = 1
+                  and (
+                    lower(coalesce(email, '')) = ?
+                    or lower(coalesce(domain, '')) = ?
+                  )
+                order by case when lower(coalesce(email, '')) = ? then 0 else 1 end
+                limit 1
+                """,
+                (email, domain, email),
+            ).fetchone()
+
+        return ContactRecord(**dict(row)) if row else None
+
+
+class SQLiteAgentLogWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def record(
+        self,
+        *,
+        agent_key: str,
+        agent_name: str,
+        step: str,
+        entity_id: str,
+        confidence: float,
+    ) -> AgentLogRecord:
+        with self._database.connect() as connection:
+            connection.execute(
+                """
+                insert into agent_logs
+                  (id, agent_key, agent_name, step, entity_id, confidence)
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (str(uuid4()), agent_key, agent_name, step, entity_id, confidence),
+            )
+
+        return AgentLogRecord(
+            agent_key=agent_key,
+            agent_name=agent_name,
+            step=step,
+            entity_id=entity_id,
+            confidence=confidence,
+        )
 
 
 class SQLiteRequestWriteRepository:

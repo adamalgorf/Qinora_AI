@@ -60,6 +60,18 @@ class CarrierRecord:
 
 
 @dataclass(frozen=True)
+class ContactRecord:
+    id: str
+    public_id: str
+    display_name: str
+    email: str | None
+    domain: str | None
+    default_markup_percent: float
+    default_incoterms: str | None
+    payment_terms: str | None
+
+
+@dataclass(frozen=True)
 class AgentLogRecord:
     agent_key: str
     agent_name: str

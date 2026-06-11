@@ -49,6 +49,7 @@ frontend -> HTTP API contract
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Successful quote sending enqueues `outbound_reply_queue` records after the pricing gate passes.
 - Quote replies are interpreted by `QuoteResponseWorkflow`, recording reply events and routing accepted, revised, or rejected quotes.
+- Inbound email senders are matched to CRM contacts by `ContactMatchingUseCase`, with Miles Match decisions persisted to `agent_logs`.
 - The outbound mail worker processes queued replies through an `OutboundMailer` port and records sent/failed status.
 - The tracking simulator worker advances in-transit shipments, records shipment events, and creates invoice audits.
 - Carrier intelligence is deterministic and stores confidence components for auditability.

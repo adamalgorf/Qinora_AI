@@ -1,6 +1,7 @@
 from qinora.interfaces.http.routers.agents import router as agents_router
 from qinora.interfaces.http.routers.auth import router as auth_router
 from qinora.interfaces.http.routers.carriers import router as carriers_router
+from qinora.interfaces.http.routers.contacts import router as contacts_router
 from qinora.interfaces.http.routers.dashboard import router as dashboard_router
 from qinora.interfaces.http.routers.health import router as health_router
 from qinora.interfaces.http.routers.inbox import router as inbox_router
@@ -17,6 +18,7 @@ routers = [
     quotes_router,
     shipments_router,
     carriers_router,
+    contacts_router,
     inbox_router,
     agents_router,
     webhooks_router,

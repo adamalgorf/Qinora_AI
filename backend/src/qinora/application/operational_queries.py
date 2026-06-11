@@ -4,6 +4,7 @@ from qinora.application.ports import OperationalReadRepository
 from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
+    ContactRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -81,6 +82,9 @@ class OperationalQueries:
 
     async def list_carriers(self) -> list[CarrierRecord]:
         return await self._repository.list_carriers()
+
+    async def list_contacts(self) -> list[ContactRecord]:
+        return await self._repository.list_contacts()
 
     async def list_inbox(self) -> list[InboxRecord]:
         return await self._repository.list_inbox()

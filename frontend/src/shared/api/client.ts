@@ -200,6 +200,17 @@ export type CarrierListItem = {
   preferred: boolean;
 };
 
+export type ContactListItem = {
+  id: string;
+  public_id: string;
+  display_name: string;
+  email: string | null;
+  domain: string | null;
+  default_markup_percent: number;
+  default_incoterms: string | null;
+  payment_terms: string | null;
+};
+
 export type InboxListItem = {
   id: string;
   sender: string;

@@ -92,6 +92,7 @@ before starting the backend against that database.
 
 - `GET /dashboard/summary`
 - `GET /requests`
+- `GET /contacts`
 - `GET /quotes`
 - `GET /shipments`
 - `GET /carriers`

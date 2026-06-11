@@ -6,6 +6,7 @@ from psycopg.rows import dict_row
 from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
+    ContactRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -227,6 +228,31 @@ class PostgresOperationalReadRepository:
             )
         ]
 
+    async def list_contacts(self) -> list[ContactRecord]:
+        return [
+            ContactRecord(
+                id=str(row["id"]),
+                public_id=row["public_id"],
+                display_name=row["name"],
+                email=row["email"],
+                domain=row["domain"],
+                default_markup_percent=float(row["default_markup_percent"] or 0),
+                default_incoterms=row["default_incoterms"],
+                payment_terms=row["payment_terms"],
+            )
+            for row in self._fetch_all(
+                """
+                select
+                  id, public_id, name, email, domain, default_markup_percent,
+                  default_incoterms, payment_terms
+                from public.contacts
+                where tenant_id = %s and is_active = true
+                order by name
+                """,
+                (self._database.tenant_id,),
+            )
+        ]
+
     async def list_inbox(self) -> list[InboxRecord]:
         return [
             InboxRecord(
@@ -340,6 +366,86 @@ class PostgresOperationalReadRepository:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(query, parameters)
             return list(cursor.fetchall())
+
+
+class PostgresContactReadRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def find_by_sender(self, sender: str) -> ContactRecord | None:
+        email = sender.strip().lower()
+        domain = email.rsplit("@", 1)[1] if "@" in email else email
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, public_id, name, email, domain, default_markup_percent,
+                  default_incoterms, payment_terms
+                from public.contacts
+                where tenant_id = %s
+                  and is_active = true
+                  and (
+                    lower(coalesce(email, '')) = %s
+                    or lower(coalesce(domain, '')) = %s
+                  )
+                order by case when lower(coalesce(email, '')) = %s then 0 else 1 end
+                limit 1
+                """,
+                (self._database.tenant_id, email, domain, email),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return None
+        return ContactRecord(
+            id=str(row["id"]),
+            public_id=row["public_id"],
+            display_name=row["name"],
+            email=row["email"],
+            domain=row["domain"],
+            default_markup_percent=float(row["default_markup_percent"] or 0),
+            default_incoterms=row["default_incoterms"],
+            payment_terms=row["payment_terms"],
+        )
+
+
+class PostgresAgentLogWriteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def record(
+        self,
+        *,
+        agent_key: str,
+        agent_name: str,
+        step: str,
+        entity_id: str,
+        confidence: float,
+    ) -> AgentLogRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.agent_logs
+                  (tenant_id, agent_key, agent_name, step, entity_id, confidence)
+                values (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    self._database.tenant_id,
+                    agent_key,
+                    agent_name,
+                    step,
+                    entity_id,
+                    confidence,
+                ),
+            )
+
+        return AgentLogRecord(
+            agent_key=agent_key,
+            agent_name=agent_name,
+            step=step,
+            entity_id=entity_id,
+            confidence=confidence,
+        )
 
 
 class PostgresRequestWriteRepository:

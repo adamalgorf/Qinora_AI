@@ -3,6 +3,7 @@ from typing import Protocol
 from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
+    ContactRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -36,6 +37,24 @@ class InboundEmailRepository(Protocol):
         pass
 
 
+class ContactReadRepository(Protocol):
+    async def find_by_sender(self, sender: str) -> ContactRecord | None:
+        pass
+
+
+class AgentLogWriteRepository(Protocol):
+    async def record(
+        self,
+        *,
+        agent_key: str,
+        agent_name: str,
+        step: str,
+        entity_id: str,
+        confidence: float,
+    ) -> AgentLogRecord:
+        pass
+
+
 class AgentDispatcher(Protocol):
     async def dispatch(self, *, event_type: str, entity_id: str) -> None:
         pass
@@ -55,6 +74,9 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_carriers(self) -> list[CarrierRecord]:
+        pass
+
+    async def list_contacts(self) -> list[ContactRecord]:
         pass
 
     async def list_inbox(self) -> list[InboxRecord]:

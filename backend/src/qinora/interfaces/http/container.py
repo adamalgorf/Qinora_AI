@@ -3,6 +3,7 @@ from typing import Any
 
 from qinora.application import (
     BookingWorkflow,
+    ContactMatchingUseCase,
     CreateRequestUseCase,
     EmailWebhookUseCase,
     InvoiceAuditWorkflow,
@@ -17,6 +18,8 @@ from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
 from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
+    PostgresAgentLogWriteRepository,
+    PostgresContactReadRepository,
     PostgresDatabase,
     PostgresInboundEmailRepository,
     PostgresInvoiceWriteRepository,
@@ -32,6 +35,8 @@ from qinora.infrastructure.postgres import (
 )
 from qinora.infrastructure.settings import PersistenceDriver, Settings
 from qinora.infrastructure.sqlite import (
+    SQLiteAgentLogWriteRepository,
+    SQLiteContactReadRepository,
     SQLiteDatabase,
     SQLiteInboundEmailRepository,
     SQLiteInvoiceWriteRepository,
@@ -87,6 +92,10 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     invoice_repository = SQLiteInvoiceWriteRepository(database)
     invoice_audit = InvoiceAuditWorkflow(invoice_repository, shipment_workflow)
     task_repository = SQLiteOperationalTaskWriteRepository(database)
+    contact_matching = ContactMatchingUseCase(
+        SQLiteContactReadRepository(database),
+        SQLiteAgentLogWriteRepository(database),
+    )
 
     booking_workflow = BookingWorkflow(
         quote_repository,
@@ -103,6 +112,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             SQLiteWebhookEventRepository(database),
             SQLiteInboundEmailRepository(database),
             dispatcher,
+            contact_matching,
         ),
         operational_queries=operational_queries,
         create_request=CreateRequestUseCase(
@@ -146,6 +156,10 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     invoice_repository = PostgresInvoiceWriteRepository(database)
     invoice_audit = InvoiceAuditWorkflow(invoice_repository, shipment_workflow)
     task_repository = PostgresOperationalTaskWriteRepository(database)
+    contact_matching = ContactMatchingUseCase(
+        PostgresContactReadRepository(database),
+        PostgresAgentLogWriteRepository(database),
+    )
 
     booking_workflow = BookingWorkflow(
         quote_repository,
@@ -162,6 +176,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             PostgresWebhookEventRepository(database),
             PostgresInboundEmailRepository(database),
             dispatcher,
+            contact_matching,
         ),
         operational_queries=operational_queries,
         create_request=CreateRequestUseCase(

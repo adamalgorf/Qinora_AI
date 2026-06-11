@@ -1,5 +1,6 @@
 import {
   Activity,
+  ContactRound,
   FileCheck2,
   FileText,
   Inbox,
@@ -27,6 +28,7 @@ const navItems = [
   { label: "Tower", href: "/", icon: Activity },
   { label: "Inbox", href: "/inbox", icon: Inbox },
   { label: "Requests", href: "/requests", icon: RadioTower },
+  { label: "Contacts", href: "/contacts", icon: ContactRound },
   { label: "Quotes", href: "/quotes", icon: FileText },
   { label: "Shipments", href: "/shipments", icon: Truck },
   { label: "Invoices", href: "/invoices", icon: FileCheck2 },

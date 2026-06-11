@@ -1,5 +1,10 @@
 from qinora.application.auth import AuthContext, AuthorizationError, Role, require_any_role
 from qinora.application.booking_workflow import BookingResult, BookingWorkflow, BookQuoteCommand
+from qinora.application.contact_matching import (
+    ContactMatchingUseCase,
+    MatchContactCommand,
+    MatchContactResult,
+)
 from qinora.application.email_webhook import EmailWebhookCommand, EmailWebhookUseCase
 from qinora.application.invoice_audit import (
     CreateInvoiceAuditCommand,
@@ -66,6 +71,7 @@ __all__ = [
     "CreateRequestCommand",
     "CreateRequestUseCase",
     "CreateQuoteCommand",
+    "ContactMatchingUseCase",
     "PricingGateError",
     "ProcessOutboundQueueCommand",
     "ProcessOutboundQueueResult",
@@ -75,6 +81,8 @@ __all__ = [
     "InvoiceWriteRepository",
     "InterpretQuoteReplyCommand",
     "InterpretQuoteReplyResult",
+    "MatchContactCommand",
+    "MatchContactResult",
     "QuoteNotFoundError",
     "QuoteReplyIntent",
     "QuoteResponseWorkflow",
