@@ -72,3 +72,6 @@ jobs:
 
       - name: Validate Docker Compose
         run: docker compose config
+
+      - name: Validate Docker Compose Postgres profile
+        run: docker compose --profile postgres config

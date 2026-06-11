@@ -4,8 +4,11 @@ services:
       context: ./backend
     environment:
       EMAIL_WEBHOOK_SECRET: ${EMAIL_WEBHOOK_SECRET:-dev-secret}
+      QINORA_PERSISTENCE: ${QINORA_PERSISTENCE:-sqlite}
       QINORA_AUTH_TOKEN_SECRET: ${QINORA_AUTH_TOKEN_SECRET:-dev-auth-secret}
+      QINORA_POSTGRES_TENANT_ID: ${QINORA_POSTGRES_TENANT_ID:-00000000-0000-0000-0000-000000000001}
       QINORA_SQLITE_PATH: /app/data/qinora.sqlite3
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/qinora}
     ports:
       - "8000:8000"
     volumes:
@@ -20,5 +23,19 @@ services:
     ports:
       - "8080:80"
 
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_DB: qinora
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - qinora_postgres:/var/lib/postgresql/data
+
 volumes:
   qinora_data:
+  qinora_postgres:

@@ -36,6 +36,15 @@ Set `QINORA_AUTH_TOKEN_SECRET` for signed Bearer tokens. The development UI can 
 dev token through `POST /auth/dev-token`; production auth can replace that endpoint without
 changing the RBAC use cases.
 
+Set `QINORA_PERSISTENCE=postgres` with `DATABASE_URL` to run the API against Postgres. Apply
+migrations first:
+
+```powershell
+cd backend
+$env:DATABASE_URL="postgres://postgres:postgres@localhost:5432/qinora"
+python -m qinora.infrastructure.migrations
+```
+
 ## Run Frontend
 
 ```powershell
@@ -53,6 +62,15 @@ docker compose up --build
 
 The containerized frontend is served at `http://127.0.0.1:8080` and proxies `/api` to the
 backend service. The backend remains reachable at `http://127.0.0.1:8000`.
+
+To run a local Postgres service for production-style persistence:
+
+```powershell
+docker compose --profile postgres up --build
+```
+
+Then set `QINORA_PERSISTENCE=postgres` and run the migrations against the compose Postgres URL
+before starting the backend against that database.
 
 ## API Modules
 
