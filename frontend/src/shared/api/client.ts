@@ -159,6 +159,11 @@ export type CreateInvoiceResponse = {
   shipment_status: string;
 };
 
+export type RunTrackingSimulatorResponse = {
+  delivered: ShipmentListItem[];
+  invoices: InvoiceListItem[];
+};
+
 export type UpdateShipmentStatusPayload = {
   status: string;
 };

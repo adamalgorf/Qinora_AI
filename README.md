@@ -63,6 +63,13 @@ cd backend
 python -m qinora.workers.outbound_mailer
 ```
 
+Run the tracking simulator, which advances in-transit shipments and creates invoice audits:
+
+```powershell
+cd backend
+python -m qinora.workers.tracking_simulator
+```
+
 ## Run Full Stack With Docker
 
 ```powershell
@@ -96,6 +103,7 @@ before starting the backend against that database.
 - `POST /auth/dev-token`
 - `GET /emails/outbound`
 - `POST /emails/outbound/process`
+- `POST /shipments/tracking-simulator/run`
 
 ## Verify
 

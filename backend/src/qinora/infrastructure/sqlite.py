@@ -177,6 +177,7 @@ class SQLiteDatabase:
             _add_column_if_missing(connection, "outbound_reply_queue", "sent_at", "text")
             _add_column_if_missing(connection, "outbound_reply_queue", "error_message", "text")
             self._seed(connection)
+            self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
 
     def _seed(self, connection: sqlite3.Connection) -> None:
@@ -229,6 +230,7 @@ class SQLiteDatabase:
                 ("quo-001", "sent", 1, 18400, "SEK", None),
                 ("quo-002", "draft", 1, 0, "SEK", None),
                 ("quo-003", "accepted", 2, 7290, "SEK", "quo-001"),
+                ("quo-004", "accepted", 1, 9800, "SEK", None),
             ],
         )
         connection.executemany(
@@ -348,6 +350,20 @@ class SQLiteDatabase:
                 ),
             ],
         )
+
+    def _seed_runtime_relationships(self, connection: sqlite3.Connection) -> None:
+        if _exists_by_id(connection, "quotes", "quo-004"):
+            return
+
+        connection.execute(
+            """
+            insert into quotes
+              (id, status, version, customer_price, currency, parent_quote_id)
+            values (?, ?, ?, ?, ?, ?)
+            """,
+            ("quo-004", "accepted", 1, 9800, "SEK", None),
+        )
+
     def _seed_operational_tasks(self, connection: sqlite3.Connection) -> None:
         if _count(connection, "operational_tasks") > 0:
             return
@@ -823,6 +839,22 @@ class SQLiteInvoiceWriteRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
         self._database = database
 
+    async def expected_invoice_amount(self, shipment_id: str) -> float:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select q.customer_price
+                from shipments s
+                join quotes q on q.id = s.quote_id
+                where s.id = ?
+                """,
+                (shipment_id,),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(f"Shipment not found: {shipment_id}")
+        return float(row["customer_price"])
+
     async def create_invoice_audit(
         self,
         *,
@@ -1036,6 +1068,11 @@ class SQLiteOutboundReplyRepository:
 def _count(connection: sqlite3.Connection, table: str) -> int:
     row = connection.execute(f"select count(*) as count from {table}").fetchone()
     return int(row["count"])
+
+
+def _exists_by_id(connection: sqlite3.Connection, table: str, record_id: str) -> bool:
+    row = connection.execute(f"select 1 from {table} where id = ?", (record_id,)).fetchone()
+    return row is not None
 
 
 def _next_public_id(connection: sqlite3.Connection, table: str, prefix: str) -> str:

@@ -36,6 +36,11 @@ from qinora.application.request_intake import (
     CreateRequestUseCase,
 )
 from qinora.application.shipment_workflow import ShipmentWorkflow, UpdateShipmentStatusCommand
+from qinora.application.tracking_simulator import (
+    RunTrackingSimulatorCommand,
+    TrackingSimulator,
+    TrackingSimulatorResult,
+)
 
 __all__ = [
     "AgentDispatcher",
@@ -65,11 +70,14 @@ __all__ = [
     "QuoteNotFoundError",
     "QuoteWorkflow",
     "Role",
+    "RunTrackingSimulatorCommand",
     "SendQuoteCommand",
     "SendQuoteResult",
     "RequestWriteRepository",
     "ShipmentWriteRepository",
     "ShipmentWorkflow",
+    "TrackingSimulator",
+    "TrackingSimulatorResult",
     "UpdateShipmentStatusCommand",
     "QuoteWriteRepository",
     "WebhookEventRepository",

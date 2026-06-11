@@ -166,6 +166,16 @@ class CreateInvoiceResponse(BaseModel):
     shipment_status: str
 
 
+class RunTrackingSimulatorPayload(BaseModel):
+    limit: int = Field(default=10, ge=1, le=100)
+    max_discrepancy: float = 250
+
+
+class RunTrackingSimulatorResponse(BaseModel):
+    delivered: list[ShipmentListItem]
+    invoices: list[InvoiceListItem]
+
+
 class AcceptQuotePayload(BaseModel):
     mode: str = "ftl"
     total_weight_kg: float

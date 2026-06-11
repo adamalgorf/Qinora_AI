@@ -640,6 +640,23 @@ class PostgresInvoiceWriteRepository:
     def __init__(self, database: PostgresDatabase) -> None:
         self._database = database
 
+    async def expected_invoice_amount(self, shipment_id: str) -> float:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select q.customer_price
+                from public.shipments s
+                join public.quotes q on q.id = s.quote_id
+                where s.tenant_id = %s and s.id = %s
+                """,
+                (self._database.tenant_id, shipment_id),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            raise LookupError(f"Shipment not found: {shipment_id}")
+        return float(row["customer_price"])
+
     async def create_invoice_audit(
         self,
         *,

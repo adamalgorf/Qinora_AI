@@ -288,6 +288,29 @@ def test_invoice_audit_disputes_large_discrepancy(client: TestClient) -> None:
     assert body["shipment_status"] == "invoice_disputed"
 
 
+def test_tracking_simulator_delivers_and_auto_audits_invoice(client: TestClient) -> None:
+    response = client.post(
+        "/shipments/tracking-simulator/run",
+        json={"limit": 10, "max_discrepancy": 250},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["delivered"][0]["id"] == "shp-002"
+    assert body["delivered"][0]["status"] == "delivered"
+    assert body["invoices"][0]["shipment_id"] == "shp-002"
+    assert body["invoices"][0]["status"] == "approved"
+
+    shipments = client.get("/shipments").json()
+    shipment = next(item for item in shipments if item["id"] == "shp-002")
+    assert shipment["status"] == "invoice_approved"
+
+    timeline = client.get("/shipments/shp-002/timeline").json()
+    transitions = [(event["from_status"], event["to_status"]) for event in timeline]
+    assert ("in_transit", "delivered") in transitions
+    assert ("delivered", "invoice_approved") in transitions
+
+
 def test_carrier_intelligence_endpoint_runs_domain_pipeline(client: TestClient) -> None:
     response = client.post(
         "/carriers/intelligence",

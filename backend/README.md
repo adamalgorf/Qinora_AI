@@ -36,4 +36,5 @@ python -m pytest
 ```powershell
 cd backend
 python -m qinora.workers.outbound_mailer
+python -m qinora.workers.tracking_simulator
 ```

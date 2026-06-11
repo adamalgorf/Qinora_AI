@@ -10,6 +10,7 @@ from qinora.application import (
     ProcessOutboundQueueUseCase,
     QuoteWorkflow,
     ShipmentWorkflow,
+    TrackingSimulator,
 )
 from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
@@ -57,6 +58,7 @@ class AppContainer:
     shipment_workflow: ShipmentWorkflow
     invoice_audit: InvoiceAuditWorkflow
     process_outbound_queue: ProcessOutboundQueueUseCase
+    tracking_simulator: TrackingSimulator
     shipment_repository: ShipmentWriteRepository
 
 
@@ -76,6 +78,9 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     outbound_repository = SQLiteOutboundReplyRepository(database)
     shipment_repository = SQLiteShipmentWriteRepository(database)
     shipment_event_repository = SQLiteShipmentEventRepository(database)
+    shipment_workflow = ShipmentWorkflow(shipment_repository, shipment_event_repository)
+    invoice_repository = SQLiteInvoiceWriteRepository(database)
+    invoice_audit = InvoiceAuditWorkflow(invoice_repository, shipment_workflow)
     task_repository = SQLiteOperationalTaskWriteRepository(database)
 
     return AppContainer(
@@ -99,12 +104,15 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             shipment_repository,
             operational_queries,
         ),
-        shipment_workflow=ShipmentWorkflow(shipment_repository, shipment_event_repository),
-        invoice_audit=InvoiceAuditWorkflow(
-            SQLiteInvoiceWriteRepository(database),
-            shipment_repository,
-        ),
+        shipment_workflow=shipment_workflow,
+        invoice_audit=invoice_audit,
         process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
+        tracking_simulator=TrackingSimulator(
+            operational_queries,
+            shipment_workflow,
+            invoice_repository,
+            invoice_audit,
+        ),
         shipment_repository=shipment_repository,
     )
 
@@ -121,6 +129,9 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     outbound_repository = PostgresOutboundReplyRepository(database)
     shipment_repository = PostgresShipmentWriteRepository(database)
     shipment_event_repository = PostgresShipmentEventRepository(database)
+    shipment_workflow = ShipmentWorkflow(shipment_repository, shipment_event_repository)
+    invoice_repository = PostgresInvoiceWriteRepository(database)
+    invoice_audit = InvoiceAuditWorkflow(invoice_repository, shipment_workflow)
     task_repository = PostgresOperationalTaskWriteRepository(database)
 
     return AppContainer(
@@ -144,11 +155,14 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             shipment_repository,
             operational_queries,
         ),
-        shipment_workflow=ShipmentWorkflow(shipment_repository, shipment_event_repository),
-        invoice_audit=InvoiceAuditWorkflow(
-            PostgresInvoiceWriteRepository(database),
-            shipment_repository,
-        ),
+        shipment_workflow=shipment_workflow,
+        invoice_audit=invoice_audit,
         process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
+        tracking_simulator=TrackingSimulator(
+            operational_queries,
+            shipment_workflow,
+            invoice_repository,
+            invoice_audit,
+        ),
         shipment_repository=shipment_repository,
     )

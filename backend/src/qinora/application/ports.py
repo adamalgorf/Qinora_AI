@@ -125,6 +125,9 @@ class ShipmentWriteRepository(Protocol):
 
 
 class InvoiceWriteRepository(Protocol):
+    async def expected_invoice_amount(self, shipment_id: str) -> float:
+        pass
+
     async def create_invoice_audit(
         self,
         *,

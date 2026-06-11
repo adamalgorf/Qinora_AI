@@ -4,6 +4,7 @@ from qinora.application import (
     AuthContext,
     CreateInvoiceAuditCommand,
     Role,
+    RunTrackingSimulatorCommand,
     UpdateShipmentStatusCommand,
 )
 from qinora.interfaces.http.auth import require_roles
@@ -13,6 +14,8 @@ from qinora.interfaces.http.schemas import (
     CreateInvoicePayload,
     CreateInvoiceResponse,
     InvoiceListItem,
+    RunTrackingSimulatorPayload,
+    RunTrackingSimulatorResponse,
     ShipmentEventItem,
     ShipmentListItem,
     UpdateShipmentStatusPayload,
@@ -46,6 +49,25 @@ async def shipment_timeline(
         ShipmentEventItem(**item.__dict__)
         for item in await container.operational_queries.list_shipment_events(shipment_id)
     ]
+
+
+@router.post("/shipments/tracking-simulator/run", response_model=RunTrackingSimulatorResponse)
+async def run_tracking_simulator(
+    payload: RunTrackingSimulatorPayload,
+    container: AppContainer = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> RunTrackingSimulatorResponse:
+    require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+    result = await container.tracking_simulator.run(
+        RunTrackingSimulatorCommand(
+            limit=payload.limit,
+            max_discrepancy=payload.max_discrepancy,
+        )
+    )
+    return RunTrackingSimulatorResponse(
+        delivered=[ShipmentListItem(**item.__dict__) for item in result.delivered],
+        invoices=[InvoiceListItem(**item.__dict__) for item in result.invoices],
+    )
 
 
 @router.post("/shipments/{shipment_id}/status", response_model=ShipmentListItem)

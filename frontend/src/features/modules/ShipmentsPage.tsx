@@ -6,6 +6,7 @@ import {
   apiPost,
   type CreateInvoicePayload,
   type CreateInvoiceResponse,
+  type RunTrackingSimulatorResponse,
   type ShipmentListItem,
   type UpdateShipmentStatusPayload,
 } from "@/shared/api/client";
@@ -41,6 +42,22 @@ export function ShipmentsPage() {
       ]);
     },
   });
+  const trackingMutation = useMutation({
+    mutationFn: () =>
+      apiPost<RunTrackingSimulatorResponse, { limit: number; max_discrepancy: number }>(
+        "/shipments/tracking-simulator/run",
+        {
+          limit: 10,
+          max_discrepancy: 250,
+        },
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["shipments"] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+      ]);
+    },
+  });
 
   return (
     <ModuleScaffold
@@ -60,6 +77,13 @@ export function ShipmentsPage() {
         rows={query.data}
       />
       <div className="quote-actions">
+        <Button
+          disabled={trackingMutation.isPending}
+          onClick={() => trackingMutation.mutate()}
+          type="button"
+        >
+          {trackingMutation.isPending ? "Running Trak Flow..." : "Run tracking simulator"}
+        </Button>
         {(query.data ?? []).map((shipment) => {
           const nextStatus =
             shipment.status === "booked"
