@@ -94,6 +94,21 @@ button {
   color: hsl(var(--primary-foreground));
 }
 
+.session-chip {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--secondary) / 0.45);
+  padding: 12px;
+}
+
+.session-chip span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.84rem;
+}
+
 .nav-list {
   display: grid;
   gap: 6px;

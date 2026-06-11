@@ -49,6 +49,24 @@ def test_dashboard_summary_returns_control_tower_data(client: TestClient) -> Non
     assert response.json()["kpis"][0]["label"] == "Open requests"
 
 
+def test_auth_me_returns_server_side_context(client: TestClient) -> None:
+    response = client.get(
+        "/auth/me",
+        headers={
+            "x-user-id": "user-1",
+            "x-tenant-id": "tenant-1",
+            "x-role": "4pl_tower,admin",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": "user-1",
+        "tenant_id": "tenant-1",
+        "roles": ["4pl_tower", "admin"],
+    }
+
+
 def test_core_module_endpoints_return_seeded_records(client: TestClient) -> None:
     assert client.get("/requests").json()[0]["public_id"] == "REQ-0001"
     assert client.get("/quotes").json()[0]["currency"] == "SEK"
@@ -71,3 +89,17 @@ def test_carrier_intelligence_endpoint_runs_domain_pipeline(client: TestClient) 
 
     assert response.status_code == 200
     assert response.json()["selected_carrier_id"] == "car-001"
+
+
+def test_carrier_intelligence_requires_operator_role(client: TestClient) -> None:
+    response = client.post(
+        "/carriers/intelligence",
+        headers={"x-role": "shipper"},
+        json={
+            "mode": "ftl",
+            "total_weight_kg": 500,
+            "requested_carrier_name": "Nordic",
+        },
+    )
+
+    assert response.status_code == 403

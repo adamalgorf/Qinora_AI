@@ -23,6 +23,12 @@ export type DashboardSummary = {
   }>;
 };
 
+export type AuthMe = {
+  user_id: string;
+  tenant_id: string;
+  roles: string[];
+};
+
 export type RequestListItem = {
   id: string;
   public_id: string;

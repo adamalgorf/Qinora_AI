@@ -1,7 +1,10 @@
 import { Activity, FileText, Inbox, RadioTower, Settings, Truck, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { apiGet, type AuthMe } from "@/shared/api/client";
 
 const navItems = [
   { label: "Tower", href: "/", icon: Activity },
@@ -14,12 +17,21 @@ const navItems = [
 ];
 
 export function AppShell() {
+  const authQuery = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: () => apiGet<AuthMe>("/auth/me"),
+  });
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Primary navigation">
         <div className="brand">
           <span className="brand-mark">Q</span>
           <span>QiNora</span>
+        </div>
+        <div className="session-chip">
+          <span>{authQuery.data?.tenant_id ?? "dev-tenant"}</span>
+          <Badge variant="secondary">{authQuery.data?.roles[0] ?? "admin"}</Badge>
         </div>
         <nav className="nav-list">
           {navItems.map((item) => (

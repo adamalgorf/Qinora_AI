@@ -13,6 +13,12 @@ class EmailWebhookResponse(BaseModel):
     inbound_email_id: str | None = None
 
 
+class AuthMeResponse(BaseModel):
+    user_id: str
+    tenant_id: str
+    roles: list[str]
+
+
 class KpiItem(BaseModel):
     label: str
     value: str

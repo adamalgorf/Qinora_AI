@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 
 from qinora.application import (
+    AuthContext,
     CarrierIntelligenceCommand,
     EmailWebhookCommand,
     EmailWebhookUseCase,
     OperationalQueries,
+    Role,
 )
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
 from qinora.infrastructure.settings import Settings
@@ -14,8 +16,10 @@ from qinora.infrastructure.sqlite import (
     SQLiteOperationalReadRepository,
     SQLiteWebhookEventRepository,
 )
+from qinora.interfaces.http.auth import get_auth_context, require_roles
 from qinora.interfaces.http.schemas import (
     AgentLogListItem,
+    AuthMeResponse,
     CarrierIntelligenceRequest,
     CarrierIntelligenceResponse,
     CarrierListItem,
@@ -28,6 +32,8 @@ from qinora.interfaces.http.schemas import (
     ShipmentListItem,
 )
 from qinora.interfaces.http.security import verify_hmac_signature
+
+AUTH_CONTEXT = Depends(get_auth_context)
 
 
 def create_app() -> FastAPI:
@@ -51,6 +57,14 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/auth/me", response_model=AuthMeResponse)
+    async def auth_me(context: AuthContext = AUTH_CONTEXT) -> AuthMeResponse:
+        return AuthMeResponse(
+            user_id=context.user_id,
+            tenant_id=context.tenant_id,
+            roles=[role.value for role in sorted(context.roles, key=lambda role: role.value)],
+        )
 
     @app.get("/dashboard/summary", response_model=DashboardSummaryResponse)
     async def dashboard_summary(request: Request) -> DashboardSummaryResponse:
@@ -90,8 +104,11 @@ def create_app() -> FastAPI:
 
     @app.post("/carriers/intelligence", response_model=CarrierIntelligenceResponse)
     async def run_carrier_intelligence(
-        payload: CarrierIntelligenceRequest, request: Request
+        payload: CarrierIntelligenceRequest,
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
     ) -> CarrierIntelligenceResponse:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
         queries: OperationalQueries = request.app.state.operational_queries
         result = await queries.run_carrier_intelligence(
             CarrierIntelligenceCommand(
@@ -124,7 +141,11 @@ def create_app() -> FastAPI:
         return [InboxListItem(**item.__dict__) for item in await queries.list_inbox()]
 
     @app.get("/agents/logs", response_model=list[AgentLogListItem])
-    async def agent_logs(request: Request) -> list[AgentLogListItem]:
+    async def agent_logs(
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
+    ) -> list[AgentLogListItem]:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
         queries: OperationalQueries = request.app.state.operational_queries
         return [AgentLogListItem(**item.__dict__) for item in await queries.list_agent_logs()]
 
