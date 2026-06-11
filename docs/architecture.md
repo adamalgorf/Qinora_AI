@@ -8,6 +8,8 @@ QiNora is implemented with a Python backend and TypeScript frontend, following c
 - `backend/src/qinora/application`: use cases and ports. Use cases depend on domain rules and abstract repositories/gateways.
 - `backend/src/qinora/infrastructure`: adapters for persistence, queues, LLM providers, email relays, and clocks.
 - `backend/src/qinora/interfaces/http`: FastAPI routes, auth, HMAC, idempotency, and HTTP DTO mapping.
+- `backend/src/qinora/interfaces/http/routers`: feature routers that keep HTTP endpoints modular.
+- `backend/src/qinora/interfaces/http/container.py`: composition root for application use cases and infrastructure adapters.
 - `backend/src/qinora/workers`: scheduled and queued job entrypoints for agents, outbound email, tracking simulation, invoice audit, and stale escalation.
 - `frontend/src`: React/Vite operator interface with feature slices.
 - `backend/migrations`: Postgres/Supabase schema migrations.
