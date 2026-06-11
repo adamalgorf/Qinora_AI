@@ -8,6 +8,7 @@ from qinora.application.read_models import (
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteRecord,
+    QuoteResponseEventRecord,
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
@@ -98,10 +99,39 @@ class QuoteWriteRepository(Protocol):
     async def get_quote(self, quote_id: str) -> Quote | None:
         pass
 
+    async def get_quote_record(self, quote_id: str) -> QuoteRecord | None:
+        pass
+
     async def mark_quote_sent(self, quote_id: str) -> QuoteRecord:
         pass
 
     async def mark_quote_accepted(self, quote_id: str) -> QuoteRecord:
+        pass
+
+    async def mark_quote_rejected(self, quote_id: str) -> QuoteRecord:
+        pass
+
+    async def mark_quote_revision_requested(self, quote_id: str) -> QuoteRecord:
+        pass
+
+    async def create_revision(
+        self,
+        *,
+        previous_quote_id: str,
+        customer_price: float,
+        currency: str,
+    ) -> QuoteRecord:
+        pass
+
+
+class QuoteResponseEventRepository(Protocol):
+    async def record_response(
+        self,
+        *,
+        quote_id: str,
+        intent: str,
+        body_text: str,
+    ) -> QuoteResponseEventRecord:
         pass
 
 

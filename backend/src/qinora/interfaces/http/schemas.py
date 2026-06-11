@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
@@ -117,6 +119,31 @@ class OutboundReplyItem(BaseModel):
 class SendQuoteResponse(BaseModel):
     quote: QuoteListItem
     outbound_reply: OutboundReplyItem
+
+
+class QuoteReplyPayload(BaseModel):
+    body_text: str = Field(min_length=1)
+    mode: str = "ltl"
+    total_weight_kg: float = 820
+    requested_carrier_name: str | None = "Nordic"
+    min_confidence: float = 0.65
+    revised_customer_price: float | None = None
+
+
+class QuoteResponseEventItem(BaseModel):
+    id: str
+    quote_id: str
+    intent: str
+    body_text: str
+    created_at: str
+
+
+class QuoteReplyResponse(BaseModel):
+    intent: str
+    event: QuoteResponseEventItem
+    quote: QuoteListItem | None = None
+    revised_quote: QuoteListItem | None = None
+    shipment: ShipmentListItem | None = None
 
 
 class ProcessOutboundQueuePayload(BaseModel):

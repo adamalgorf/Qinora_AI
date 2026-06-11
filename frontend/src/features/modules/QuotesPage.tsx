@@ -10,6 +10,8 @@ import {
   type CreateQuotePayload,
   type OutboundReplyItem,
   type ProcessOutboundQueueResponse,
+  type QuoteReplyPayload,
+  type QuoteReplyResponse,
   type QuoteListItem,
   type SendQuoteResponse,
 } from "@/shared/api/client";
@@ -71,6 +73,20 @@ export function QuotesPage() {
     },
     onError: (problem: { detail?: string }) => {
       setError(problem.detail ?? "Quote could not be accepted");
+    },
+  });
+  const replyMutation = useMutation({
+    mutationFn: ({ quoteId, payload }: { quoteId: string; payload: QuoteReplyPayload }) =>
+      apiPost<QuoteReplyResponse, QuoteReplyPayload>(`/quotes/${quoteId}/reply`, payload),
+    onSuccess: async () => {
+      setError(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["quotes"] }),
+        queryClient.invalidateQueries({ queryKey: ["shipments"] }),
+      ]);
+    },
+    onError: (problem: { detail?: string }) => {
+      setError(problem.detail ?? "Quote reply could not be interpreted");
     },
   });
   const processQueueMutation = useMutation({
@@ -164,13 +180,58 @@ export function QuotesPage() {
         {(query.data ?? [])
           .filter((quote) => quote.status === "sent")
           .map((quote) => (
-            <Button
-              key={`accept-${quote.id}`}
-              onClick={() => acceptMutation.mutate(quote.id)}
-              type="button"
-            >
-              Accept {quote.id}
-            </Button>
+            <div className="button-cluster" key={`reply-${quote.id}`}>
+              <Button
+                onClick={() =>
+                  replyMutation.mutate({
+                    quoteId: quote.id,
+                    payload: {
+                      body_text: "Accepted, please go ahead",
+                      mode: "ltl",
+                      total_weight_kg: 820,
+                      requested_carrier_name: "Nordic",
+                    },
+                  })
+                }
+                type="button"
+              >
+                Rex accept {quote.id}
+              </Button>
+              <Button
+                onClick={() =>
+                  replyMutation.mutate({
+                    quoteId: quote.id,
+                    payload: {
+                      body_text: "Please revise with a lower price",
+                      revised_customer_price: Math.max(1, quote.customer_price - 500),
+                    },
+                  })
+                }
+                type="button"
+                variant="secondary"
+              >
+                Revise
+              </Button>
+              <Button
+                onClick={() =>
+                  replyMutation.mutate({
+                    quoteId: quote.id,
+                    payload: { body_text: "No thanks, we reject this quote" },
+                  })
+                }
+                type="button"
+                variant="ghost"
+              >
+                Reject
+              </Button>
+              <Button
+                onClick={() => acceptMutation.mutate(quote.id)}
+                type="button"
+                variant="secondary"
+              >
+                Direct accept
+              </Button>
+            </div>
           ))}
       </div>
       <section className="queue-panel" aria-label="Outbound reply queue">

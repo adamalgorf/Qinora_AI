@@ -240,6 +240,57 @@ def test_accept_quote_books_shipment_with_carrier_intelligence(client: TestClien
     assert body["shipment"]["status"] == "booked"
 
 
+def test_quote_reply_accepts_and_books_shipment(client: TestClient) -> None:
+    response = client.post(
+        "/quotes/quo-001/reply",
+        json={
+            "body_text": "Accepted, please go ahead",
+            "mode": "ltl",
+            "total_weight_kg": 820,
+            "requested_carrier_name": "Nordic",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "accepted"
+    assert body["event"]["intent"] == "accepted"
+    assert body["quote"]["status"] == "accepted"
+    assert body["shipment"]["status"] == "booked"
+
+
+def test_quote_reply_rejects_quote(client: TestClient) -> None:
+    response = client.post(
+        "/quotes/quo-001/reply",
+        json={"body_text": "No thanks, we reject this quote"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "rejected"
+    assert body["quote"]["status"] == "rejected"
+    assert body["shipment"] is None
+
+
+def test_quote_reply_revision_creates_revised_quote(client: TestClient) -> None:
+    response = client.post(
+        "/quotes/quo-001/reply",
+        json={
+            "body_text": "Please revise with a lower price",
+            "revised_customer_price": 17000,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "revise"
+    assert body["quote"]["status"] == "revision_requested"
+    assert body["revised_quote"]["status"] == "revised"
+    assert body["revised_quote"]["version"] == 2
+    assert body["revised_quote"]["parent_quote_id"] == "quo-001"
+    assert body["revised_quote"]["customer_price"] == 17000
+
+
 def test_update_shipment_status_uses_fsm(client: TestClient) -> None:
     response = client.post("/shipments/shp-001/status", json={"status": "in_transit"})
 

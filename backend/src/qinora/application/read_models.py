@@ -109,3 +109,12 @@ class OutboundReplyRecord:
     created_at: str
     sent_at: str | None = None
     error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class QuoteResponseEventRecord:
+    id: str
+    quote_id: str
+    intent: str
+    body_text: str
+    created_at: str

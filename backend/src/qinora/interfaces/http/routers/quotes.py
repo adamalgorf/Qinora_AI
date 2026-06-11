@@ -4,6 +4,7 @@ from qinora.application import (
     AuthContext,
     BookQuoteCommand,
     CreateQuoteCommand,
+    InterpretQuoteReplyCommand,
     PricingGateError,
     ProcessOutboundQueueCommand,
     QuoteNotFoundError,
@@ -21,6 +22,9 @@ from qinora.interfaces.http.schemas import (
     ProcessOutboundQueuePayload,
     ProcessOutboundQueueResponse,
     QuoteListItem,
+    QuoteReplyPayload,
+    QuoteReplyResponse,
+    QuoteResponseEventItem,
     SendQuoteResponse,
     ShipmentListItem,
 )
@@ -103,6 +107,38 @@ async def send_quote(
     return SendQuoteResponse(
         quote=QuoteListItem(**result.quote.__dict__),
         outbound_reply=OutboundReplyItem(**result.outbound_reply.__dict__),
+    )
+
+
+@router.post("/quotes/{quote_id}/reply", response_model=QuoteReplyResponse)
+async def interpret_quote_reply(
+    quote_id: str,
+    payload: QuoteReplyPayload,
+    container: AppContainer = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> QuoteReplyResponse:
+    require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+    result = await container.quote_response_workflow.interpret_reply(
+        InterpretQuoteReplyCommand(
+            quote_id=quote_id,
+            body_text=payload.body_text,
+            mode=payload.mode,
+            total_weight_kg=payload.total_weight_kg,
+            requested_carrier_name=payload.requested_carrier_name,
+            min_confidence=payload.min_confidence,
+            revised_customer_price=payload.revised_customer_price,
+        )
+    )
+    return QuoteReplyResponse(
+        intent=result.intent.value,
+        event=QuoteResponseEventItem(**result.event.__dict__),
+        quote=QuoteListItem(**result.quote.__dict__) if result.quote else None,
+        revised_quote=(
+            QuoteListItem(**result.revised_quote.__dict__) if result.revised_quote else None
+        ),
+        shipment=(
+            ShipmentListItem(**result.booking.shipment.__dict__) if result.booking else None
+        ),
     )
 
 

@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteRecord,
+    QuoteResponseEventRecord,
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
@@ -23,6 +24,7 @@ from qinora.domain import (
     ShipmentStatus,
     TransportRequestInput,
     assert_shipment_transition,
+    next_quote_revision,
 )
 
 
@@ -165,6 +167,14 @@ class SQLiteDatabase:
                   created_at text not null default current_timestamp,
                   sent_at text,
                   error_message text
+                );
+
+                create table if not exists quote_response_events (
+                  id text primary key,
+                  quote_id text not null,
+                  intent text not null,
+                  body_text text not null,
+                  created_at text not null default current_timestamp
                 );
                 """
             )
@@ -712,6 +722,21 @@ class SQLiteQuoteWriteRepository:
             parent_quote_id=row["parent_quote_id"],
         )
 
+    async def get_quote_record(self, quote_id: str) -> QuoteRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, status, version, customer_price, currency, parent_quote_id
+                from quotes
+                where id = ?
+                """,
+                (quote_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return QuoteRecord(**dict(row))
+
     async def mark_quote_sent(self, quote_id: str) -> QuoteRecord:
         with self._database.connect() as connection:
             connection.execute(
@@ -748,6 +773,84 @@ class SQLiteQuoteWriteRepository:
             raise LookupError(f"Quote not found: {quote_id}")
 
         return QuoteRecord(**dict(row))
+
+    async def mark_quote_rejected(self, quote_id: str) -> QuoteRecord:
+        return await self._set_quote_status(quote_id, "rejected")
+
+    async def mark_quote_revision_requested(self, quote_id: str) -> QuoteRecord:
+        return await self._set_quote_status(quote_id, "revision_requested")
+
+    async def create_revision(
+        self,
+        *,
+        previous_quote_id: str,
+        customer_price: float,
+        currency: str,
+    ) -> QuoteRecord:
+        previous = await self.get_quote(previous_quote_id)
+        if previous is None:
+            raise LookupError(f"Quote not found: {previous_quote_id}")
+
+        version, parent_quote_id = next_quote_revision(previous)
+        quote_id = str(uuid4())
+        with self._database.connect() as connection:
+            connection.execute(
+                """
+                insert into quotes
+                  (id, status, version, customer_price, currency, parent_quote_id)
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (quote_id, "revised", version, customer_price, currency, parent_quote_id),
+            )
+
+        return QuoteRecord(
+            id=quote_id,
+            status="revised",
+            version=version,
+            customer_price=customer_price,
+            currency=currency,
+            parent_quote_id=parent_quote_id,
+        )
+
+    async def _set_quote_status(self, quote_id: str, status: str) -> QuoteRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update quotes set status = ? where id = ?
+                returning id, status, version, customer_price, currency, parent_quote_id
+                """,
+                (status, quote_id),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(f"Quote not found: {quote_id}")
+        return QuoteRecord(**dict(row))
+
+
+class SQLiteQuoteResponseEventRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def record_response(
+        self,
+        *,
+        quote_id: str,
+        intent: str,
+        body_text: str,
+    ) -> QuoteResponseEventRecord:
+        event_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into quote_response_events
+                  (id, quote_id, intent, body_text)
+                values (?, ?, ?, ?)
+                returning id, quote_id, intent, body_text, created_at
+                """,
+                (event_id, quote_id, intent, body_text),
+            ).fetchone()
+
+        return QuoteResponseEventRecord(**dict(row))
 
 
 class SQLiteShipmentWriteRepository:

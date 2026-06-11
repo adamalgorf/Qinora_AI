@@ -22,6 +22,12 @@ from qinora.application.ports import (
     ShipmentWriteRepository,
     WebhookEventRepository,
 )
+from qinora.application.quote_response_workflow import (
+    InterpretQuoteReplyCommand,
+    InterpretQuoteReplyResult,
+    QuoteReplyIntent,
+    QuoteResponseWorkflow,
+)
 from qinora.application.quote_workflow import (
     CreateQuoteCommand,
     PricingGateError,
@@ -67,7 +73,11 @@ __all__ = [
     "InvoiceAuditResult",
     "InvoiceAuditWorkflow",
     "InvoiceWriteRepository",
+    "InterpretQuoteReplyCommand",
+    "InterpretQuoteReplyResult",
     "QuoteNotFoundError",
+    "QuoteReplyIntent",
+    "QuoteResponseWorkflow",
     "QuoteWorkflow",
     "Role",
     "RunTrackingSimulatorCommand",

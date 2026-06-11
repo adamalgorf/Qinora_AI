@@ -102,6 +102,29 @@ export type SendQuoteResponse = {
   outbound_reply: OutboundReplyItem;
 };
 
+export type QuoteReplyPayload = {
+  body_text: string;
+  mode?: string;
+  total_weight_kg?: number;
+  requested_carrier_name?: string;
+  min_confidence?: number;
+  revised_customer_price?: number;
+};
+
+export type QuoteReplyResponse = {
+  intent: string;
+  event: {
+    id: string;
+    quote_id: string;
+    intent: string;
+    body_text: string;
+    created_at: string;
+  };
+  quote: QuoteListItem | null;
+  revised_quote: QuoteListItem | null;
+  shipment: ShipmentListItem | null;
+};
+
 export type ProcessOutboundQueueResponse = {
   sent: OutboundReplyItem[];
   failed: OutboundReplyItem[];

@@ -48,6 +48,7 @@ frontend -> HTTP API contract
 - Shipment status updates write `shipment_events` through an application workflow for case timeline auditability.
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Successful quote sending enqueues `outbound_reply_queue` records after the pricing gate passes.
+- Quote replies are interpreted by `QuoteResponseWorkflow`, recording reply events and routing accepted, revised, or rejected quotes.
 - The outbound mail worker processes queued replies through an `OutboundMailer` port and records sent/failed status.
 - The tracking simulator worker advances in-transit shipments, records shipment events, and creates invoice audits.
 - Carrier intelligence is deterministic and stores confidence components for auditability.

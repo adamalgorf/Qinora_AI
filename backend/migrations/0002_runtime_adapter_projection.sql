@@ -35,3 +35,14 @@ alter table public.invoices
 alter table public.outbound_reply_queue
   add column if not exists sent_at timestamptz,
   add column if not exists error_message text;
+
+create table if not exists public.quote_response_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id),
+  quote_id uuid references public.quotes(id),
+  intent text not null,
+  body_text text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.quote_response_events enable row level security;

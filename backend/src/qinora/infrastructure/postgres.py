@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteRecord,
+    QuoteResponseEventRecord,
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
@@ -23,6 +24,7 @@ from qinora.domain import (
     ShipmentStatus,
     TransportRequestInput,
     assert_shipment_transition,
+    next_quote_revision,
 )
 
 
@@ -483,11 +485,61 @@ class PostgresQuoteWriteRepository:
             parent_quote_id=str(row["parent_quote_id"]) if row["parent_quote_id"] else None,
         )
 
+    async def get_quote_record(self, quote_id: str) -> QuoteRecord | None:
+        row = self._get_quote_row(quote_id)
+        if row is None:
+            return None
+        return _quote_record(row)
+
     async def mark_quote_sent(self, quote_id: str) -> QuoteRecord:
         return self._set_status(quote_id, "sent")
 
     async def mark_quote_accepted(self, quote_id: str) -> QuoteRecord:
         return self._set_status(quote_id, "accepted")
+
+    async def mark_quote_rejected(self, quote_id: str) -> QuoteRecord:
+        return self._set_status(quote_id, "rejected")
+
+    async def mark_quote_revision_requested(self, quote_id: str) -> QuoteRecord:
+        return self._set_status(quote_id, "revision_requested")
+
+    async def create_revision(
+        self,
+        *,
+        previous_quote_id: str,
+        customer_price: float,
+        currency: str,
+    ) -> QuoteRecord:
+        previous = await self.get_quote(previous_quote_id)
+        if previous is None:
+            raise LookupError(f"Quote not found: {previous_quote_id}")
+
+        version, parent_quote_id = next_quote_revision(previous)
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            public_id = _next_public_id(cursor, "public.quotes", "QUO", self._database.tenant_id)
+            cursor.execute(
+                """
+                insert into public.quotes
+                  (
+                    tenant_id, public_id, parent_quote_id, version,
+                    status, customer_price, currency
+                  )
+                values (%s, %s, %s, %s, %s, %s, %s)
+                returning id, status, version, customer_price, currency, parent_quote_id
+                """,
+                (
+                    self._database.tenant_id,
+                    public_id,
+                    parent_quote_id,
+                    version,
+                    "revised",
+                    customer_price,
+                    currency,
+                ),
+            )
+            row = cursor.fetchone()
+
+        return _quote_record(row)
 
     def _get_quote_row(self, quote_id: str) -> dict[str, Any] | None:
         with self._database.connect() as connection, connection.cursor() as cursor:
@@ -517,6 +569,38 @@ class PostgresQuoteWriteRepository:
         if row is None:
             raise LookupError(f"Quote not found: {quote_id}")
         return _quote_record(row)
+
+
+class PostgresQuoteResponseEventRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def record_response(
+        self,
+        *,
+        quote_id: str,
+        intent: str,
+        body_text: str,
+    ) -> QuoteResponseEventRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.quote_response_events
+                  (tenant_id, quote_id, intent, body_text)
+                values (%s, %s, %s, %s)
+                returning id, quote_id, intent, body_text, created_at
+                """,
+                (self._database.tenant_id, quote_id, intent, body_text),
+            )
+            row = cursor.fetchone()
+
+        return QuoteResponseEventRecord(
+            id=str(row["id"]),
+            quote_id=str(row["quote_id"]) if row["quote_id"] else "",
+            intent=row["intent"],
+            body_text=row["body_text"],
+            created_at=row["created_at"].isoformat(),
+        )
 
 
 class PostgresShipmentWriteRepository:
