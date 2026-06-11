@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import {
   apiGet,
   apiPost,
+  type AcceptQuotePayload,
+  type AcceptQuoteResponse,
   type CreateQuotePayload,
   type QuoteListItem,
 } from "@/shared/api/client";
@@ -40,6 +42,24 @@ export function QuotesPage() {
     },
     onError: (problem: { detail?: string }) => {
       setError(problem.detail ?? "Quote could not be sent");
+    },
+  });
+  const acceptMutation = useMutation({
+    mutationFn: (quoteId: string) =>
+      apiPost<AcceptQuoteResponse, AcceptQuotePayload>(`/quotes/${quoteId}/accept`, {
+        mode: "ltl",
+        total_weight_kg: 820,
+        requested_carrier_name: "Nordic",
+      }),
+    onSuccess: async () => {
+      setError(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["quotes"] }),
+        queryClient.invalidateQueries({ queryKey: ["shipments"] }),
+      ]);
+    },
+    onError: (problem: { detail?: string }) => {
+      setError(problem.detail ?? "Quote could not be accepted");
     },
   });
 
@@ -115,6 +135,17 @@ export function QuotesPage() {
               variant="secondary"
             >
               Send {quote.id}
+            </Button>
+          ))}
+        {(query.data ?? [])
+          .filter((quote) => quote.status === "sent")
+          .map((quote) => (
+            <Button
+              key={`accept-${quote.id}`}
+              onClick={() => acceptMutation.mutate(quote.id)}
+              type="button"
+            >
+              Accept {quote.id}
             </Button>
           ))}
       </div>

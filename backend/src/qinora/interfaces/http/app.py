@@ -2,6 +2,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 
 from qinora.application import (
     AuthContext,
+    BookingWorkflow,
+    BookQuoteCommand,
     CargoLineCommand,
     CarrierIntelligenceCommand,
     CreateQuoteCommand,
@@ -24,10 +26,13 @@ from qinora.infrastructure.sqlite import (
     SQLiteOperationalReadRepository,
     SQLiteQuoteWriteRepository,
     SQLiteRequestWriteRepository,
+    SQLiteShipmentWriteRepository,
     SQLiteWebhookEventRepository,
 )
 from qinora.interfaces.http.auth import get_auth_context, require_roles
 from qinora.interfaces.http.schemas import (
+    AcceptQuotePayload,
+    AcceptQuoteResponse,
     AgentLogListItem,
     AuthMeResponse,
     CarrierIntelligenceRequest,
@@ -43,6 +48,7 @@ from qinora.interfaces.http.schemas import (
     QuoteListItem,
     RequestListItem,
     ShipmentListItem,
+    UpdateShipmentStatusPayload,
 )
 from qinora.interfaces.http.security import verify_hmac_signature
 
@@ -62,6 +68,11 @@ def create_app() -> FastAPI:
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
     create_request = CreateRequestUseCase(SQLiteRequestWriteRepository(database))
     quote_workflow = QuoteWorkflow(SQLiteQuoteWriteRepository(database))
+    booking_workflow = BookingWorkflow(
+        SQLiteQuoteWriteRepository(database),
+        SQLiteShipmentWriteRepository(database),
+        operational_queries,
+    )
 
     app.state.settings = settings
     app.state.database = database
@@ -70,6 +81,8 @@ def create_app() -> FastAPI:
     app.state.operational_queries = operational_queries
     app.state.create_request = create_request
     app.state.quote_workflow = quote_workflow
+    app.state.booking_workflow = booking_workflow
+    app.state.shipment_repository = SQLiteShipmentWriteRepository(database)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -181,10 +194,59 @@ def create_app() -> FastAPI:
 
         return QuoteListItem(**quote.__dict__)
 
+    @app.post("/quotes/{quote_id}/accept", response_model=AcceptQuoteResponse)
+    async def accept_quote(
+        quote_id: str,
+        payload: AcceptQuotePayload,
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
+    ) -> AcceptQuoteResponse:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+        workflow: BookingWorkflow = request.app.state.booking_workflow
+        result = await workflow.book_quote(
+            BookQuoteCommand(
+                quote_id=quote_id,
+                mode=payload.mode,
+                total_weight_kg=payload.total_weight_kg,
+                requested_carrier_name=payload.requested_carrier_name,
+                min_confidence=payload.min_confidence,
+            )
+        )
+
+        return AcceptQuoteResponse(
+            shipment=ShipmentListItem(**result.shipment.__dict__),
+            selected_carrier_id=result.selected_carrier_id,
+            requires_manual_review=result.requires_manual_review,
+            overall_confidence=result.overall_confidence,
+        )
+
     @app.get("/shipments", response_model=list[ShipmentListItem])
     async def list_shipments(request: Request) -> list[ShipmentListItem]:
         queries: OperationalQueries = request.app.state.operational_queries
         return [ShipmentListItem(**item.__dict__) for item in await queries.list_shipments()]
+
+    @app.post("/shipments/{shipment_id}/status", response_model=ShipmentListItem)
+    async def update_shipment_status(
+        shipment_id: str,
+        payload: UpdateShipmentStatusPayload,
+        request: Request,
+        context: AuthContext = AUTH_CONTEXT,
+    ) -> ShipmentListItem:
+        require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+        repository: SQLiteShipmentWriteRepository = request.app.state.shipment_repository
+
+        try:
+            shipment = await repository.update_status(shipment_id, payload.status)
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(error),
+            ) from error
+
+        if shipment is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipment not found")
+
+        return ShipmentListItem(**shipment.__dict__)
 
     @app.get("/carriers", response_model=list[CarrierListItem])
     async def list_carriers(request: Request) -> list[CarrierListItem]:

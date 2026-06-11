@@ -151,6 +151,35 @@ def test_send_quote_blocks_zero_price(client: TestClient) -> None:
     assert response.json()["detail"] == "Quote customer price must be greater than zero"
 
 
+def test_accept_quote_books_shipment_with_carrier_intelligence(client: TestClient) -> None:
+    response = client.post(
+        "/quotes/quo-001/accept",
+        json={
+            "mode": "ltl",
+            "total_weight_kg": 820,
+            "requested_carrier_name": "Nordic",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected_carrier_id"] == "car-001"
+    assert body["shipment"]["status"] == "booked"
+
+
+def test_update_shipment_status_uses_fsm(client: TestClient) -> None:
+    response = client.post("/shipments/shp-001/status", json={"status": "in_transit"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "in_transit"
+
+
+def test_update_shipment_status_rejects_invalid_transition(client: TestClient) -> None:
+    response = client.post("/shipments/shp-001/status", json={"status": "invoice_approved"})
+
+    assert response.status_code == 422
+
+
 def test_carrier_intelligence_endpoint_runs_domain_pipeline(client: TestClient) -> None:
     response = client.post(
         "/carriers/intelligence",

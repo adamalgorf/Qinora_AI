@@ -78,6 +78,20 @@ export type CreateQuotePayload = {
   currency: string;
 };
 
+export type AcceptQuotePayload = {
+  mode: string;
+  total_weight_kg: number;
+  requested_carrier_name?: string;
+  min_confidence?: number;
+};
+
+export type AcceptQuoteResponse = {
+  shipment: ShipmentListItem;
+  selected_carrier_id: string | null;
+  requires_manual_review: boolean;
+  overall_confidence: number;
+};
+
 export type ShipmentListItem = {
   id: string;
   public_id: string;
@@ -86,6 +100,10 @@ export type ShipmentListItem = {
   lane: string;
   status: string;
   eta: string;
+};
+
+export type UpdateShipmentStatusPayload = {
+  status: string;
 };
 
 export type CarrierListItem = {

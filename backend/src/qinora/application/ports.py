@@ -84,3 +84,22 @@ class QuoteWriteRepository(Protocol):
 
     async def mark_quote_sent(self, quote_id: str) -> QuoteRecord:
         pass
+
+    async def mark_quote_accepted(self, quote_id: str) -> QuoteRecord:
+        pass
+
+
+class ShipmentWriteRepository(Protocol):
+    async def create_shipment(
+        self,
+        *,
+        quote_id: str,
+        carrier_id: str | None,
+        lane: str,
+        status: str,
+        eta: str,
+    ) -> ShipmentRecord:
+        pass
+
+    async def update_status(self, shipment_id: str, status: str) -> ShipmentRecord | None:
+        pass

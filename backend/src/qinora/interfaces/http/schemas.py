@@ -105,6 +105,24 @@ class ShipmentListItem(BaseModel):
     eta: str
 
 
+class AcceptQuotePayload(BaseModel):
+    mode: str = "ftl"
+    total_weight_kg: float
+    requested_carrier_name: str | None = None
+    min_confidence: float = 0.65
+
+
+class AcceptQuoteResponse(BaseModel):
+    shipment: ShipmentListItem
+    selected_carrier_id: str | None
+    requires_manual_review: bool
+    overall_confidence: float
+
+
+class UpdateShipmentStatusPayload(BaseModel):
+    status: str
+
+
 class CarrierListItem(BaseModel):
     id: str
     display_name: str

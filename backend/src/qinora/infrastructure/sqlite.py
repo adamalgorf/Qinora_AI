@@ -11,7 +11,15 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentRecord,
 )
-from qinora.domain import CurrencyCode, Money, Quote, QuoteStatus, TransportRequestInput
+from qinora.domain import (
+    CurrencyCode,
+    Money,
+    Quote,
+    QuoteStatus,
+    ShipmentStatus,
+    TransportRequestInput,
+    assert_shipment_transition,
+)
 
 
 class SQLiteDatabase:
@@ -580,6 +588,96 @@ class SQLiteQuoteWriteRepository:
             ).fetchone()
 
         return QuoteRecord(**dict(row))
+
+    async def mark_quote_accepted(self, quote_id: str) -> QuoteRecord:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update quotes set status = ? where id = ?",
+                ("accepted", quote_id),
+            )
+            row = connection.execute(
+                """
+                select id, status, version, customer_price, currency, parent_quote_id
+                from quotes
+                where id = ?
+                """,
+                (quote_id,),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(f"Quote not found: {quote_id}")
+
+        return QuoteRecord(**dict(row))
+
+
+class SQLiteShipmentWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_shipment(
+        self,
+        *,
+        quote_id: str,
+        carrier_id: str | None,
+        lane: str,
+        status: str,
+        eta: str,
+    ) -> ShipmentRecord:
+        shipment_id = str(uuid4())
+
+        with self._database.connect() as connection:
+            public_id = _next_public_id(connection, "shipments", "SHP")
+            connection.execute(
+                """
+                insert into shipments
+                  (id, public_id, quote_id, carrier_id, lane, status, eta)
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (shipment_id, public_id, quote_id, carrier_id, lane, status, eta),
+            )
+
+        return ShipmentRecord(
+            id=shipment_id,
+            public_id=public_id,
+            quote_id=quote_id,
+            carrier_id=carrier_id,
+            lane=lane,
+            status=status,
+            eta=eta,
+        )
+
+    async def update_status(self, shipment_id: str, status: str) -> ShipmentRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, public_id, quote_id, carrier_id, lane, status, eta
+                from shipments
+                where id = ?
+                """,
+                (shipment_id,),
+            ).fetchone()
+
+            if row is None:
+                return None
+
+            assert_shipment_transition(
+                ShipmentStatus(row["status"]),
+                ShipmentStatus(status),
+            )
+            connection.execute(
+                "update shipments set status = ? where id = ?",
+                (status, shipment_id),
+            )
+
+        return ShipmentRecord(
+            id=row["id"],
+            public_id=row["public_id"],
+            quote_id=row["quote_id"],
+            carrier_id=row["carrier_id"],
+            lane=row["lane"],
+            status=status,
+            eta=row["eta"],
+        )
 
 
 def _count(connection: sqlite3.Connection, table: str) -> int:
