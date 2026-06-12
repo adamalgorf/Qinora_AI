@@ -14,6 +14,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
+    StaleRequestRecord,
 )
 from qinora.domain import Quote, TransportRequestInput
 
@@ -121,6 +122,11 @@ class RequestWriteRepository(Protocol):
         status: str,
         review_reason: str | None,
     ) -> RequestRecord:
+        pass
+
+
+class StaleRequestRepository(Protocol):
+    async def list_stale_requests(self, cutoff: str) -> list[StaleRequestRecord]:
         pass
 
 

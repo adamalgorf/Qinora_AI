@@ -13,6 +13,7 @@ from qinora.application import (
     QuoteResponseWorkflow,
     QuoteWorkflow,
     ShipmentWorkflow,
+    StaleRequestEscalator,
     TrackingSimulator,
 )
 from qinora.application.ports import ShipmentWriteRepository
@@ -33,6 +34,7 @@ from qinora.infrastructure.postgres import (
     PostgresRequestWriteRepository,
     PostgresShipmentEventRepository,
     PostgresShipmentWriteRepository,
+    PostgresStaleRequestRepository,
     PostgresWebhookEventRepository,
 )
 from qinora.infrastructure.settings import PersistenceDriver, Settings
@@ -51,6 +53,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteRequestWriteRepository,
     SQLiteShipmentEventRepository,
     SQLiteShipmentWriteRepository,
+    SQLiteStaleRequestRepository,
     SQLiteWebhookEventRepository,
 )
 
@@ -71,6 +74,7 @@ class AppContainer:
     shipment_workflow: ShipmentWorkflow
     invoice_audit: InvoiceAuditWorkflow
     process_outbound_queue: ProcessOutboundQueueUseCase
+    stale_request_escalator: StaleRequestEscalator
     tracking_simulator: TrackingSimulator
     shipment_repository: ShipmentWriteRepository
 
@@ -135,6 +139,10 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         shipment_workflow=shipment_workflow,
         invoice_audit=invoice_audit,
         process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
+        stale_request_escalator=StaleRequestEscalator(
+            SQLiteStaleRequestRepository(database),
+            task_repository,
+        ),
         tracking_simulator=TrackingSimulator(
             operational_queries,
             shipment_workflow,
@@ -201,6 +209,10 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         shipment_workflow=shipment_workflow,
         invoice_audit=invoice_audit,
         process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
+        stale_request_escalator=StaleRequestEscalator(
+            PostgresStaleRequestRepository(database),
+            task_repository,
+        ),
         tracking_simulator=TrackingSimulator(
             operational_queries,
             shipment_workflow,

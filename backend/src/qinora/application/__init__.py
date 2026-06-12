@@ -53,6 +53,11 @@ from qinora.application.request_intake import (
     CreateRequestUseCase,
 )
 from qinora.application.shipment_workflow import ShipmentWorkflow, UpdateShipmentStatusCommand
+from qinora.application.stale_request_escalation import (
+    EscalateStaleRequestsCommand,
+    StaleRequestEscalationResult,
+    StaleRequestEscalator,
+)
 from qinora.application.tracking_simulator import (
     RunTrackingSimulatorCommand,
     TrackingSimulator,
@@ -70,6 +75,7 @@ __all__ = [
     "BookingWorkflow",
     "EmailWebhookCommand",
     "EmailWebhookUseCase",
+    "EscalateStaleRequestsCommand",
     "InboundEmailRepository",
     "OperationalQueries",
     "OperationalReadRepository",
@@ -103,6 +109,8 @@ __all__ = [
     "RequestWriteRepository",
     "ShipmentWriteRepository",
     "ShipmentWorkflow",
+    "StaleRequestEscalationResult",
+    "StaleRequestEscalator",
     "TrackingSimulator",
     "TrackingSimulatorResult",
     "UpdateAgentConfigCommand",

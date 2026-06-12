@@ -13,6 +13,15 @@ class RequestRecord:
 
 
 @dataclass(frozen=True)
+class StaleRequestRecord:
+    id: str
+    public_id: str
+    customer: str
+    review_reason: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
 class QuoteRecord:
     id: str
     status: str

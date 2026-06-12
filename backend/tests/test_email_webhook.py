@@ -1,9 +1,11 @@
 import hmac
 from hashlib import sha256
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
 
+from qinora.application import EscalateStaleRequestsCommand
 from qinora.interfaces.http.app import create_app
 
 
@@ -497,3 +499,39 @@ def test_agent_config_update_requires_admin_role(client: TestClient) -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_stale_request_escalator_creates_idempotent_tasks(client: TestClient) -> None:
+    with client.app.state.container.database.connect() as connection:
+        connection.execute(
+            """
+            update transport_requests
+            set created_at = datetime('now', '-25 hours')
+            where id = ?
+            """,
+            ("req-003",),
+        )
+
+    first_result = anyio.run(
+        lambda: client.app.state.container.stale_request_escalator.run(
+            EscalateStaleRequestsCommand(max_age_hours=24)
+        )
+    )
+    second_result = anyio.run(
+        lambda: client.app.state.container.stale_request_escalator.run(
+            EscalateStaleRequestsCommand(max_age_hours=24)
+        )
+    )
+
+    assert len(first_result.tasks) == 1
+    assert len(second_result.tasks) == 0
+
+    tasks = client.get("/tasks").json()
+    stale_tasks = [
+        task
+        for task in tasks
+        if task["entity_id"] == "req-003"
+        and task["reason"].startswith("Stale clarification request")
+    ]
+    assert len(stale_tasks) == 1
+    assert stale_tasks[0]["priority"] == "high"

@@ -70,6 +70,13 @@ cd backend
 python -m qinora.workers.tracking_simulator
 ```
 
+Escalate stale clarification requests into Control Tower tasks:
+
+```powershell
+cd backend
+python -m qinora.workers.stale_request_escalator
+```
+
 ## Run Full Stack With Docker
 
 ```powershell

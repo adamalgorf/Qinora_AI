@@ -45,6 +45,7 @@ frontend -> HTTP API contract
 - Shipment status transitions are encoded as a domain FSM.
 - Request intake validation checks weight, dimensions, timing, and ADR UN-number detection.
 - Incomplete request intake creates `operational_tasks` for Control Tower exception handling.
+- Stale request escalation finds old `needs_clarification` requests and creates idempotent high-priority Control Tower tasks.
 - Shipment status updates write `shipment_events` through an application workflow for case timeline auditability.
 - Manual shipment overrides reuse the shipment workflow and require an operator reason in the timeline.
 - Quote sending is blocked when the customer price is less than or equal to zero.

@@ -19,6 +19,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
+    StaleRequestRecord,
 )
 from qinora.domain import (
     CurrencyCode,
@@ -624,6 +625,46 @@ class PostgresRequestWriteRepository:
             status=status,
             weight_kg=total_weight,
         )
+
+
+class PostgresStaleRequestRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def list_stale_requests(self, cutoff: str) -> list[StaleRequestRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, public_id, customer, review_reason, created_at
+                from public.transport_requests request
+                where request.tenant_id = %s
+                  and request.status = 'needs_clarification'
+                  and request.created_at <= %s::timestamptz
+                  and not exists (
+                    select 1
+                    from public.operational_tasks task
+                    where task.tenant_id = request.tenant_id
+                      and task.entity_type = 'transport_request'
+                      and task.entity_id = request.id::text
+                      and task.status = 'open'
+                      and task.reason like 'Stale clarification request%%'
+                  )
+                order by request.created_at
+                """,
+                (self._database.tenant_id, cutoff),
+            )
+            rows = cursor.fetchall()
+
+        return [
+            StaleRequestRecord(
+                id=str(row["id"]),
+                public_id=row["public_id"],
+                customer=row["customer"] or "Unknown customer",
+                review_reason=row["review_reason"],
+                created_at=row["created_at"].isoformat(),
+            )
+            for row in rows
+        ]
 
 
 class PostgresQuoteWriteRepository:

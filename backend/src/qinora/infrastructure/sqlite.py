@@ -19,6 +19,7 @@ from qinora.application.read_models import (
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
+    StaleRequestRecord,
 )
 from qinora.domain import (
     CurrencyCode,
@@ -72,7 +73,8 @@ class SQLiteDatabase:
                   mode text not null,
                   status text not null,
                   weight_kg real not null,
-                  review_reason text
+                  review_reason text,
+                  created_at text not null default current_timestamp
                 );
 
                 create table if not exists request_cargo (
@@ -208,6 +210,14 @@ class SQLiteDatabase:
                 "transport_requests",
                 "review_reason",
                 "text",
+            )
+            _add_column_if_missing(connection, "transport_requests", "created_at", "text")
+            connection.execute(
+                """
+                update transport_requests
+                set created_at = current_timestamp
+                where created_at is null
+                """
             )
             _add_column_if_missing(connection, "outbound_reply_queue", "sent_at", "text")
             _add_column_if_missing(connection, "outbound_reply_queue", "error_message", "text")
@@ -850,8 +860,11 @@ class SQLiteRequestWriteRepository:
             connection.execute(
                 """
                 insert into transport_requests
-                  (id, public_id, customer, lane, mode, status, weight_kg, review_reason)
-                values (?, ?, ?, ?, ?, ?, ?, ?)
+                  (
+                    id, public_id, customer, lane, mode, status, weight_kg,
+                    review_reason, created_at
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, current_timestamp)
                 """,
                 (
                     request_id,
@@ -900,6 +913,35 @@ class SQLiteRequestWriteRepository:
             status=status,
             weight_kg=total_weight,
         )
+
+
+class SQLiteStaleRequestRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def list_stale_requests(self, cutoff: str) -> list[StaleRequestRecord]:
+        cutoff_value = cutoff.replace("T", " ").replace("+00:00", "")
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select id, public_id, customer, review_reason, created_at
+                from transport_requests request
+                where request.status = 'needs_clarification'
+                  and coalesce(request.created_at, current_timestamp) <= ?
+                  and not exists (
+                    select 1
+                    from operational_tasks task
+                    where task.entity_type = 'transport_request'
+                      and task.entity_id = request.id
+                      and task.status = 'open'
+                      and task.reason like 'Stale clarification request%'
+                  )
+                order by request.created_at
+                """,
+                (cutoff_value,),
+            ).fetchall()
+
+        return [StaleRequestRecord(**dict(row)) for row in rows]
 
 
 class SQLiteQuoteWriteRepository:
