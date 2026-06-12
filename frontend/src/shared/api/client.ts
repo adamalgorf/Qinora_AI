@@ -83,6 +83,7 @@ export type QuoteListItem = {
   customer_price: number;
   currency: string;
   parent_quote_id: string | null;
+  request_id: string | null;
 };
 
 export type QuoteLineItem = {

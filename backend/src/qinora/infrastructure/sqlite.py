@@ -227,6 +227,14 @@ class SQLiteDatabase:
             _add_column_if_missing(connection, "quotes", "request_id", "text")
             connection.execute(
                 """
+                update quotes
+                set request_id = ?
+                where id in (?, ?, ?) and request_id is null
+                """,
+                ("req-001", "quo-001", "quo-002", "quo-003"),
+            )
+            connection.execute(
+                """
                 update transport_requests
                 set created_at = current_timestamp
                 where created_at is null
@@ -297,14 +305,14 @@ class SQLiteDatabase:
         connection.executemany(
             """
             insert into quotes
-              (id, status, version, customer_price, currency, parent_quote_id)
-            values (?, ?, ?, ?, ?, ?)
+              (id, request_id, status, version, customer_price, currency, parent_quote_id)
+            values (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                ("quo-001", "sent", 1, 18400, "SEK", None),
-                ("quo-002", "draft", 1, 0, "SEK", None),
-                ("quo-003", "accepted", 2, 7290, "SEK", "quo-001"),
-                ("quo-004", "accepted", 1, 9800, "SEK", None),
+                ("quo-001", "req-001", "sent", 1, 18400, "SEK", None),
+                ("quo-002", "req-001", "draft", 1, 0, "SEK", None),
+                ("quo-003", "req-001", "accepted", 2, 7290, "SEK", "quo-001"),
+                ("quo-004", None, "accepted", 1, 9800, "SEK", None),
             ],
         )
         connection.executemany(
@@ -532,10 +540,10 @@ class SQLiteDatabase:
         connection.execute(
             """
             insert into quotes
-              (id, status, version, customer_price, currency, parent_quote_id)
-            values (?, ?, ?, ?, ?, ?)
+              (id, request_id, status, version, customer_price, currency, parent_quote_id)
+            values (?, ?, ?, ?, ?, ?, ?)
             """,
-            ("quo-004", "accepted", 1, 9800, "SEK", None),
+            ("quo-004", None, "accepted", 1, 9800, "SEK", None),
         )
 
     def _seed_operational_tasks(self, connection: sqlite3.Connection) -> None:

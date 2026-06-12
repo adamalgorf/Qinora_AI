@@ -103,6 +103,7 @@ class QuoteListItem(BaseModel):
     customer_price: float
     currency: str
     parent_quote_id: str | None = None
+    request_id: str | None = None
 
 
 class QuoteLineItem(BaseModel):

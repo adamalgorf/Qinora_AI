@@ -289,12 +289,14 @@ def test_create_and_send_quote(client: TestClient) -> None:
 
     assert created.status_code == 201
     quote_id = created.json()["id"]
+    assert created.json()["request_id"] == "req-001"
 
     sent = client.post(f"/quotes/{quote_id}/send")
 
     assert sent.status_code == 200
     body = sent.json()
     assert body["quote"]["status"] == "sent"
+    assert body["quote"]["request_id"] == "req-001"
     assert body["outbound_reply"]["quote_id"] == quote_id
     assert body["outbound_reply"]["status"] == "queued"
 
@@ -356,6 +358,7 @@ def test_accept_quote_books_shipment_with_carrier_intelligence(client: TestClien
     body = response.json()
     assert body["selected_carrier_id"] == "car-001"
     assert body["shipment"]["status"] == "booked"
+    assert body["shipment"]["lane"] == "Gothenburg -> Hamburg"
 
 
 def test_quote_reply_accepts_and_books_shipment(client: TestClient) -> None:
@@ -375,6 +378,7 @@ def test_quote_reply_accepts_and_books_shipment(client: TestClient) -> None:
     assert body["event"]["intent"] == "accepted"
     assert body["quote"]["status"] == "accepted"
     assert body["shipment"]["status"] == "booked"
+    assert body["shipment"]["lane"] == "Gothenburg -> Hamburg"
 
     detail = client.get("/quotes/quo-001").json()
     event_types = {event["event_type"] for event in detail["acceptance_events"]}
@@ -410,6 +414,7 @@ def test_quote_reply_revision_creates_revised_quote(client: TestClient) -> None:
     assert body["revised_quote"]["status"] == "revised"
     assert body["revised_quote"]["version"] == 2
     assert body["revised_quote"]["parent_quote_id"] == "quo-001"
+    assert body["revised_quote"]["request_id"] == "req-001"
     assert body["revised_quote"]["customer_price"] == 17000
 
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   type QuoteReplyPayload,
   type QuoteReplyResponse,
   type QuoteListItem,
+  type RequestListItem,
   type SendQuoteResponse,
 } from "@/shared/api/client";
 
@@ -32,8 +33,12 @@ export function QuotesPage() {
     queryKey: ["outbound-replies"],
     queryFn: () => apiGet<OutboundReplyItem[]>("/emails/outbound"),
   });
+  const requestsQuery = useQuery({
+    queryKey: ["requests"],
+    queryFn: () => apiGet<RequestListItem[]>("/requests"),
+  });
   const [form, setForm] = useState({
-    requestId: "req-001",
+    requestId: "",
     customerPrice: "12500",
     currency: "SEK",
   });
@@ -47,8 +52,9 @@ export function QuotesPage() {
   const createMutation = useMutation({
     mutationFn: (payload: CreateQuotePayload) =>
       apiPost<QuoteListItem, CreateQuotePayload>("/quotes", payload),
-    onSuccess: async () => {
+    onSuccess: async (quote) => {
       setError(null);
+      setSelectedQuoteId(quote.id);
       await queryClient.invalidateQueries({ queryKey: ["quotes"] });
     },
   });
@@ -87,8 +93,11 @@ export function QuotesPage() {
   const replyMutation = useMutation({
     mutationFn: ({ quoteId, payload }: { quoteId: string; payload: QuoteReplyPayload }) =>
       apiPost<QuoteReplyResponse, QuoteReplyPayload>(`/quotes/${quoteId}/reply`, payload),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setError(null);
+      if (result.revised_quote) {
+        setSelectedQuoteId(result.revised_quote.id);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["quotes"] }),
         queryClient.invalidateQueries({ queryKey: ["shipments"] }),
@@ -112,8 +121,21 @@ export function QuotesPage() {
     },
   });
 
+  useEffect(() => {
+    if (form.requestId || !requestsQuery.data?.length) {
+      return;
+    }
+
+    setForm((current) => ({ ...current, requestId: requestsQuery.data[0].id }));
+  }, [form.requestId, requestsQuery.data]);
+
   function submitQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!form.requestId) {
+      setError("Create a transport request before quoting.");
+      return;
+    }
+
     createMutation.mutate({
       request_id: form.requestId,
       customer_price: Number(form.customerPrice),
@@ -128,11 +150,18 @@ export function QuotesPage() {
       title="Quotes"
     >
       <form className="request-form" onSubmit={submitQuote}>
-        <input
+        <select
           aria-label="Request ID"
+          disabled={requestsQuery.isLoading || !requestsQuery.data?.length}
           value={form.requestId}
           onChange={(event) => setForm((current) => ({ ...current, requestId: event.target.value }))}
-        />
+        >
+          {(requestsQuery.data ?? []).map((request) => (
+            <option key={request.id} value={request.id}>
+              {request.public_id} - {request.customer} - {request.lane}
+            </option>
+          ))}
+        </select>
         <input
           aria-label="Customer price"
           inputMode="decimal"
@@ -154,6 +183,14 @@ export function QuotesPage() {
       <DataTable
         columns={[
           { key: "id", label: "ID" },
+          {
+            key: "request_id",
+            label: "Request",
+            render: (value) => {
+              const request = (requestsQuery.data ?? []).find((item) => item.id === value);
+              return request?.public_id ?? String(value ?? "");
+            },
+          },
           { key: "status", label: "Status" },
           { key: "version", label: "Version" },
           {
