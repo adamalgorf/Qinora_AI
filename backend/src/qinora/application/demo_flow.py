@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from qinora.application.booking_workflow import BookingResult, BookingWorkflow, BookQuoteCommand
@@ -18,7 +18,7 @@ from qinora.application.quote_workflow import (
     SendQuoteCommand,
     SendQuoteResult,
 )
-from qinora.application.read_models import RequestRecord
+from qinora.application.read_models import RequestRecord, ShipmentRecord
 from qinora.application.request_intake import (
     CargoLineCommand,
     CreateRequestCommand,
@@ -34,6 +34,7 @@ class DemoFlowResult:
     quote: SendQuoteResult
     outbound_queue: ProcessOutboundQueueResult
     booking: BookingResult
+    final_shipment: ShipmentRecord
     invoice: InvoiceAuditResult
     steps: tuple[str, ...]
 
@@ -98,12 +99,14 @@ class DemoFlowUseCase:
                 max_discrepancy=250,
             )
         )
+        final_shipment = replace(booking.shipment, status=invoice.shipment_status)
 
         return DemoFlowResult(
             request=request_result.request,
             quote=sent_quote,
             outbound_queue=outbound_queue,
             booking=booking,
+            final_shipment=final_shipment,
             invoice=invoice,
             steps=(
                 "Transport request created",

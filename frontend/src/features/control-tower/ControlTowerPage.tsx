@@ -72,8 +72,8 @@ export function ControlTowerPage() {
             <Badge variant="secondary">{demoFlow.shipment_status}</Badge>
             <h2>{demoFlow.request.public_id} completed order-to-cash</h2>
             <p>
-              {demoFlow.quote.id} sent, {demoFlow.shipment.public_id} delivered and{" "}
-              {demoFlow.invoice.public_id} approved.
+              {demoFlow.quote.id} sent, {demoFlow.shipment.public_id} finished as{" "}
+              {demoFlow.shipment.status} and {demoFlow.invoice.public_id} approved.
             </p>
           </div>
           <ol>

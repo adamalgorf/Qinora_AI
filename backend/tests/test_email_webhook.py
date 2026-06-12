@@ -181,7 +181,8 @@ def test_demo_flow_runs_order_to_cash_workflow(client: TestClient) -> None:
     assert body["request"]["status"] == "parsed"
     assert body["quote"]["status"] == "sent"
     assert body["outbound_reply"]["status"] == "sent"
-    assert body["shipment"]["status"] == "booked"
+    assert body["outbound_reply"]["quote_id"] == body["quote"]["id"]
+    assert body["shipment"]["status"] == "invoice_approved"
     assert body["invoice"]["status"] == "approved"
     assert body["shipment_status"] == "invoice_approved"
 

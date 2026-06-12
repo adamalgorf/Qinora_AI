@@ -23,8 +23,13 @@ async def run_demo_flow(
 ) -> DemoFlowResponse:
     require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
     result = await container.demo_flow.run()
-    outbound_reply = (
-        result.outbound_queue.sent[0] if result.outbound_queue.sent else result.quote.outbound_reply
+    outbound_reply = next(
+        (
+            reply
+            for reply in result.outbound_queue.sent
+            if reply.quote_id == result.quote.quote.id
+        ),
+        result.quote.outbound_reply,
     )
 
     return DemoFlowResponse(
@@ -32,7 +37,7 @@ async def run_demo_flow(
         request=RequestListItem(**result.request.__dict__),
         quote=QuoteListItem(**result.quote.quote.__dict__),
         outbound_reply=OutboundReplyItem(**outbound_reply.__dict__),
-        shipment=ShipmentListItem(**result.booking.shipment.__dict__),
+        shipment=ShipmentListItem(**result.final_shipment.__dict__),
         invoice=InvoiceListItem(**result.invoice.invoice.__dict__),
         shipment_status=result.invoice.shipment_status,
     )
