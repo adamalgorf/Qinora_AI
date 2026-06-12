@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bot, CheckCircle2, Clock3, Play, RadioTower } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,26 @@ export function ControlTowerPage() {
               <li key={step}>{step}</li>
             ))}
           </ol>
+          <div className="demo-flow-links" aria-label="Created flow records">
+            <Button asChild size="sm" variant="secondary">
+              <Link to={`/requests?highlight=${demoFlow.request.id}`}>
+                Request {demoFlow.request.public_id}
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <Link to={`/quotes?highlight=${demoFlow.quote.id}`}>Quote</Link>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <Link to={`/shipments?highlight=${demoFlow.shipment.id}`}>
+                Shipment {demoFlow.shipment.public_id}
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <Link to={`/invoices?highlight=${demoFlow.invoice.id}`}>
+                Invoice {demoFlow.invoice.public_id}
+              </Link>
+            </Button>
+          </div>
         </section>
       ) : null}
       {demoFlowMutation.error ? (

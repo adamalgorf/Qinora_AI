@@ -351,6 +351,17 @@ h1 {
   font-size: 0.9rem;
 }
 
+.demo-flow-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.demo-flow-links a {
+  gap: 6px;
+}
+
 .pipeline-column {
   min-height: 240px;
   overflow: hidden;
