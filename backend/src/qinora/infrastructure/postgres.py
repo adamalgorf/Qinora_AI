@@ -14,6 +14,9 @@ from qinora.application.read_models import (
     InvoiceRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
+    QuoteAcceptanceEventRecord,
+    QuoteDetailRecord,
+    QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
     RequestRecord,
@@ -170,6 +173,83 @@ class PostgresOperationalReadRepository:
                 (self._database.tenant_id,),
             )
         ]
+
+    async def get_quote_detail(self, quote_id: str) -> QuoteDetailRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, status, version, customer_price, currency, parent_quote_id
+                from public.quotes
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, quote_id),
+            )
+            quote_row = cursor.fetchone()
+            if quote_row is None:
+                return None
+
+            cursor.execute(
+                """
+                select id, quote_id, description, amount, currency
+                from public.quote_line_items
+                where tenant_id = %s and quote_id = %s
+                order by description
+                """,
+                (self._database.tenant_id, quote_id),
+            )
+            line_rows = cursor.fetchall()
+
+            cursor.execute(
+                """
+                select id, quote_id, event_type, detail, created_at
+                from (
+                  select
+                    id,
+                    quote_id,
+                    'quote_sent' as event_type,
+                    status || ' email to ' || recipient as detail,
+                    created_at
+                  from public.outbound_reply_queue
+                  where tenant_id = %s and quote_id = %s
+                  union all
+                  select
+                    id,
+                    quote_id,
+                    'reply_' || intent as event_type,
+                    body_text as detail,
+                    created_at
+                  from public.quote_response_events
+                  where tenant_id = %s and quote_id = %s
+                ) events
+                order by created_at desc
+                """,
+                (self._database.tenant_id, quote_id, self._database.tenant_id, quote_id),
+            )
+            event_rows = cursor.fetchall()
+
+        return QuoteDetailRecord(
+            quote=_quote_record(quote_row),
+            line_items=tuple(
+                QuoteLineItemRecord(
+                    id=str(row["id"]),
+                    quote_id=str(row["quote_id"]),
+                    description=row["description"],
+                    amount=float(row["amount"]),
+                    currency=row["currency"],
+                )
+                for row in line_rows
+            ),
+            acceptance_events=tuple(
+                QuoteAcceptanceEventRecord(
+                    id=str(row["id"]),
+                    quote_id=str(row["quote_id"]),
+                    event_type=row["event_type"],
+                    detail=row["detail"],
+                    created_at=row["created_at"].isoformat(),
+                )
+                for row in event_rows
+            ),
+        )
 
     async def list_shipments(self) -> list[ShipmentRecord]:
         return [
@@ -707,6 +787,13 @@ class PostgresQuoteWriteRepository:
                 ),
             )
             row = cursor.fetchone()
+            _insert_postgres_quote_line_item(
+                cursor,
+                self._database.tenant_id,
+                str(row["id"]),
+                customer_price,
+                currency,
+            )
 
         return _quote_record(row)
 
@@ -779,6 +866,13 @@ class PostgresQuoteWriteRepository:
                 ),
             )
             row = cursor.fetchone()
+            _insert_postgres_quote_line_item(
+                cursor,
+                self._database.tenant_id,
+                str(row["id"]),
+                customer_price,
+                currency,
+            )
 
         return _quote_record(row)
 
@@ -1253,6 +1347,23 @@ def _agent_config_from_postgres_row(row: dict[str, Any]) -> AgentConfigRecord:
         is_enabled=bool(row["is_enabled"]),
         auto_mode=str(config.get("auto_mode", "manual")),
         min_confidence=float(config.get("min_confidence", 0)),
+    )
+
+
+def _insert_postgres_quote_line_item(
+    cursor: psycopg.Cursor[dict[str, Any]],
+    tenant_id: str,
+    quote_id: str,
+    amount: float,
+    currency: str,
+) -> None:
+    cursor.execute(
+        """
+        insert into public.quote_line_items
+          (tenant_id, quote_id, description, amount, currency)
+        values (%s, %s, %s, %s, %s)
+        """,
+        (tenant_id, quote_id, "Freight charge", amount, currency),
     )
 
 

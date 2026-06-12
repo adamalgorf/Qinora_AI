@@ -32,6 +32,31 @@ class QuoteRecord:
 
 
 @dataclass(frozen=True)
+class QuoteLineItemRecord:
+    id: str
+    quote_id: str
+    description: str
+    amount: float
+    currency: str
+
+
+@dataclass(frozen=True)
+class QuoteAcceptanceEventRecord:
+    id: str
+    quote_id: str
+    event_type: str
+    detail: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class QuoteDetailRecord:
+    quote: QuoteRecord
+    line_items: tuple[QuoteLineItemRecord, ...]
+    acceptance_events: tuple[QuoteAcceptanceEventRecord, ...]
+
+
+@dataclass(frozen=True)
 class ShipmentRecord:
     id: str
     public_id: str

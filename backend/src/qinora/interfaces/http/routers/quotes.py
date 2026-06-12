@@ -21,6 +21,9 @@ from qinora.interfaces.http.schemas import (
     OutboundReplyItem,
     ProcessOutboundQueuePayload,
     ProcessOutboundQueueResponse,
+    QuoteAcceptanceEventItem,
+    QuoteDetailResponse,
+    QuoteLineItem,
     QuoteListItem,
     QuoteReplyPayload,
     QuoteReplyResponse,
@@ -38,6 +41,24 @@ async def list_quotes(container: AppContainer = CONTAINER) -> list[QuoteListItem
         QuoteListItem(**item.__dict__)
         for item in await container.operational_queries.list_quotes()
     ]
+
+
+@router.get("/quotes/{quote_id}", response_model=QuoteDetailResponse)
+async def quote_detail(
+    quote_id: str,
+    container: AppContainer = CONTAINER,
+) -> QuoteDetailResponse:
+    detail = await container.operational_queries.get_quote_detail(quote_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found")
+
+    return QuoteDetailResponse(
+        quote=QuoteListItem(**detail.quote.__dict__),
+        line_items=[QuoteLineItem(**item.__dict__) for item in detail.line_items],
+        acceptance_events=[
+            QuoteAcceptanceEventItem(**item.__dict__) for item in detail.acceptance_events
+        ],
+    )
 
 
 @router.post("/quotes", response_model=QuoteListItem, status_code=status.HTTP_201_CREATED)

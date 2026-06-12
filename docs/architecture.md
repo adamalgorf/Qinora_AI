@@ -50,6 +50,7 @@ frontend -> HTTP API contract
 - Manual shipment overrides reuse the shipment workflow and require an operator reason in the timeline.
 - Quote sending is blocked when the customer price is less than or equal to zero.
 - Successful quote sending enqueues `outbound_reply_queue` records after the pricing gate passes.
+- Quote details expose persistent line items and a commercial timeline built from outbound and customer reply events.
 - Quote replies are interpreted by `QuoteResponseWorkflow`, recording reply events and routing accepted, revised, or rejected quotes.
 - Inbound email senders are matched to CRM contacts by `ContactMatchingUseCase`, with Miles Match decisions persisted to `agent_logs`.
 - Agent runtime behavior is controlled through `AgentConfigService`, preserving enable flags, Auto Mode and confidence guard rails behind persistence ports.

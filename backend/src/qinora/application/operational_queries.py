@@ -9,6 +9,7 @@ from qinora.application.read_models import (
     InvoiceRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
+    QuoteDetailRecord,
     QuoteRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -73,6 +74,9 @@ class OperationalQueries:
 
     async def list_quotes(self) -> list[QuoteRecord]:
         return await self._repository.list_quotes()
+
+    async def get_quote_detail(self, quote_id: str) -> QuoteDetailRecord | None:
+        return await self._repository.get_quote_detail(quote_id)
 
     async def list_shipments(self) -> list[ShipmentRecord]:
         return await self._repository.list_shipments()

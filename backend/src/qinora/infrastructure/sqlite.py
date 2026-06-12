@@ -14,6 +14,9 @@ from qinora.application.read_models import (
     InvoiceRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
+    QuoteAcceptanceEventRecord,
+    QuoteDetailRecord,
+    QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
     RequestRecord,
@@ -97,6 +100,14 @@ class SQLiteDatabase:
                   customer_price real not null,
                   currency text not null,
                   parent_quote_id text
+                );
+
+                create table if not exists quote_line_items (
+                  id text primary key,
+                  quote_id text not null,
+                  description text not null,
+                  amount real not null,
+                  currency text not null
                 );
 
                 create table if not exists shipments (
@@ -239,6 +250,7 @@ class SQLiteDatabase:
             self._seed_operational_tasks(connection)
             self._seed_contacts(connection)
             self._seed_agent_configs(connection)
+            self._seed_quote_line_items(connection)
 
     def _seed(self, connection: sqlite3.Connection) -> None:
         if _count(connection, "transport_requests") > 0:
@@ -483,6 +495,34 @@ class SQLiteDatabase:
                 ),
             )
 
+    def _seed_quote_line_items(self, connection: sqlite3.Connection) -> None:
+        rows = connection.execute(
+            """
+            select id, customer_price, currency
+            from quotes quote
+            where not exists (
+              select 1 from quote_line_items item where item.quote_id = quote.id
+            )
+            """
+        ).fetchall()
+        connection.executemany(
+            """
+            insert into quote_line_items
+              (id, quote_id, description, amount, currency)
+            values (?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    str(uuid4()),
+                    row["id"],
+                    "Freight charge",
+                    row["customer_price"],
+                    row["currency"],
+                )
+                for row in rows
+            ],
+        )
+
     def _seed_runtime_relationships(self, connection: sqlite3.Connection) -> None:
         if _exists_by_id(connection, "quotes", "quo-004"):
             return
@@ -592,6 +632,66 @@ class SQLiteOperationalReadRepository:
                 """
             )
         ]
+
+    async def get_quote_detail(self, quote_id: str) -> QuoteDetailRecord | None:
+        quote_row = self._fetch_one(
+            """
+            select id, status, version, customer_price, currency, parent_quote_id
+            from quotes
+            where id = ?
+            """,
+            (quote_id,),
+        )
+        if quote_row is None:
+            return None
+
+        line_items = [
+            QuoteLineItemRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select id, quote_id, description, amount, currency
+                from quote_line_items
+                where quote_id = ?
+                order by description
+                """,
+                (quote_id,),
+            )
+        ]
+        events = [
+            QuoteAcceptanceEventRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select id, quote_id, event_type, detail, created_at
+                from (
+                  select
+                    id,
+                    quote_id,
+                    'quote_sent' as event_type,
+                    status || ' email to ' || recipient as detail,
+                    created_at
+                  from outbound_reply_queue
+                  where quote_id = ?
+                  union all
+                  select
+                    id,
+                    quote_id,
+                    'reply_' || intent as event_type,
+                    body_text as detail,
+                    created_at
+                  from quote_response_events
+                  where quote_id = ?
+                )
+                order by created_at desc
+                """,
+                (quote_id, quote_id),
+            )
+        ]
+
+        return QuoteDetailRecord(
+            quote=QuoteRecord(**dict(quote_row)),
+            line_items=tuple(line_items),
+            acceptance_events=tuple(events),
+        )
 
     async def list_shipments(self) -> list[ShipmentRecord]:
         return [
@@ -736,6 +836,10 @@ class SQLiteOperationalReadRepository:
     def _fetch_all(self, query: str, parameters: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         with self._database.connect() as connection:
             return list(connection.execute(query, parameters).fetchall())
+
+    def _fetch_one(self, query: str, parameters: tuple[Any, ...] = ()) -> sqlite3.Row | None:
+        with self._database.connect() as connection:
+            return connection.execute(query, parameters).fetchone()
 
 
 class SQLiteContactReadRepository:
@@ -966,6 +1070,7 @@ class SQLiteQuoteWriteRepository:
                 """,
                 (quote_id, "draft", 1, customer_price, currency, None),
             )
+            _insert_quote_line_item(connection, quote_id, customer_price, currency)
 
         return QuoteRecord(
             id=quote_id,
@@ -1081,6 +1186,7 @@ class SQLiteQuoteWriteRepository:
                 """,
                 (quote_id, "revised", version, customer_price, currency, parent_quote_id),
             )
+            _insert_quote_line_item(connection, quote_id, customer_price, currency)
 
         return QuoteRecord(
             id=quote_id,
@@ -1479,6 +1585,22 @@ def _add_column_if_missing(
 
 def _split_csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _insert_quote_line_item(
+    connection: sqlite3.Connection,
+    quote_id: str,
+    amount: float,
+    currency: str,
+) -> None:
+    connection.execute(
+        """
+        insert into quote_line_items
+          (id, quote_id, description, amount, currency)
+        values (?, ?, ?, ?, ?)
+        """,
+        (str(uuid4()), quote_id, "Freight charge", amount, currency),
+    )
 
 
 def _agent_config_from_sqlite_row(row: sqlite3.Row) -> AgentConfigRecord:

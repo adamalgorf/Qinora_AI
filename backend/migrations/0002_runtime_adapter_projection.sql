@@ -36,6 +36,28 @@ alter table public.agent_logs
 alter table public.invoices
   add column if not exists quote_amount numeric(12, 2) not null default 0;
 
+create table if not exists public.quote_line_items (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id),
+  quote_id uuid not null references public.quotes(id),
+  description text not null,
+  amount numeric(12, 2) not null,
+  currency text not null,
+  created_at timestamptz not null default now()
+);
+
+insert into public.quote_line_items
+  (tenant_id, quote_id, description, amount, currency)
+select tenant_id, id, 'Freight charge', customer_price, currency
+from public.quotes quote
+where not exists (
+  select 1
+  from public.quote_line_items item
+  where item.quote_id = quote.id
+);
+
+alter table public.quote_line_items enable row level security;
+
 alter table public.outbound_reply_queue
   add column if not exists sent_at timestamptz,
   add column if not exists error_message text;

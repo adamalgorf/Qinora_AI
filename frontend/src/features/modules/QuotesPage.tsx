@@ -10,6 +10,7 @@ import {
   type CreateQuotePayload,
   type OutboundReplyItem,
   type ProcessOutboundQueueResponse,
+  type QuoteDetailResponse,
   type QuoteReplyPayload,
   type QuoteReplyResponse,
   type QuoteListItem,
@@ -34,7 +35,13 @@ export function QuotesPage() {
     customerPrice: "12500",
     currency: "SEK",
   });
+  const [selectedQuoteId, setSelectedQuoteId] = useState("quo-001");
   const [error, setError] = useState<string | null>(null);
+  const detailQuery = useQuery({
+    queryKey: ["quote-detail", selectedQuoteId],
+    queryFn: () => apiGet<QuoteDetailResponse>(`/quotes/${selectedQuoteId}`),
+    enabled: Boolean(selectedQuoteId),
+  });
   const createMutation = useMutation({
     mutationFn: (payload: CreateQuotePayload) =>
       apiPost<QuoteListItem, CreateQuotePayload>("/quotes", payload),
@@ -164,6 +171,61 @@ export function QuotesPage() {
         loading={query.isLoading}
         rows={query.data}
       />
+      <div className="quote-actions">
+        {(query.data ?? []).map((quote) => (
+          <Button
+            key={`detail-${quote.id}`}
+            type="button"
+            variant={quote.id === selectedQuoteId ? "default" : "secondary"}
+            onClick={() => setSelectedQuoteId(quote.id)}
+          >
+            Details {quote.id}
+          </Button>
+        ))}
+      </div>
+      <section className="quote-detail-panel" aria-label="Quote detail">
+        <div className="queue-panel-header">
+          <h3>Commercial timeline</h3>
+          <span className="muted">{detailQuery.data?.quote.status ?? "No quote selected"}</span>
+        </div>
+        <div className="quote-detail-grid">
+          <div>
+            <h4>Line items</h4>
+            <div className="agent-list">
+              {(detailQuery.data?.line_items ?? []).map((item) => (
+                <div className="agent-row" key={item.id}>
+                  <div>
+                    <strong>{item.description}</strong>
+                    <span>{item.quote_id}</span>
+                  </div>
+                  <span>
+                    {item.amount} {item.currency}
+                  </span>
+                </div>
+              ))}
+              {!detailQuery.isLoading && (detailQuery.data?.line_items ?? []).length === 0 ? (
+                <p className="muted">No line items.</p>
+              ) : null}
+            </div>
+          </div>
+          <div>
+            <h4>Events</h4>
+            <div className="timeline-list">
+              {(detailQuery.data?.acceptance_events ?? []).map((event) => (
+                <article className="timeline-item" key={event.id}>
+                  <span>{event.event_type}</span>
+                  <strong>{event.detail}</strong>
+                  <small>{event.created_at}</small>
+                </article>
+              ))}
+              {!detailQuery.isLoading &&
+              (detailQuery.data?.acceptance_events ?? []).length === 0 ? (
+                <p className="muted">No commercial events yet.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
       <div className="quote-actions">
         {(query.data ?? [])
           .filter((quote) => quote.status === "draft" || quote.status === "revised")

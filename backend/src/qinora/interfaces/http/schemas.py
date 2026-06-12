@@ -105,6 +105,28 @@ class QuoteListItem(BaseModel):
     parent_quote_id: str | None = None
 
 
+class QuoteLineItem(BaseModel):
+    id: str
+    quote_id: str
+    description: str
+    amount: float
+    currency: str
+
+
+class QuoteAcceptanceEventItem(BaseModel):
+    id: str
+    quote_id: str
+    event_type: str
+    detail: str
+    created_at: str
+
+
+class QuoteDetailResponse(BaseModel):
+    quote: QuoteListItem
+    line_items: list[QuoteLineItem]
+    acceptance_events: list[QuoteAcceptanceEventItem]
+
+
 class OutboundReplyItem(BaseModel):
     id: str
     quote_id: str

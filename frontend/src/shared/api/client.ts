@@ -85,6 +85,28 @@ export type QuoteListItem = {
   parent_quote_id: string | null;
 };
 
+export type QuoteLineItem = {
+  id: string;
+  quote_id: string;
+  description: string;
+  amount: number;
+  currency: string;
+};
+
+export type QuoteAcceptanceEventItem = {
+  id: string;
+  quote_id: string;
+  event_type: string;
+  detail: string;
+  created_at: string;
+};
+
+export type QuoteDetailResponse = {
+  quote: QuoteListItem;
+  line_items: QuoteLineItem[];
+  acceptance_events: QuoteAcceptanceEventItem[];
+};
+
 export type OutboundReplyItem = {
   id: string;
   quote_id: string;

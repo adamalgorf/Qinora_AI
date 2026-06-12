@@ -241,6 +241,13 @@ def test_create_and_send_quote(client: TestClient) -> None:
     assert outbound.status_code == 200
     assert outbound.json()[0]["quote_id"] == quote_id
 
+    detail = client.get(f"/quotes/{quote_id}")
+    assert detail.status_code == 200
+    detail_body = detail.json()
+    assert detail_body["line_items"][0]["description"] == "Freight charge"
+    assert detail_body["line_items"][0]["amount"] == 12300
+    assert detail_body["acceptance_events"][0]["event_type"] == "quote_sent"
+
 
 def test_process_outbound_queue_marks_replies_sent(client: TestClient) -> None:
     created = client.post(
@@ -307,6 +314,10 @@ def test_quote_reply_accepts_and_books_shipment(client: TestClient) -> None:
     assert body["event"]["intent"] == "accepted"
     assert body["quote"]["status"] == "accepted"
     assert body["shipment"]["status"] == "booked"
+
+    detail = client.get("/quotes/quo-001").json()
+    event_types = {event["event_type"] for event in detail["acceptance_events"]}
+    assert "reply_accepted" in event_types
 
 
 def test_quote_reply_rejects_quote(client: TestClient) -> None:
