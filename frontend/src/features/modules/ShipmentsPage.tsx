@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   type CreateInvoicePayload,
   type CreateInvoiceResponse,
   type OverrideShipmentPayload,
+  type QuoteListItem,
   type RunTrackingSimulatorResponse,
   type ShipmentListItem,
   type UpdateShipmentStatusPayload,
@@ -22,13 +23,18 @@ export function ShipmentsPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [overrideForm, setOverrideForm] = useState({
-    shipmentId: "shp-001",
+    shipmentId: "",
     status: "needs_review",
     reason: "Carrier confirmation requires operator review",
   });
+  const [error, setError] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["shipments"],
     queryFn: () => apiGet<ShipmentListItem[]>("/shipments"),
+  });
+  const quotesQuery = useQuery({
+    queryKey: ["quotes"],
+    queryFn: () => apiGet<QuoteListItem[]>("/quotes"),
   });
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -40,16 +46,26 @@ export function ShipmentsPage() {
     },
   });
   const invoiceMutation = useMutation({
-    mutationFn: (shipment: ShipmentListItem) =>
+    mutationFn: ({
+      shipment,
+      invoiceAmount,
+    }: {
+      shipment: ShipmentListItem;
+      invoiceAmount: number;
+    }) =>
       apiPost<CreateInvoiceResponse, CreateInvoicePayload>(`/shipments/${shipment.id}/invoice`, {
-        invoice_amount: 7350,
+        invoice_amount: invoiceAmount,
         max_discrepancy: 250,
       }),
     onSuccess: async () => {
+      setError(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["shipments"] }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
       ]);
+    },
+    onError: (problem: { detail?: string }) => {
+      setError(problem.detail ?? "Invoice audit could not be completed");
     },
   });
   const overrideMutation = useMutation({
@@ -79,6 +95,24 @@ export function ShipmentsPage() {
     },
   });
 
+  function auditInvoiceForShipment(shipment: ShipmentListItem) {
+    const quote = (quotesQuery.data ?? []).find((item) => item.id === shipment.quote_id);
+    if (!quote) {
+      setError("Quote amount is required before invoice audit.");
+      return;
+    }
+
+    invoiceMutation.mutate({ shipment, invoiceAmount: quote.customer_price });
+  }
+
+  useEffect(() => {
+    if (overrideForm.shipmentId || !query.data?.length) {
+      return;
+    }
+
+    setOverrideForm((current) => ({ ...current, shipmentId: query.data[0].id }));
+  }, [overrideForm.shipmentId, query.data]);
+
   return (
     <ModuleScaffold
       badge="Bex + Trak"
@@ -97,6 +131,7 @@ export function ShipmentsPage() {
         loading={query.isLoading}
         rows={query.data}
       />
+      {error ? <p className="form-feedback">{error}</p> : null}
       <div className="quote-actions">
         <Button
           disabled={trackingMutation.isPending}
@@ -131,7 +166,7 @@ export function ShipmentsPage() {
           .map((shipment) => (
             <Button
               key={`invoice-${shipment.id}`}
-              onClick={() => invoiceMutation.mutate(shipment)}
+              onClick={() => auditInvoiceForShipment(shipment)}
               type="button"
             >
               Audit invoice for {shipment.public_id}

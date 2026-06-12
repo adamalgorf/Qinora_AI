@@ -42,7 +42,7 @@ export function QuotesPage() {
     customerPrice: "12500",
     currency: "SEK",
   });
-  const [selectedQuoteId, setSelectedQuoteId] = useState("quo-001");
+  const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const detailQuery = useQuery({
     queryKey: ["quote-detail", selectedQuoteId],
@@ -73,12 +73,11 @@ export function QuotesPage() {
     },
   });
   const acceptMutation = useMutation({
-    mutationFn: (quoteId: string) =>
-      apiPost<AcceptQuoteResponse, AcceptQuotePayload>(`/quotes/${quoteId}/accept`, {
-        mode: "ltl",
-        total_weight_kg: 820,
-        requested_carrier_name: "Nordic",
-      }),
+    mutationFn: (quote: QuoteListItem) =>
+      apiPost<AcceptQuoteResponse, AcceptQuotePayload>(
+        `/quotes/${quote.id}/accept`,
+        acceptancePayloadForQuote(quote),
+      ),
     onSuccess: async () => {
       setError(null);
       await Promise.all([
@@ -128,6 +127,27 @@ export function QuotesPage() {
 
     setForm((current) => ({ ...current, requestId: requestsQuery.data[0].id }));
   }, [form.requestId, requestsQuery.data]);
+
+  useEffect(() => {
+    if (selectedQuoteId || !query.data?.length) {
+      return;
+    }
+
+    setSelectedQuoteId(query.data[0].id);
+  }, [query.data, selectedQuoteId]);
+
+  function requestForQuote(quote: QuoteListItem): RequestListItem | undefined {
+    return (requestsQuery.data ?? []).find((request) => request.id === quote.request_id);
+  }
+
+  function acceptancePayloadForQuote(quote: QuoteListItem): AcceptQuotePayload {
+    const request = requestForQuote(quote);
+
+    return {
+      mode: request?.mode ?? "ltl",
+      total_weight_kg: request?.weight_kg ?? 1,
+    };
+  }
 
   function submitQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -289,9 +309,7 @@ export function QuotesPage() {
                     quoteId: quote.id,
                     payload: {
                       body_text: "Accepted, please go ahead",
-                      mode: "ltl",
-                      total_weight_kg: 820,
-                      requested_carrier_name: "Nordic",
+                      ...acceptancePayloadForQuote(quote),
                     },
                   })
                 }
@@ -327,7 +345,7 @@ export function QuotesPage() {
                 Reject
               </Button>
               <Button
-                onClick={() => acceptMutation.mutate(quote.id)}
+                onClick={() => acceptMutation.mutate(quote)}
                 type="button"
                 variant="secondary"
               >
