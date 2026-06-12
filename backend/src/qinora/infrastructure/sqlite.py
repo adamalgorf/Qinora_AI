@@ -95,6 +95,7 @@ class SQLiteDatabase:
 
                 create table if not exists quotes (
                   id text primary key,
+                  request_id text,
                   status text not null,
                   version integer not null,
                   customer_price real not null,
@@ -223,6 +224,7 @@ class SQLiteDatabase:
                 "text",
             )
             _add_column_if_missing(connection, "transport_requests", "created_at", "text")
+            _add_column_if_missing(connection, "quotes", "request_id", "text")
             connection.execute(
                 """
                 update transport_requests
@@ -626,7 +628,7 @@ class SQLiteOperationalReadRepository:
             QuoteRecord(**dict(row))
             for row in self._fetch_all(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select id, status, version, customer_price, currency, parent_quote_id, request_id
                 from quotes
                 order by id
                 """
@@ -636,7 +638,7 @@ class SQLiteOperationalReadRepository:
     async def get_quote_detail(self, quote_id: str) -> QuoteDetailRecord | None:
         quote_row = self._fetch_one(
             """
-            select id, status, version, customer_price, currency, parent_quote_id
+            select id, status, version, customer_price, currency, parent_quote_id, request_id
             from quotes
             where id = ?
             """,
@@ -1065,10 +1067,10 @@ class SQLiteQuoteWriteRepository:
             connection.execute(
                 """
                 insert into quotes
-                  (id, status, version, customer_price, currency, parent_quote_id)
-                values (?, ?, ?, ?, ?, ?)
+                  (id, request_id, status, version, customer_price, currency, parent_quote_id)
+                values (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (quote_id, "draft", 1, customer_price, currency, None),
+                (quote_id, request_id, "draft", 1, customer_price, currency, None),
             )
             _insert_quote_line_item(connection, quote_id, customer_price, currency)
 
@@ -1079,13 +1081,14 @@ class SQLiteQuoteWriteRepository:
             customer_price=customer_price,
             currency=currency,
             parent_quote_id=None,
+            request_id=request_id,
         )
 
     async def get_quote(self, quote_id: str) -> Quote | None:
         with self._database.connect() as connection:
             row = connection.execute(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select id, status, version, customer_price, currency, parent_quote_id, request_id
                 from quotes
                 where id = ?
                 """,
@@ -1110,7 +1113,7 @@ class SQLiteQuoteWriteRepository:
         with self._database.connect() as connection:
             row = connection.execute(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select id, status, version, customer_price, currency, parent_quote_id, request_id
                 from quotes
                 where id = ?
                 """,
@@ -1129,7 +1132,7 @@ class SQLiteQuoteWriteRepository:
             )
             row = connection.execute(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select id, status, version, customer_price, currency, parent_quote_id, request_id
                 from quotes
                 where id = ?
                 """,
@@ -1146,7 +1149,7 @@ class SQLiteQuoteWriteRepository:
             )
             row = connection.execute(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select id, status, version, customer_price, currency, parent_quote_id, request_id
                 from quotes
                 where id = ?
                 """,
@@ -1172,6 +1175,7 @@ class SQLiteQuoteWriteRepository:
         currency: str,
     ) -> QuoteRecord:
         previous = await self.get_quote(previous_quote_id)
+        previous_record = await self.get_quote_record(previous_quote_id)
         if previous is None:
             raise LookupError(f"Quote not found: {previous_quote_id}")
 
@@ -1181,10 +1185,18 @@ class SQLiteQuoteWriteRepository:
             connection.execute(
                 """
                 insert into quotes
-                  (id, status, version, customer_price, currency, parent_quote_id)
-                values (?, ?, ?, ?, ?, ?)
+                  (id, request_id, status, version, customer_price, currency, parent_quote_id)
+                values (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (quote_id, "revised", version, customer_price, currency, parent_quote_id),
+                (
+                    quote_id,
+                    previous_record.request_id if previous_record else None,
+                    "revised",
+                    version,
+                    customer_price,
+                    currency,
+                    parent_quote_id,
+                ),
             )
             _insert_quote_line_item(connection, quote_id, customer_price, currency)
 
@@ -1195,6 +1207,7 @@ class SQLiteQuoteWriteRepository:
             customer_price=customer_price,
             currency=currency,
             parent_quote_id=parent_quote_id,
+            request_id=previous_record.request_id if previous_record else None,
         )
 
     async def _set_quote_status(self, quote_id: str, status: str) -> QuoteRecord:
@@ -1202,7 +1215,7 @@ class SQLiteQuoteWriteRepository:
             row = connection.execute(
                 """
                 update quotes set status = ? where id = ?
-                returning id, status, version, customer_price, currency, parent_quote_id
+                returning id, status, version, customer_price, currency, parent_quote_id, request_id
                 """,
                 (status, quote_id),
             ).fetchone()

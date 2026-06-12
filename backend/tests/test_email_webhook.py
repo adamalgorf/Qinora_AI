@@ -183,12 +183,14 @@ def test_demo_flow_runs_order_to_cash_workflow(client: TestClient) -> None:
     assert body["outbound_reply"]["status"] == "sent"
     assert body["outbound_reply"]["quote_id"] == body["quote"]["id"]
     assert body["shipment"]["status"] == "invoice_approved"
+    assert body["shipment"]["lane"] == body["request"]["lane"]
     assert body["invoice"]["status"] == "approved"
     assert body["shipment_status"] == "invoice_approved"
 
     shipments = client.get("/shipments").json()
     completed_shipment = next(item for item in shipments if item["id"] == body["shipment"]["id"])
     assert completed_shipment["status"] == "invoice_approved"
+    assert completed_shipment["lane"] == body["request"]["lane"]
 
 
 def test_demo_flow_requires_operator_role(client: TestClient) -> None:

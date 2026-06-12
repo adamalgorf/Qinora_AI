@@ -165,7 +165,9 @@ class PostgresOperationalReadRepository:
             )
             for row in self._fetch_all(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select
+                    id, status, version, customer_price, currency, parent_quote_id,
+                    coalesce(request_id::text, request_id_text) as request_id
                 from public.quotes
                 where tenant_id = %s
                 order by public_id
@@ -178,7 +180,9 @@ class PostgresOperationalReadRepository:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id
+                select
+                    id, status, version, customer_price, currency, parent_quote_id,
+                    coalesce(request_id::text, request_id_text) as request_id
                 from public.quotes
                 where tenant_id = %s and id = %s
                 """,
@@ -772,7 +776,9 @@ class PostgresQuoteWriteRepository:
                       case when %s ~ '^[0-9a-fA-F-]{36}$' then %s::uuid else null end,
                       %s, %s, %s, %s, %s
                     )
-                    returning id, status, version, customer_price, currency, parent_quote_id
+                    returning
+                        id, status, version, customer_price, currency, parent_quote_id,
+                        coalesce(request_id::text, request_id_text) as request_id
                     """,
                 (
                     self._database.tenant_id,
@@ -839,6 +845,7 @@ class PostgresQuoteWriteRepository:
         currency: str,
     ) -> QuoteRecord:
         previous = await self.get_quote(previous_quote_id)
+        previous_record = await self.get_quote_record(previous_quote_id)
         if previous is None:
             raise LookupError(f"Quote not found: {previous_quote_id}")
 
@@ -849,15 +856,24 @@ class PostgresQuoteWriteRepository:
                 """
                 insert into public.quotes
                   (
-                    tenant_id, public_id, parent_quote_id, version,
+                    tenant_id, public_id, request_id, request_id_text, parent_quote_id, version,
                     status, customer_price, currency
                   )
-                values (%s, %s, %s, %s, %s, %s, %s)
-                returning id, status, version, customer_price, currency, parent_quote_id
+                values (
+                  %s, %s,
+                  case when %s ~ '^[0-9a-fA-F-]{36}$' then %s::uuid else null end,
+                  %s, %s, %s, %s, %s, %s
+                )
+                returning
+                    id, status, version, customer_price, currency, parent_quote_id,
+                    coalesce(request_id::text, request_id_text) as request_id
                 """,
                 (
                     self._database.tenant_id,
                     public_id,
+                    previous_record.request_id if previous_record else "",
+                    previous_record.request_id if previous_record else "",
+                    previous_record.request_id if previous_record else None,
                     parent_quote_id,
                     version,
                     "revised",
@@ -880,7 +896,9 @@ class PostgresQuoteWriteRepository:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                    select id, status, version, customer_price, currency, parent_quote_id
+                    select
+                        id, status, version, customer_price, currency, parent_quote_id,
+                        coalesce(request_id::text, request_id_text) as request_id
                     from public.quotes
                     where tenant_id = %s and id = %s
                     """,
@@ -895,7 +913,9 @@ class PostgresQuoteWriteRepository:
                     update public.quotes
                     set status = %s
                     where tenant_id = %s and id = %s
-                    returning id, status, version, customer_price, currency, parent_quote_id
+                    returning
+                        id, status, version, customer_price, currency, parent_quote_id,
+                        coalesce(request_id::text, request_id_text) as request_id
                     """,
                 (status, self._database.tenant_id, quote_id),
             )
@@ -1322,6 +1342,7 @@ def _quote_record(row: dict[str, Any]) -> QuoteRecord:
         customer_price=float(row["customer_price"]),
         currency=row["currency"],
         parent_quote_id=str(row["parent_quote_id"]) if row["parent_quote_id"] else None,
+        request_id=str(row["request_id"]) if row.get("request_id") else None,
     )
 
 

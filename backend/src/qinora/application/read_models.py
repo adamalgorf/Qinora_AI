@@ -29,6 +29,7 @@ class QuoteRecord:
     customer_price: float
     currency: str
     parent_quote_id: str | None
+    request_id: str | None = None
 
 
 @dataclass(frozen=True)

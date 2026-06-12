@@ -35,6 +35,7 @@ class BookingWorkflow:
 
     async def book_quote(self, command: BookQuoteCommand) -> BookingResult:
         quote = await self._quote_repository.mark_quote_accepted(command.quote_id)
+        lane = await self._resolve_quote_lane(quote.request_id)
         intelligence = await self._operational_queries.run_carrier_intelligence(
             CarrierIntelligenceCommand(
                 mode=command.mode,
@@ -47,7 +48,7 @@ class BookingWorkflow:
         shipment = await self._shipment_repository.create_shipment(
             quote_id=quote.id,
             carrier_id=intelligence.selected_carrier_id,
-            lane="Pending lane confirmation",
+            lane=lane,
             status=status,
             eta="Pending",
         )
@@ -58,3 +59,14 @@ class BookingWorkflow:
             requires_manual_review=intelligence.requires_manual_review,
             overall_confidence=intelligence.overall_confidence,
         )
+
+    async def _resolve_quote_lane(self, request_id: str | None) -> str:
+        if request_id is None:
+            return "Pending lane confirmation"
+
+        requests = await self._operational_queries.list_requests()
+        for request in requests:
+            if request.id == request_id:
+                return request.lane
+
+        return "Pending lane confirmation"
