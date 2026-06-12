@@ -179,7 +179,7 @@ def test_demo_flow_runs_order_to_cash_workflow(client: TestClient) -> None:
     body = response.json()
     assert body["steps"][-1] == "Invoice audited and approved"
     assert body["request"]["status"] == "parsed"
-    assert body["quote"]["status"] == "sent"
+    assert body["quote"]["status"] == "accepted"
     assert body["outbound_reply"]["status"] == "sent"
     assert body["outbound_reply"]["quote_id"] == body["quote"]["id"]
     assert body["shipment"]["status"] == "invoice_approved"

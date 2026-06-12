@@ -35,7 +35,7 @@ async def run_demo_flow(
     return DemoFlowResponse(
         steps=list(result.steps),
         request=RequestListItem(**result.request.__dict__),
-        quote=QuoteListItem(**result.quote.quote.__dict__),
+        quote=QuoteListItem(**result.final_quote.__dict__),
         outbound_reply=OutboundReplyItem(**outbound_reply.__dict__),
         shipment=ShipmentListItem(**result.final_shipment.__dict__),
         invoice=InvoiceListItem(**result.invoice.invoice.__dict__),

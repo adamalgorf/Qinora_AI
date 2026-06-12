@@ -18,7 +18,7 @@ from qinora.application.quote_workflow import (
     SendQuoteCommand,
     SendQuoteResult,
 )
-from qinora.application.read_models import RequestRecord, ShipmentRecord
+from qinora.application.read_models import QuoteRecord, RequestRecord, ShipmentRecord
 from qinora.application.request_intake import (
     CargoLineCommand,
     CreateRequestCommand,
@@ -32,6 +32,7 @@ from qinora.application.shipment_workflow import ShipmentWorkflow, UpdateShipmen
 class DemoFlowResult:
     request: RequestRecord
     quote: SendQuoteResult
+    final_quote: QuoteRecord
     outbound_queue: ProcessOutboundQueueResult
     booking: BookingResult
     final_shipment: ShipmentRecord
@@ -100,10 +101,12 @@ class DemoFlowUseCase:
             )
         )
         final_shipment = replace(booking.shipment, status=invoice.shipment_status)
+        final_quote = replace(sent_quote.quote, status="accepted")
 
         return DemoFlowResult(
             request=request_result.request,
             quote=sent_quote,
+            final_quote=final_quote,
             outbound_queue=outbound_queue,
             booking=booking,
             final_shipment=final_shipment,
