@@ -5,11 +5,13 @@ import {
   FileText,
   Inbox,
   RadioTower,
+  Search,
   Settings,
   Truck,
   Users,
 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import {
   setAuthToken,
   type AuthMe,
   type DevTokenPayload,
+  type SearchResultItem,
   type TokenResponse,
 } from "@/shared/api/client";
 
@@ -37,6 +40,9 @@ const navItems = [
 ];
 
 export function AppShell() {
+  const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalizedSearchTerm = searchTerm.trim();
   const authQuery = useQuery({
     queryKey: ["auth-me"],
     queryFn: async () => {
@@ -54,6 +60,29 @@ export function AppShell() {
       return session.user;
     },
   });
+  const searchQuery = useQuery({
+    queryKey: ["global-search", normalizedSearchTerm],
+    queryFn: () =>
+      apiGet<SearchResultItem[]>(`/search?q=${encodeURIComponent(normalizedSearchTerm)}`),
+    enabled: normalizedSearchTerm.length >= 2,
+  });
+
+  useEffect(() => {
+    function focusGlobalSearch(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        document.getElementById("global-search")?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", focusGlobalSearch);
+    return () => window.removeEventListener("keydown", focusGlobalSearch);
+  }, []);
+
+  function selectSearchResult(result: SearchResultItem) {
+    navigate(result.href);
+    setSearchTerm("");
+  }
 
   return (
     <div className="app-shell">
@@ -66,6 +95,38 @@ export function AppShell() {
           <span>{authQuery.data?.tenant_id ?? "dev-tenant"}</span>
           <Badge variant="secondary">{authQuery.data?.roles[0] ?? "admin"}</Badge>
         </div>
+        <div className="global-search">
+          <Search aria-hidden="true" size={16} />
+          <input
+            id="global-search"
+            aria-label="Search QiNora"
+            autoComplete="off"
+            placeholder="Search QiNora"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+          />
+          <kbd>Ctrl K</kbd>
+        </div>
+        {normalizedSearchTerm.length >= 2 ? (
+          <div className="search-results" role="listbox" aria-label="Search results">
+            {searchQuery.isLoading ? <p className="muted">Searching...</p> : null}
+            {(searchQuery.data ?? []).map((result) => (
+              <button
+                key={`${result.entity_type}-${result.id}`}
+                type="button"
+                role="option"
+                onClick={() => selectSearchResult(result)}
+              >
+                <span>{result.entity_type}</span>
+                <strong>{result.label}</strong>
+                <small>{result.description}</small>
+              </button>
+            ))}
+            {!searchQuery.isLoading && (searchQuery.data ?? []).length === 0 ? (
+              <p className="muted">No matches.</p>
+            ) : null}
+          </div>
+        ) : null}
         <nav className="nav-list">
           {navItems.map((item) => (
             <Button

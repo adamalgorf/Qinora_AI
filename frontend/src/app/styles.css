@@ -109,6 +109,98 @@ button {
   font-size: 0.84rem;
 }
 
+.global-search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background) / 0.68);
+  padding: 0 10px;
+}
+
+.global-search svg {
+  color: hsl(186 100% 72%);
+}
+
+.global-search input {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  outline: 0;
+}
+
+.global-search input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.global-search:focus-within {
+  border-color: hsl(var(--ring));
+  outline: 3px solid hsl(var(--ring) / 0.16);
+}
+
+.global-search kbd {
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.search-results {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: linear-gradient(180deg, hsl(222 38% 10% / 0.96), hsl(222 47% 6% / 0.96));
+  padding: 8px;
+  box-shadow: var(--shadow-soft);
+}
+
+.search-results button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  padding: 9px;
+  text-align: left;
+}
+
+.search-results button:hover {
+  background: hsl(var(--secondary) / 0.72);
+}
+
+.search-results span {
+  color: hsl(186 100% 72%);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.search-results strong {
+  overflow: hidden;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-results small {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nav-list {
   display: grid;
   gap: 6px;
@@ -532,6 +624,12 @@ td {
 
 tbody tr:hover {
   background: hsl(var(--secondary) / 0.38);
+}
+
+tbody tr.highlight-row,
+tbody tr.highlight-row:hover {
+  background: linear-gradient(90deg, hsl(var(--primary) / 0.2), hsl(var(--secondary) / 0.28));
+  box-shadow: inset 3px 0 0 hsl(var(--primary));
 }
 
 .agent-list {

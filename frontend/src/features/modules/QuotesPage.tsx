@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ import { ModuleScaffold } from "./ModuleScaffold";
 
 export function QuotesPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const query = useQuery({
     queryKey: ["quotes"],
     queryFn: () => apiGet<QuoteListItem[]>("/quotes"),
@@ -168,6 +170,7 @@ export function QuotesPage() {
                 : "No action",
           },
         ]}
+        highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
       />

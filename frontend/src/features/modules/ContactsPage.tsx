@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 
 import { apiGet, type ContactListItem } from "@/shared/api/client";
 
@@ -6,6 +7,7 @@ import { DataTable } from "./DataTable";
 import { ModuleScaffold } from "./ModuleScaffold";
 
 export function ContactsPage() {
+  const [searchParams] = useSearchParams();
   const query = useQuery({
     queryKey: ["contacts"],
     queryFn: () => apiGet<ContactListItem[]>("/contacts"),
@@ -31,6 +33,7 @@ export function ContactsPage() {
           { key: "default_incoterms", label: "Incoterms" },
           { key: "payment_terms", label: "Terms" },
         ]}
+        highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
       />

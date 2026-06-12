@@ -127,6 +127,15 @@ class QuoteDetailResponse(BaseModel):
     acceptance_events: list[QuoteAcceptanceEventItem]
 
 
+class SearchResultItem(BaseModel):
+    id: str
+    public_id: str
+    entity_type: str
+    label: str
+    description: str
+    href: str
+
+
 class OutboundReplyItem(BaseModel):
     id: str
     quote_id: str

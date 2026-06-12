@@ -57,6 +57,16 @@ class QuoteDetailRecord:
 
 
 @dataclass(frozen=True)
+class SearchResultRecord:
+    id: str
+    public_id: str
+    entity_type: str
+    label: str
+    description: str
+    href: str
+
+
+@dataclass(frozen=True)
 class ShipmentRecord:
     id: str
     public_id: str

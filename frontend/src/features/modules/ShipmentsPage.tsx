@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,7 @@ import { ModuleScaffold } from "./ModuleScaffold";
 
 export function ShipmentsPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [overrideForm, setOverrideForm] = useState({
     shipmentId: "shp-001",
     status: "needs_review",
@@ -91,6 +93,7 @@ export function ShipmentsPage() {
           { key: "carrier_id", label: "Carrier" },
           { key: "eta", label: "ETA" },
         ]}
+        highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
       />

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 
 import { apiGet, type InvoiceListItem } from "@/shared/api/client";
 
@@ -6,6 +7,7 @@ import { DataTable } from "./DataTable";
 import { ModuleScaffold } from "./ModuleScaffold";
 
 export function InvoicesPage() {
+  const [searchParams] = useSearchParams();
   const query = useQuery({
     queryKey: ["invoices"],
     queryFn: () => apiGet<InvoiceListItem[]>("/invoices"),
@@ -34,6 +36,7 @@ export function InvoicesPage() {
           },
           { key: "discrepancy_amount", label: "Discrepancy" },
         ]}
+        highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
       />

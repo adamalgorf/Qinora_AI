@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ function createCargoLine(overrides: Partial<CargoLineForm> = {}): CargoLineForm 
 
 export function RequestsPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const query = useQuery({
     queryKey: ["requests"],
     queryFn: () => apiGet<RequestListItem[]>("/requests"),
@@ -283,6 +285,7 @@ export function RequestsPage() {
           { key: "status", label: "Status" },
           { key: "weight_kg", label: "Weight kg" },
         ]}
+        highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
       />

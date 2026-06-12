@@ -12,6 +12,7 @@ from qinora.application.read_models import (
     QuoteDetailRecord,
     QuoteRecord,
     RequestRecord,
+    SearchResultRecord,
     ShipmentEventRecord,
     ShipmentRecord,
 )
@@ -105,6 +106,102 @@ class OperationalQueries:
     async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
         return await self._repository.list_outbound_replies()
 
+    async def global_search(self, query: str, limit: int = 10) -> list[SearchResultRecord]:
+        needle = query.strip().lower()
+        if not needle:
+            return []
+
+        result_groups = await self._searchable_result_groups()
+        scored_results = [
+            (_score_result(result, needle), result)
+            for results in result_groups
+            for result in results
+            if _score_result(result, needle) > 0
+        ]
+        scored_results.sort(key=lambda item: (-item[0], item[1].entity_type, item[1].public_id))
+        return [result for _, result in scored_results[:limit]]
+
+    async def _searchable_result_groups(self) -> list[list[SearchResultRecord]]:
+        requests = await self._repository.list_requests()
+        quotes = await self._repository.list_quotes()
+        shipments = await self._repository.list_shipments()
+        invoices = await self._repository.list_invoices()
+        carriers = await self._repository.list_carriers()
+        contacts = await self._repository.list_contacts()
+
+        return [
+            [
+                SearchResultRecord(
+                    id=request.id,
+                    public_id=request.public_id,
+                    entity_type="request",
+                    label=f"{request.customer} transport request",
+                    description=f"{request.lane} - {request.mode} - {request.status}",
+                    href=f"/requests?highlight={request.id}",
+                )
+                for request in requests
+            ],
+            [
+                SearchResultRecord(
+                    id=quote.id,
+                    public_id=quote.id,
+                    entity_type="quote",
+                    label=f"Quote {quote.id}",
+                    description=f"{quote.status} - {quote.customer_price:g} {quote.currency}",
+                    href=f"/quotes?highlight={quote.id}",
+                )
+                for quote in quotes
+            ],
+            [
+                SearchResultRecord(
+                    id=shipment.id,
+                    public_id=shipment.public_id,
+                    entity_type="shipment",
+                    label=f"Shipment {shipment.public_id}",
+                    description=f"{shipment.lane} - {shipment.status}",
+                    href=f"/shipments?highlight={shipment.id}",
+                )
+                for shipment in shipments
+            ],
+            [
+                SearchResultRecord(
+                    id=invoice.id,
+                    public_id=invoice.public_id,
+                    entity_type="invoice",
+                    label=f"Invoice {invoice.public_id}",
+                    description=f"{invoice.status} - {invoice.invoice_amount:g} {invoice.currency}",
+                    href=f"/invoices?highlight={invoice.id}",
+                )
+                for invoice in invoices
+            ],
+            [
+                SearchResultRecord(
+                    id=carrier.id,
+                    public_id=carrier.id,
+                    entity_type="carrier",
+                    label=carrier.display_name,
+                    description=f"{', '.join(carrier.modes)} - lane score {carrier.lane_score:g}",
+                    href=f"/carriers?highlight={carrier.id}",
+                )
+                for carrier in carriers
+            ],
+            [
+                SearchResultRecord(
+                    id=contact.id,
+                    public_id=contact.public_id,
+                    entity_type="contact",
+                    label=contact.display_name,
+                    description=" - ".join(
+                        part
+                        for part in (contact.email, contact.domain, contact.payment_terms)
+                        if part
+                    ),
+                    href=f"/contacts?highlight={contact.id}",
+                )
+                for contact in contacts
+            ],
+        ]
+
     async def run_carrier_intelligence(self, command: CarrierIntelligenceCommand):
         carriers = await self._repository.list_carriers()
         candidates = tuple(_to_candidate(carrier) for carrier in carriers)
@@ -132,3 +229,22 @@ def _to_candidate(carrier: CarrierRecord) -> CarrierCandidate:
         preferred=carrier.preferred,
         sample_size=carrier.sample_size,
     )
+
+
+def _score_result(result: SearchResultRecord, needle: str) -> int:
+    fields = (
+        result.public_id.lower(),
+        result.id.lower(),
+        result.label.lower(),
+        result.description.lower(),
+        result.entity_type.lower(),
+    )
+    if fields[0] == needle or fields[1] == needle:
+        return 100
+    if fields[0].startswith(needle) or fields[1].startswith(needle):
+        return 80
+    if any(field.startswith(needle) for field in fields[2:]):
+        return 60
+    if any(needle in field for field in fields):
+        return 35
+    return 0

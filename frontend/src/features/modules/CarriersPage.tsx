@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 
 import { apiGet, type CarrierListItem } from "@/shared/api/client";
 
@@ -6,6 +7,7 @@ import { DataTable } from "./DataTable";
 import { ModuleScaffold } from "./ModuleScaffold";
 
 export function CarriersPage() {
+  const [searchParams] = useSearchParams();
   const query = useQuery({
     queryKey: ["carriers"],
     queryFn: () => apiGet<CarrierListItem[]>("/carriers"),
@@ -25,6 +27,7 @@ export function CarriersPage() {
           { key: "performance_score", label: "Performance" },
           { key: "preferred", label: "Preferred", render: (value) => (value ? "Yes" : "No") },
         ]}
+        highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
       />

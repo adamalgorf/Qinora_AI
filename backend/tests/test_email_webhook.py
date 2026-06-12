@@ -138,6 +138,31 @@ def test_core_module_endpoints_return_seeded_records(client: TestClient) -> None
     assert client.get("/agents/logs").json()[0]["agent_name"] == "Nora Intake"
 
 
+def test_global_search_returns_deep_links_across_entities(client: TestClient) -> None:
+    response = client.get("/search", params={"q": "volvo"})
+
+    assert response.status_code == 200
+    results = response.json()
+    assert any(
+        item["entity_type"] == "request" and item["href"] == "/requests?highlight=req-001"
+        for item in results
+    )
+    assert any(
+        item["entity_type"] == "contact" and item["href"] == "/contacts?highlight=cnt-001"
+        for item in results
+    )
+
+    shipment_response = client.get("/search", params={"q": "SHP-0001"})
+    assert shipment_response.status_code == 200
+    assert shipment_response.json()[0]["href"] == "/shipments?highlight=shp-001"
+
+
+def test_global_search_requires_operator_role(client: TestClient) -> None:
+    response = client.get("/search", params={"q": "volvo"}, headers={"x-role": "shipper"})
+
+    assert response.status_code == 403
+
+
 def test_create_request_persists_complete_request(client: TestClient) -> None:
     response = client.post(
         "/requests",

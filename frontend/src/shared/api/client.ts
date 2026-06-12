@@ -107,6 +107,15 @@ export type QuoteDetailResponse = {
   acceptance_events: QuoteAcceptanceEventItem[];
 };
 
+export type SearchResultItem = {
+  id: string;
+  public_id: string;
+  entity_type: string;
+  label: string;
+  description: string;
+  href: string;
+};
+
 export type OutboundReplyItem = {
   id: string;
   quote_id: string;

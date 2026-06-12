@@ -3,6 +3,7 @@ dist/
 coverage/
 __pycache__/
 .pytest_cache/
+backend/.tmp/
 *.py[cod]
 *.tsbuildinfo
 *.sqlite3
