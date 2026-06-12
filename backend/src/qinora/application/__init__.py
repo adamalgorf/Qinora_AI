@@ -11,6 +11,7 @@ from qinora.application.contact_matching import (
     MatchContactCommand,
     MatchContactResult,
 )
+from qinora.application.demo_flow import DemoFlowResult, DemoFlowUseCase
 from qinora.application.email_webhook import EmailWebhookCommand, EmailWebhookUseCase
 from qinora.application.invoice_audit import (
     CreateInvoiceAuditCommand,
@@ -87,6 +88,8 @@ __all__ = [
     "CreateQuoteCommand",
     "ContactMatchingUseCase",
     "DEFAULT_AGENT_CONFIGS",
+    "DemoFlowResult",
+    "DemoFlowUseCase",
     "PricingGateError",
     "ProcessOutboundQueueCommand",
     "ProcessOutboundQueueResult",

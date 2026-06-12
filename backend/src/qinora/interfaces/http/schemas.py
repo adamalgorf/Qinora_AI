@@ -187,6 +187,16 @@ class ProcessOutboundQueueResponse(BaseModel):
     failed: list[OutboundReplyItem]
 
 
+class DemoFlowResponse(BaseModel):
+    steps: list[str]
+    request: RequestListItem
+    quote: QuoteListItem
+    outbound_reply: OutboundReplyItem
+    shipment: ShipmentListItem
+    invoice: InvoiceListItem
+    shipment_status: str
+
+
 class CreateQuotePayload(BaseModel):
     request_id: str
     customer_price: float

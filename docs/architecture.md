@@ -1,16 +1,19 @@
 # QiNora TMS Architecture
 
 QiNora is implemented with a Python backend and TypeScript frontend, following clean architecture boundaries.
+The product is workflow-first, not an always-on multi-agent system: deterministic use cases own
+the core transport lifecycle, and AI should be introduced only for narrow tasks where it clearly
+beats rules and structured parsing.
 
 ## Layers
 
 - `backend/src/qinora/domain`: pure business rules, entities, value objects, status machines, validations, and deterministic scoring. It has no framework, database, HTTP, or LLM dependencies.
 - `backend/src/qinora/application`: use cases and ports. Use cases depend on domain rules and abstract repositories/gateways.
-- `backend/src/qinora/infrastructure`: adapters for SQLite/Postgres persistence, migrations, queues, LLM providers, email relays, and clocks.
+- `backend/src/qinora/infrastructure`: adapters for SQLite/Postgres persistence, migrations, queues, email relays, and clocks.
 - `backend/src/qinora/interfaces/http`: FastAPI routes, signed Bearer auth, HMAC webhooks, idempotency, and HTTP DTO mapping.
 - `backend/src/qinora/interfaces/http/routers`: feature routers that keep HTTP endpoints modular.
 - `backend/src/qinora/interfaces/http/container.py`: composition root for application use cases and infrastructure adapters.
-- `backend/src/qinora/workers`: scheduled and queued job entrypoints for agents, outbound email, tracking simulation, invoice audit, and stale escalation.
+- `backend/src/qinora/workers`: scheduled and queued job entrypoints for outbound email, tracking simulation, invoice audit, and stale escalation.
 - `frontend/src`: React/Vite operator interface with feature slices.
 - `backend/migrations`: Postgres/Supabase schema migrations.
 - `docker-compose.yml`: local full-stack deployment wiring Nginx, React, FastAPI, and SQLite volume persistence.
@@ -53,7 +56,7 @@ frontend -> HTTP API contract
 - Quote details expose persistent line items and a commercial timeline built from outbound and customer reply events.
 - Quote replies are interpreted by `QuoteResponseWorkflow`, recording reply events and routing accepted, revised, or rejected quotes.
 - Inbound email senders are matched to CRM contacts by `ContactMatchingUseCase`, with Miles Match decisions persisted to `agent_logs`.
-- Agent runtime behavior is controlled through `AgentConfigService`, preserving enable flags, Auto Mode and confidence guard rails behind persistence ports.
+- Automation behavior is controlled through `AgentConfigService`, preserving enable flags, Auto Mode and confidence guard rails behind persistence ports.
 - The outbound mail worker processes queued replies through an `OutboundMailer` port and records sent/failed status.
 - The tracking simulator worker advances in-transit shipments, records shipment events, and creates invoice audits.
 - Carrier intelligence is deterministic and stores confidence components for auditability.
@@ -61,3 +64,10 @@ frontend -> HTTP API contract
 - HTTP auth accepts signed Bearer tokens and maps them into framework-free RBAC context.
 - Frontend modules consume backend API endpoints through the Vite `/api` proxy.
 - SQLite and Postgres repositories implement the same application ports, preserving the dependency rule.
+
+## MVP Flow
+
+- `DemoFlowUseCase` is a thin application-layer orchestration over existing use cases.
+- `POST /demo/flow` creates a complete request-to-invoice scenario for local demos and smoke tests.
+- The flow is deterministic: request validation, pricing gate, carrier scoring, shipment FSM and invoice audit all run through ordinary domain/application rules.
+- This endpoint is for demonstration and onboarding; production workflows should keep the same use-case boundaries and replace demo inputs with real operator/customer inputs.

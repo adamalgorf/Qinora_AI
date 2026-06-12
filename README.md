@@ -1,6 +1,10 @@
 # Qinora AI / QiNora TMS
 
-AI-driven Transport Management System for 4PL operators and freight forwarders.
+Workflow-first Transport Management System for 4PL operators and freight forwarders.
+
+QiNora is intentionally not built as an always-on multi-agent model. The core product is a
+deterministic order-to-cash workflow with clean architecture boundaries. AI can be added later
+for targeted extraction or summarization, but the MVP keeps cost, latency and operational risk low.
 
 ## Stack
 
@@ -97,6 +101,7 @@ before starting the backend against that database.
 
 ## API Modules
 
+- `POST /demo/flow`
 - `GET /dashboard/summary`
 - `GET /requests`
 - `GET /contacts`
@@ -116,6 +121,13 @@ before starting the backend against that database.
 - `GET /emails/outbound`
 - `POST /emails/outbound/process`
 - `POST /shipments/tracking-simulator/run`
+
+## MVP Flow
+
+The simplest end-to-end path is exposed as `POST /demo/flow`. It creates a transport request,
+prices and sends a quote, processes the outbound queue, books a shipment, advances it to delivered,
+and audits the invoice. The Control Tower page has a `Run demo flow` button that calls this endpoint
+and refreshes the operational lists.
 
 ## Verify
 

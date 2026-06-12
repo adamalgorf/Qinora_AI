@@ -161,6 +161,16 @@ export type ProcessOutboundQueueResponse = {
   failed: OutboundReplyItem[];
 };
 
+export type DemoFlowResponse = {
+  steps: string[];
+  request: RequestListItem;
+  quote: QuoteListItem;
+  outbound_reply: OutboundReplyItem;
+  shipment: ShipmentListItem;
+  invoice: InvoiceListItem;
+  shipment_status: string;
+};
+
 export type CreateQuotePayload = {
   request_id: string;
   customer_price: number;
@@ -309,13 +319,17 @@ export function setAuthToken(token: string): void {
   window.localStorage.setItem(AUTH_TOKEN_KEY, token);
 }
 
+export function clearAuthToken(): void {
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`/api${path}`, {
     headers: jsonHeaders(),
   });
 
   if (!response.ok) {
-    throw (await response.json()) as ApiProblem;
+    throw await toApiProblem(response);
   }
 
   return (await response.json()) as T;
@@ -329,7 +343,7 @@ export async function apiPost<TResponse, TPayload>(path: string, payload: TPaylo
   });
 
   if (!response.ok) {
-    throw (await response.json()) as ApiProblem;
+    throw await toApiProblem(response);
   }
 
   return (await response.json()) as TResponse;
@@ -341,5 +355,15 @@ function jsonHeaders(): HeadersInit {
     accept: "application/json",
     ...(token ? { authorization: `Bearer ${token}` } : {}),
     "content-type": "application/json",
+  };
+}
+
+async function toApiProblem(response: Response): Promise<ApiProblem> {
+  const payload = (await response.json()) as Partial<ApiProblem> | { detail?: string };
+  return {
+    type: "about:blank",
+    title: "Request failed",
+    ...payload,
+    status: response.status,
   };
 }

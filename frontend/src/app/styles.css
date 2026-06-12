@@ -314,6 +314,43 @@ h1 {
   padding-bottom: 2px;
 }
 
+.demo-flow-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: linear-gradient(135deg, hsl(186 100% 43% / 0.12), hsl(263 70% 58% / 0.1)),
+    hsl(222 38% 10% / 0.72);
+  padding: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.demo-flow-panel h2 {
+  margin: 10px 0 6px;
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.demo-flow-panel p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+
+.demo-flow-panel ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.demo-flow-panel li {
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+}
+
 .pipeline-column {
   min-height: 240px;
   overflow: hidden;
@@ -782,6 +819,10 @@ tbody tr.highlight-row:hover {
   }
 
   .tower-split {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-flow-panel {
     grid-template-columns: 1fr;
   }
 

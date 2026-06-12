@@ -6,6 +6,7 @@ from qinora.application import (
     BookingWorkflow,
     ContactMatchingUseCase,
     CreateRequestUseCase,
+    DemoFlowUseCase,
     EmailWebhookUseCase,
     InvoiceAuditWorkflow,
     OperationalQueries,
@@ -64,6 +65,7 @@ class AppContainer:
     database: Any
     dispatcher: RecordingAgentDispatcher
     outbound_mailer: RecordingOutboundMailer
+    demo_flow: DemoFlowUseCase
     agent_config_service: AgentConfigService
     email_webhook: EmailWebhookUseCase
     operational_queries: OperationalQueries
@@ -112,11 +114,26 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         operational_queries,
     )
 
+    create_request = CreateRequestUseCase(
+        SQLiteRequestWriteRepository(database),
+        task_repository,
+    )
+    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository)
+    process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
+
     return AppContainer(
         settings=settings,
         database=database,
         dispatcher=dispatcher,
         outbound_mailer=outbound_mailer,
+        demo_flow=DemoFlowUseCase(
+            create_request,
+            quote_workflow,
+            process_outbound_queue,
+            booking_workflow,
+            shipment_workflow,
+            invoice_audit,
+        ),
         agent_config_service=agent_config_service,
         email_webhook=EmailWebhookUseCase(
             SQLiteWebhookEventRepository(database),
@@ -125,11 +142,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             contact_matching,
         ),
         operational_queries=operational_queries,
-        create_request=CreateRequestUseCase(
-            SQLiteRequestWriteRepository(database),
-            task_repository,
-        ),
-        quote_workflow=QuoteWorkflow(quote_repository, outbound_repository),
+        create_request=create_request,
+        quote_workflow=quote_workflow,
         quote_response_workflow=QuoteResponseWorkflow(
             quote_repository,
             quote_response_repository,
@@ -138,7 +152,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         booking_workflow=booking_workflow,
         shipment_workflow=shipment_workflow,
         invoice_audit=invoice_audit,
-        process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
+        process_outbound_queue=process_outbound_queue,
         stale_request_escalator=StaleRequestEscalator(
             SQLiteStaleRequestRepository(database),
             task_repository,
@@ -182,11 +196,26 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         operational_queries,
     )
 
+    create_request = CreateRequestUseCase(
+        PostgresRequestWriteRepository(database),
+        task_repository,
+    )
+    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository)
+    process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
+
     return AppContainer(
         settings=settings,
         database=database,
         dispatcher=dispatcher,
         outbound_mailer=outbound_mailer,
+        demo_flow=DemoFlowUseCase(
+            create_request,
+            quote_workflow,
+            process_outbound_queue,
+            booking_workflow,
+            shipment_workflow,
+            invoice_audit,
+        ),
         agent_config_service=agent_config_service,
         email_webhook=EmailWebhookUseCase(
             PostgresWebhookEventRepository(database),
@@ -195,11 +224,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             contact_matching,
         ),
         operational_queries=operational_queries,
-        create_request=CreateRequestUseCase(
-            PostgresRequestWriteRepository(database),
-            task_repository,
-        ),
-        quote_workflow=QuoteWorkflow(quote_repository, outbound_repository),
+        create_request=create_request,
+        quote_workflow=quote_workflow,
         quote_response_workflow=QuoteResponseWorkflow(
             quote_repository,
             quote_response_repository,
@@ -208,7 +234,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         booking_workflow=booking_workflow,
         shipment_workflow=shipment_workflow,
         invoice_audit=invoice_audit,
-        process_outbound_queue=ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer),
+        process_outbound_queue=process_outbound_queue,
         stale_request_escalator=StaleRequestEscalator(
             PostgresStaleRequestRepository(database),
             task_repository,

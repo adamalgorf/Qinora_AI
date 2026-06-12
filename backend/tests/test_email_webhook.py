@@ -163,6 +163,30 @@ def test_global_search_requires_operator_role(client: TestClient) -> None:
     assert response.status_code == 403
 
 
+def test_demo_flow_runs_order_to_cash_workflow(client: TestClient) -> None:
+    response = client.post("/demo/flow")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["steps"][-1] == "Invoice audited and approved"
+    assert body["request"]["status"] == "parsed"
+    assert body["quote"]["status"] == "sent"
+    assert body["outbound_reply"]["status"] == "sent"
+    assert body["shipment"]["status"] == "booked"
+    assert body["invoice"]["status"] == "approved"
+    assert body["shipment_status"] == "invoice_approved"
+
+    shipments = client.get("/shipments").json()
+    completed_shipment = next(item for item in shipments if item["id"] == body["shipment"]["id"])
+    assert completed_shipment["status"] == "invoice_approved"
+
+
+def test_demo_flow_requires_operator_role(client: TestClient) -> None:
+    response = client.post("/demo/flow", headers={"x-role": "shipper"})
+
+    assert response.status_code == 403
+
+
 def test_create_request_persists_complete_request(client: TestClient) -> None:
     response = client.post(
         "/requests",

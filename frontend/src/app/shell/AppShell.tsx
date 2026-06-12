@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import {
   apiGet,
   apiPost,
+  clearAuthToken,
   getAuthToken,
   setAuthToken,
   type AuthMe,
@@ -46,7 +47,7 @@ export function AppShell() {
   const authQuery = useQuery({
     queryKey: ["auth-me"],
     queryFn: async () => {
-      const currentUser = await apiGet<AuthMe>("/auth/me");
+      const currentUser = await getCurrentUser();
       if (getAuthToken()) {
         return currentUser;
       }
@@ -148,5 +149,26 @@ export function AppShell() {
         <Outlet />
       </main>
     </div>
+  );
+}
+
+async function getCurrentUser(): Promise<AuthMe> {
+  try {
+    return await apiGet<AuthMe>("/auth/me");
+  } catch (error) {
+    if (getAuthToken() && isUnauthorized(error)) {
+      clearAuthToken();
+      return apiGet<AuthMe>("/auth/me");
+    }
+    throw error;
+  }
+}
+
+function isUnauthorized(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status?: number }).status === 401
   );
 }

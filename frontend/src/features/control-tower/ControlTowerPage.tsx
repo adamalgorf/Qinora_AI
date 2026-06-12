@@ -1,14 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bot, CheckCircle2, Clock3, RadioTower, Sparkles } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Bot, CheckCircle2, Clock3, Play, RadioTower } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiGet, type DashboardSummary, type OperationalTaskItem } from "@/shared/api/client";
+import {
+  apiGet,
+  apiPost,
+  type DashboardSummary,
+  type DemoFlowResponse,
+  type OperationalTaskItem,
+} from "@/shared/api/client";
 
 const iconByMetric = [Clock3, CheckCircle2, AlertTriangle, Bot];
 
 export function ControlTowerPage() {
+  const queryClient = useQueryClient();
   const summaryQuery = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: () => apiGet<DashboardSummary>("/dashboard/summary"),
@@ -17,8 +24,23 @@ export function ControlTowerPage() {
     queryKey: ["operational-tasks"],
     queryFn: () => apiGet<OperationalTaskItem[]>("/tasks"),
   });
+  const demoFlowMutation = useMutation({
+    mutationFn: () => apiPost<DemoFlowResponse, Record<string, never>>("/demo/flow", {}),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational-tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["requests"] }),
+        queryClient.invalidateQueries({ queryKey: ["quotes"] }),
+        queryClient.invalidateQueries({ queryKey: ["shipments"] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["outbound-replies"] }),
+      ]);
+    },
+  });
   const summary = summaryQuery.data;
   const tasks = tasksQuery.data ?? [];
+  const demoFlow = demoFlowMutation.data;
 
   return (
     <section className="tower-page">
@@ -28,17 +50,42 @@ export function ControlTowerPage() {
             <RadioTower aria-hidden="true" className="size-3.5" />
             Control Tower
           </Badge>
-          <h1>AI-driven freight operations in one live command layer.</h1>
+          <h1>Freight operations from request to invoice in one command layer.</h1>
           <p className="page-lede">
-            Email intake, quotes, carrier intelligence, booking and invoice audit connected through
-            one backend API.
+            Intake, quotes, carrier matching, booking and invoice audit connected through one
+            deterministic backend workflow.
           </p>
         </div>
-        <Button className="primary-action" type="button">
-          <Sparkles aria-hidden="true" />
-          Review queue
+        <Button
+          className="primary-action"
+          disabled={summaryQuery.isLoading || demoFlowMutation.isPending}
+          type="button"
+          onClick={() => demoFlowMutation.mutate()}
+        >
+          <Play aria-hidden="true" />
+          {demoFlowMutation.isPending ? "Running flow..." : "Run demo flow"}
         </Button>
       </header>
+      {demoFlow ? (
+        <section className="demo-flow-panel" aria-label="Demo flow result">
+          <div>
+            <Badge variant="secondary">{demoFlow.shipment_status}</Badge>
+            <h2>{demoFlow.request.public_id} completed order-to-cash</h2>
+            <p>
+              {demoFlow.quote.id} sent, {demoFlow.shipment.public_id} delivered and{" "}
+              {demoFlow.invoice.public_id} approved.
+            </p>
+          </div>
+          <ol>
+            {demoFlow.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      {demoFlowMutation.error ? (
+        <p className="form-feedback">Demo flow could not be completed.</p>
+      ) : null}
 
       <div className="kpi-grid">
         {(summary?.kpis ?? []).map((kpi, index) => {
@@ -100,8 +147,8 @@ export function ControlTowerPage() {
 
         <Card className="agent-card">
           <CardHeader>
-            <CardDescription>Agent activity</CardDescription>
-            <CardTitle>Latest autonomous decisions</CardTitle>
+            <CardDescription>Workflow activity</CardDescription>
+            <CardTitle>Latest automation decisions</CardTitle>
           </CardHeader>
           <CardContent className="agent-list">
             {summaryQuery.isLoading ? (
