@@ -73,6 +73,15 @@ def test_dashboard_summary_returns_control_tower_data(client: TestClient) -> Non
     assert response.json()["kpis"][0]["label"] == "Open requests"
 
 
+def test_health_and_readiness_endpoints(client: TestClient) -> None:
+    assert client.get("/health").json() == {"status": "ok"}
+
+    ready = client.get("/ready")
+
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ready", "persistence": "sqlite"}
+
+
 def test_auth_me_returns_server_side_context(client: TestClient) -> None:
     response = client.get(
         "/auth/me",

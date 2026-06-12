@@ -89,6 +89,7 @@ docker compose up --build
 
 The containerized frontend is served at `http://127.0.0.1:8080` and proxies `/api` to the
 backend service. The backend remains reachable at `http://127.0.0.1:8000`.
+Compose waits for backend readiness before starting the frontend service.
 
 To run a local Postgres service for production-style persistence:
 
@@ -102,6 +103,8 @@ before starting the backend against that database.
 ## API Modules
 
 - `POST /demo/flow`
+- `GET /health`
+- `GET /ready`
 - `GET /dashboard/summary`
 - `GET /requests`
 - `GET /contacts`

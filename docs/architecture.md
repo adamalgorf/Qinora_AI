@@ -62,6 +62,7 @@ frontend -> HTTP API contract
 - Carrier intelligence is deterministic and stores confidence components for auditability.
 - Email webhooks require HMAC and idempotency at the API boundary.
 - HTTP auth accepts signed Bearer tokens and maps them into framework-free RBAC context.
+- `/health` proves the HTTP process is alive; `/ready` verifies the active persistence adapter.
 - Frontend modules consume backend API endpoints through the Vite `/api` proxy.
 - SQLite and Postgres repositories implement the same application ports, preserving the dependency rule.
 
