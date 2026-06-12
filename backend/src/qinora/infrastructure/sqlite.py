@@ -1,9 +1,12 @@
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from qinora.application import DEFAULT_AGENT_CONFIGS
 from qinora.application.read_models import (
+    AgentConfigRecord,
     AgentLogRecord,
     CarrierRecord,
     ContactRecord,
@@ -138,6 +141,15 @@ class SQLiteDatabase:
                   created_at text not null default current_timestamp
                 );
 
+                create table if not exists agent_configs (
+                  id text primary key,
+                  agent_key text not null unique,
+                  agent_name text not null,
+                  is_enabled integer not null default 1,
+                  config text not null default '{}',
+                  created_at text not null default current_timestamp
+                );
+
                 create table if not exists invoices (
                   id text primary key,
                   public_id text not null unique,
@@ -216,6 +228,7 @@ class SQLiteDatabase:
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
             self._seed_contacts(connection)
+            self._seed_agent_configs(connection)
 
     def _seed(self, connection: sqlite3.Connection) -> None:
         if _count(connection, "transport_requests") > 0:
@@ -437,6 +450,28 @@ class SQLiteDatabase:
                 ),
             ],
         )
+
+    def _seed_agent_configs(self, connection: sqlite3.Connection) -> None:
+        for config in DEFAULT_AGENT_CONFIGS:
+            connection.execute(
+                """
+                insert or ignore into agent_configs
+                  (id, agent_key, agent_name, is_enabled, config)
+                values (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    config.agent_key,
+                    config.agent_name,
+                    1,
+                    json.dumps(
+                        {
+                            "auto_mode": config.auto_mode.value,
+                            "min_confidence": config.min_confidence,
+                        }
+                    ),
+                ),
+            )
 
     def _seed_runtime_relationships(self, connection: sqlite3.Connection) -> None:
         if _exists_by_id(connection, "quotes", "quo-004"):
@@ -751,6 +786,47 @@ class SQLiteAgentLogWriteRepository:
             entity_id=entity_id,
             confidence=confidence,
         )
+
+
+class SQLiteAgentConfigRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def list_configs(self) -> list[AgentConfigRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select agent_key, agent_name, is_enabled, config
+                from agent_configs
+                order by agent_name
+                """
+            ).fetchall()
+
+        return [_agent_config_from_sqlite_row(row) for row in rows]
+
+    async def update_config(
+        self,
+        *,
+        agent_key: str,
+        is_enabled: bool,
+        auto_mode: str,
+        min_confidence: float,
+    ) -> AgentConfigRecord:
+        config = json.dumps({"auto_mode": auto_mode, "min_confidence": min_confidence})
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update agent_configs
+                set is_enabled = ?, config = ?
+                where agent_key = ?
+                returning agent_key, agent_name, is_enabled, config
+                """,
+                (1 if is_enabled else 0, config, agent_key),
+            ).fetchone()
+
+        if row is None:
+            raise LookupError(f"Agent config not found: {agent_key}")
+        return _agent_config_from_sqlite_row(row)
 
 
 class SQLiteRequestWriteRepository:
@@ -1361,3 +1437,14 @@ def _add_column_if_missing(
 
 def _split_csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _agent_config_from_sqlite_row(row: sqlite3.Row) -> AgentConfigRecord:
+    config = json.loads(row["config"] or "{}")
+    return AgentConfigRecord(
+        agent_key=row["agent_key"],
+        agent_name=row["agent_name"],
+        is_enabled=bool(row["is_enabled"]),
+        auto_mode=str(config.get("auto_mode", "manual")),
+        min_confidence=float(config.get("min_confidence", 0)),
+    )

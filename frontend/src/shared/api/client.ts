@@ -232,6 +232,20 @@ export type AgentLogListItem = {
   confidence: number;
 };
 
+export type AgentConfigItem = {
+  agent_key: string;
+  agent_name: string;
+  is_enabled: boolean;
+  auto_mode: "manual" | "assisted" | "guarded_auto";
+  min_confidence: number;
+};
+
+export type UpdateAgentConfigPayload = {
+  is_enabled: boolean;
+  auto_mode: AgentConfigItem["auto_mode"];
+  min_confidence: number;
+};
+
 export type OperationalTaskItem = {
   id: string;
   entity_type: string;

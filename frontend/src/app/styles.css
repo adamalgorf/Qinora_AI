@@ -490,6 +490,94 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.agent-config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.agent-config-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(222 38% 10% / 0.62);
+  padding: 16px;
+}
+
+.agent-config-head {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.agent-config-head svg {
+  color: hsl(186 100% 72%);
+}
+
+.agent-config-head div,
+.agent-config-card label {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-config-head span,
+.agent-config-card label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.agent-config-head strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.agent-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background) / 0.72);
+  cursor: pointer;
+}
+
+.agent-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.agent-toggle:has(input:checked) {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.16);
+}
+
+.agent-config-card input,
+.agent-config-card select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background) / 0.72);
+  color: hsl(var(--foreground));
+  padding: 0 12px;
+}
+
+.agent-config-card input:focus,
+.agent-config-card select:focus {
+  border-color: hsl(var(--ring));
+  outline: 3px solid hsl(var(--ring) / 0.18);
+}
+
 .agent-row {
   display: flex;
   align-items: center;
@@ -547,6 +635,10 @@ tbody tr:hover {
   }
 
   .tower-split {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-config-grid {
     grid-template-columns: 1fr;
   }
 

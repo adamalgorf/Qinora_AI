@@ -1,3 +1,9 @@
+from qinora.application.agent_config import (
+    DEFAULT_AGENT_CONFIGS,
+    AgentAutoMode,
+    AgentConfigService,
+    UpdateAgentConfigCommand,
+)
 from qinora.application.auth import AuthContext, AuthorizationError, Role, require_any_role
 from qinora.application.booking_workflow import BookingResult, BookingWorkflow, BookQuoteCommand
 from qinora.application.contact_matching import (
@@ -55,6 +61,8 @@ from qinora.application.tracking_simulator import (
 
 __all__ = [
     "AgentDispatcher",
+    "AgentAutoMode",
+    "AgentConfigService",
     "AuthContext",
     "AuthorizationError",
     "BookQuoteCommand",
@@ -72,6 +80,7 @@ __all__ = [
     "CreateRequestUseCase",
     "CreateQuoteCommand",
     "ContactMatchingUseCase",
+    "DEFAULT_AGENT_CONFIGS",
     "PricingGateError",
     "ProcessOutboundQueueCommand",
     "ProcessOutboundQueueResult",
@@ -96,6 +105,7 @@ __all__ = [
     "ShipmentWorkflow",
     "TrackingSimulator",
     "TrackingSimulatorResult",
+    "UpdateAgentConfigCommand",
     "UpdateShipmentStatusCommand",
     "QuoteWriteRepository",
     "WebhookEventRepository",

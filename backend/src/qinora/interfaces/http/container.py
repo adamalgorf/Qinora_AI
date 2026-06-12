@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from qinora.application import (
+    AgentConfigService,
     BookingWorkflow,
     ContactMatchingUseCase,
     CreateRequestUseCase,
@@ -18,6 +19,7 @@ from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
 from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
+    PostgresAgentConfigRepository,
     PostgresAgentLogWriteRepository,
     PostgresContactReadRepository,
     PostgresDatabase,
@@ -35,6 +37,7 @@ from qinora.infrastructure.postgres import (
 )
 from qinora.infrastructure.settings import PersistenceDriver, Settings
 from qinora.infrastructure.sqlite import (
+    SQLiteAgentConfigRepository,
     SQLiteAgentLogWriteRepository,
     SQLiteContactReadRepository,
     SQLiteDatabase,
@@ -58,6 +61,7 @@ class AppContainer:
     database: Any
     dispatcher: RecordingAgentDispatcher
     outbound_mailer: RecordingOutboundMailer
+    agent_config_service: AgentConfigService
     email_webhook: EmailWebhookUseCase
     operational_queries: OperationalQueries
     create_request: CreateRequestUseCase
@@ -82,6 +86,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     database = SQLiteDatabase(settings.sqlite_path)
     dispatcher = RecordingAgentDispatcher()
     outbound_mailer = RecordingOutboundMailer()
+    agent_config_service = AgentConfigService(SQLiteAgentConfigRepository(database))
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
     quote_repository = SQLiteQuoteWriteRepository(database)
     quote_response_repository = SQLiteQuoteResponseEventRepository(database)
@@ -108,6 +113,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         database=database,
         dispatcher=dispatcher,
         outbound_mailer=outbound_mailer,
+        agent_config_service=agent_config_service,
         email_webhook=EmailWebhookUseCase(
             SQLiteWebhookEventRepository(database),
             SQLiteInboundEmailRepository(database),
@@ -146,6 +152,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     database = PostgresDatabase(settings.database_url, settings.postgres_tenant_id)
     dispatcher = RecordingAgentDispatcher()
     outbound_mailer = RecordingOutboundMailer()
+    agent_config_service = AgentConfigService(PostgresAgentConfigRepository(database))
     operational_queries = OperationalQueries(PostgresOperationalReadRepository(database))
     quote_repository = PostgresQuoteWriteRepository(database)
     quote_response_repository = PostgresQuoteResponseEventRepository(database)
@@ -172,6 +179,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         database=database,
         dispatcher=dispatcher,
         outbound_mailer=outbound_mailer,
+        agent_config_service=agent_config_service,
         email_webhook=EmailWebhookUseCase(
             PostgresWebhookEventRepository(database),
             PostgresInboundEmailRepository(database),

@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from qinora.application.read_models import (
+    AgentConfigRecord,
     AgentLogRecord,
     CarrierRecord,
     ContactRecord,
@@ -52,6 +53,21 @@ class AgentLogWriteRepository(Protocol):
         entity_id: str,
         confidence: float,
     ) -> AgentLogRecord:
+        pass
+
+
+class AgentConfigRepository(Protocol):
+    async def list_configs(self) -> list[AgentConfigRecord]:
+        pass
+
+    async def update_config(
+        self,
+        *,
+        agent_key: str,
+        is_enabled: bool,
+        auto_mode: str,
+        min_confidence: float,
+    ) -> AgentConfigRecord:
         pass
 
 

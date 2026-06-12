@@ -100,6 +100,8 @@ before starting the backend against that database.
 - `POST /carriers/intelligence`
 - `GET /inbox/pending`
 - `GET /agents/logs`
+- `GET /agents/configs`
+- `POST /agents/{key}/config`
 - `POST /webhooks/email`
 - `GET /auth/me`
 - `POST /auth/dev-token`

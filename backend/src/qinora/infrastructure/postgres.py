@@ -2,8 +2,11 @@ from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
+from qinora.application import DEFAULT_AGENT_CONFIGS
 from qinora.application.read_models import (
+    AgentConfigRecord,
     AgentLogRecord,
     CarrierRecord,
     ContactRecord,
@@ -48,6 +51,27 @@ class PostgresDatabase:
                     """,
                 (self.tenant_id, "QiNora Default Tenant"),
             )
+            for config in DEFAULT_AGENT_CONFIGS:
+                cursor.execute(
+                    """
+                    insert into public.agent_configs
+                      (tenant_id, agent_key, is_enabled, config)
+                    values (%s, %s, %s, %s)
+                    on conflict (tenant_id, agent_key) do nothing
+                    """,
+                    (
+                        self.tenant_id,
+                        config.agent_key,
+                        True,
+                        Jsonb(
+                            {
+                                "agent_name": config.agent_name,
+                                "auto_mode": config.auto_mode.value,
+                                "min_confidence": config.min_confidence,
+                            }
+                        ),
+                    ),
+                )
 
 
 class PostgresWebhookEventRepository:
@@ -446,6 +470,76 @@ class PostgresAgentLogWriteRepository:
             entity_id=entity_id,
             confidence=confidence,
         )
+
+
+class PostgresAgentConfigRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def list_configs(self) -> list[AgentConfigRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select agent_key, is_enabled, config
+                from public.agent_configs
+                where tenant_id = %s
+                order by coalesce(config ->> 'agent_name', agent_key)
+                """,
+                (self._database.tenant_id,),
+            )
+            rows = cursor.fetchall()
+
+        return [_agent_config_from_postgres_row(row) for row in rows]
+
+    async def update_config(
+        self,
+        *,
+        agent_key: str,
+        is_enabled: bool,
+        auto_mode: str,
+        min_confidence: float,
+    ) -> AgentConfigRecord:
+        current = await self._get_config(agent_key)
+        if current is None:
+            raise LookupError(f"Agent config not found: {agent_key}")
+
+        config = {
+            **current["config"],
+            "auto_mode": auto_mode,
+            "min_confidence": min_confidence,
+        }
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.agent_configs
+                set is_enabled = %s, config = %s
+                where tenant_id = %s and agent_key = %s
+                returning agent_key, is_enabled, config
+                """,
+                (
+                    is_enabled,
+                    Jsonb(config),
+                    self._database.tenant_id,
+                    agent_key,
+                ),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            raise LookupError(f"Agent config not found: {agent_key}")
+        return _agent_config_from_postgres_row(row)
+
+    async def _get_config(self, agent_key: str) -> dict[str, Any] | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select agent_key, is_enabled, config
+                from public.agent_configs
+                where tenant_id = %s and agent_key = %s
+                """,
+                (self._database.tenant_id, agent_key),
+            )
+            return cursor.fetchone()
 
 
 class PostgresRequestWriteRepository:
@@ -1107,6 +1201,17 @@ def _outbound_reply_record(row: dict[str, Any]) -> OutboundReplyRecord:
         created_at=row["created_at"].isoformat(),
         sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
         error_message=row["error_message"],
+    )
+
+
+def _agent_config_from_postgres_row(row: dict[str, Any]) -> AgentConfigRecord:
+    config = row["config"] or {}
+    return AgentConfigRecord(
+        agent_key=row["agent_key"],
+        agent_name=str(config.get("agent_name", row["agent_key"])),
+        is_enabled=bool(row["is_enabled"]),
+        auto_mode=str(config.get("auto_mode", "manual")),
+        min_confidence=float(config.get("min_confidence", 0)),
     )
 
 

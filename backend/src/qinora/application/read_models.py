@@ -81,6 +81,15 @@ class AgentLogRecord:
 
 
 @dataclass(frozen=True)
+class AgentConfigRecord:
+    agent_key: str
+    agent_name: str
+    is_enabled: bool
+    auto_mode: str
+    min_confidence: float
+
+
+@dataclass(frozen=True)
 class InboxRecord:
     id: str
     sender: str

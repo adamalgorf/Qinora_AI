@@ -263,6 +263,20 @@ class AgentLogListItem(BaseModel):
     confidence: float
 
 
+class AgentConfigItem(BaseModel):
+    agent_key: str
+    agent_name: str
+    is_enabled: bool
+    auto_mode: Literal["manual", "assisted", "guarded_auto"]
+    min_confidence: float
+
+
+class UpdateAgentConfigPayload(BaseModel):
+    is_enabled: bool
+    auto_mode: Literal["manual", "assisted", "guarded_auto"]
+    min_confidence: float = Field(ge=0, le=1)
+
+
 class OperationalTaskItem(BaseModel):
     id: str
     entity_type: str

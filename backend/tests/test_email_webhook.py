@@ -455,3 +455,45 @@ def test_carrier_intelligence_requires_operator_role(client: TestClient) -> None
     )
 
     assert response.status_code == 403
+
+
+def test_agent_configs_can_be_listed_and_updated_by_admin(client: TestClient) -> None:
+    listed = client.get("/agents/configs")
+
+    assert listed.status_code == 200
+    assert listed.json()[0]["agent_key"]
+
+    updated = client.post(
+        "/agents/intake_agent/config",
+        json={
+            "is_enabled": False,
+            "auto_mode": "guarded_auto",
+            "min_confidence": 0.91,
+        },
+    )
+
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["agent_key"] == "intake_agent"
+    assert body["is_enabled"] is False
+    assert body["auto_mode"] == "guarded_auto"
+    assert body["min_confidence"] == 0.91
+
+    configs = client.get("/agents/configs").json()
+    intake = next(item for item in configs if item["agent_key"] == "intake_agent")
+    assert intake["is_enabled"] is False
+    assert intake["auto_mode"] == "guarded_auto"
+
+
+def test_agent_config_update_requires_admin_role(client: TestClient) -> None:
+    response = client.post(
+        "/agents/intake_agent/config",
+        headers={"x-role": "4pl_tower"},
+        json={
+            "is_enabled": True,
+            "auto_mode": "manual",
+            "min_confidence": 0.7,
+        },
+    )
+
+    assert response.status_code == 403
