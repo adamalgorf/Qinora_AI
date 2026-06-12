@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 type DataTableProps<T extends Record<string, unknown>> = {
   rows: T[] | undefined;
   columns: Array<{
@@ -15,6 +17,19 @@ export function DataTable<T extends Record<string, unknown>>({
   highlightId,
   loading,
 }: DataTableProps<T>) {
+  const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    if (!highlightId || !highlightedRowRef.current) {
+      return;
+    }
+
+    highlightedRowRef.current.scrollIntoView({
+      block: "center",
+      behavior: "smooth",
+    });
+  }, [highlightId, rows]);
+
   if (loading) {
     return <p className="muted">Syncing with backend...</p>;
   }
@@ -42,7 +57,12 @@ export function DataTable<T extends Record<string, unknown>>({
             );
 
             return (
-              <tr className={isHighlighted ? "highlight-row" : undefined} key={rowKey}>
+              <tr
+                aria-current={isHighlighted ? "true" : undefined}
+                className={isHighlighted ? "highlight-row" : undefined}
+                key={rowKey}
+                ref={isHighlighted ? highlightedRowRef : undefined}
+              >
                 {columns.map((column) => {
                   const value = row[column.key];
                   return (
