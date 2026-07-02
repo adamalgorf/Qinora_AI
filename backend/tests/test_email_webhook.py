@@ -336,6 +336,34 @@ def test_process_outbound_queue_marks_replies_sent(client: TestClient) -> None:
     assert outbound[0]["sent_at"] is not None
 
 
+def test_create_quote_rejects_unknown_request(client: TestClient) -> None:
+    response = client.post(
+        "/quotes",
+        json={
+            "request_id": "req-missing",
+            "customer_price": 12300,
+            "currency": "SEK",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Request not found"
+
+
+def test_create_quote_rejects_request_not_ready_for_quote(client: TestClient) -> None:
+    response = client.post(
+        "/quotes",
+        json={
+            "request_id": "req-003",
+            "customer_price": 12300,
+            "currency": "SEK",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "cannot be quoted" in response.json()["detail"]
+
+
 def test_send_quote_blocks_zero_price(client: TestClient) -> None:
     response = client.post("/quotes/quo-002/send")
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,13 @@ export function QuotesPage() {
   });
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const quotableRequests = useMemo(
+    () =>
+      (requestsQuery.data ?? []).filter((request) =>
+        ["parsed", "quoted"].includes(request.status),
+      ),
+    [requestsQuery.data],
+  );
   const detailQuery = useQuery({
     queryKey: ["quote-detail", selectedQuoteId],
     queryFn: () => apiGet<QuoteDetailResponse>(`/quotes/${selectedQuoteId}`),
@@ -121,12 +128,12 @@ export function QuotesPage() {
   });
 
   useEffect(() => {
-    if (form.requestId || !requestsQuery.data?.length) {
+    if (form.requestId || !quotableRequests.length) {
       return;
     }
 
-    setForm((current) => ({ ...current, requestId: requestsQuery.data[0].id }));
-  }, [form.requestId, requestsQuery.data]);
+    setForm((current) => ({ ...current, requestId: quotableRequests[0].id }));
+  }, [form.requestId, quotableRequests]);
 
   useEffect(() => {
     if (selectedQuoteId || !query.data?.length) {
@@ -172,11 +179,11 @@ export function QuotesPage() {
       <form className="request-form" onSubmit={submitQuote}>
         <select
           aria-label="Request ID"
-          disabled={requestsQuery.isLoading || !requestsQuery.data?.length}
+          disabled={requestsQuery.isLoading || !quotableRequests.length}
           value={form.requestId}
           onChange={(event) => setForm((current) => ({ ...current, requestId: event.target.value }))}
         >
-          {(requestsQuery.data ?? []).map((request) => (
+          {quotableRequests.map((request) => (
             <option key={request.id} value={request.id}>
               {request.public_id} - {request.customer} - {request.lane}
             </option>

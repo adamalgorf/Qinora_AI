@@ -8,6 +8,8 @@ from qinora.application import (
     PricingGateError,
     ProcessOutboundQueueCommand,
     QuoteNotFoundError,
+    RequestNotFoundError,
+    RequestNotQuotableError,
     Role,
     SendQuoteCommand,
 )
@@ -68,13 +70,25 @@ async def create_quote(
     context: AuthContext = AUTH_CONTEXT,
 ) -> QuoteListItem:
     require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
-    quote = await container.quote_workflow.create_quote(
-        CreateQuoteCommand(
-            request_id=payload.request_id,
-            customer_price=payload.customer_price,
-            currency=payload.currency,
+    try:
+        quote = await container.quote_workflow.create_quote(
+            CreateQuoteCommand(
+                request_id=payload.request_id,
+                customer_price=payload.customer_price,
+                currency=payload.currency,
+            )
         )
-    )
+    except RequestNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Request not found",
+        ) from error
+    except RequestNotQuotableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
     return QuoteListItem(**quote.__dict__)
 
 

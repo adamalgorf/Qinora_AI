@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 
+from qinora.application.operational_queries import OperationalQueries
 from qinora.application.ports import OutboundReplyRepository, QuoteWriteRepository
-from qinora.application.read_models import OutboundReplyRecord, QuoteRecord
+from qinora.application.read_models import OutboundReplyRecord, QuoteRecord, RequestRecord
 from qinora.domain import can_send_quote
+
+QUOTABLE_REQUEST_STATUSES = {"parsed", "quoted"}
 
 
 @dataclass(frozen=True)
@@ -29,11 +32,19 @@ class QuoteWorkflow:
         self,
         repository: QuoteWriteRepository,
         outbound_repository: OutboundReplyRepository,
+        operational_queries: OperationalQueries,
     ) -> None:
         self._repository = repository
         self._outbound_repository = outbound_repository
+        self._operational_queries = operational_queries
 
     async def create_quote(self, command: CreateQuoteCommand) -> QuoteRecord:
+        request = await self._find_request(command.request_id)
+        if request is None:
+            raise RequestNotFoundError(command.request_id)
+        if request.status not in QUOTABLE_REQUEST_STATUSES:
+            raise RequestNotQuotableError(request.id, request.status)
+
         return await self._repository.create_quote(
             request_id=command.request_id,
             customer_price=command.customer_price,
@@ -62,9 +73,26 @@ class QuoteWorkflow:
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)
 
+    async def _find_request(self, request_id: str) -> RequestRecord | None:
+        for request in await self._operational_queries.list_requests():
+            if request.id == request_id:
+                return request
+        return None
+
 
 class QuoteNotFoundError(LookupError):
     pass
+
+
+class RequestNotFoundError(LookupError):
+    pass
+
+
+class RequestNotQuotableError(ValueError):
+    def __init__(self, request_id: str, status: str) -> None:
+        super().__init__(f"Request {request_id} cannot be quoted while status is {status}")
+        self.request_id = request_id
+        self.status = status
 
 
 class PricingGateError(ValueError):

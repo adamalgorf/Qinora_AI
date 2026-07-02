@@ -45,6 +45,8 @@ from qinora.application.quote_workflow import (
     PricingGateError,
     QuoteNotFoundError,
     QuoteWorkflow,
+    RequestNotFoundError,
+    RequestNotQuotableError,
     SendQuoteCommand,
     SendQuoteResult,
 )
@@ -105,6 +107,8 @@ __all__ = [
     "QuoteReplyIntent",
     "QuoteResponseWorkflow",
     "QuoteWorkflow",
+    "RequestNotFoundError",
+    "RequestNotQuotableError",
     "Role",
     "RunTrackingSimulatorCommand",
     "SendQuoteCommand",

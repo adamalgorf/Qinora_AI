@@ -118,7 +118,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         SQLiteRequestWriteRepository(database),
         task_repository,
     )
-    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository)
+    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
 
     return AppContainer(
@@ -200,7 +200,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         PostgresRequestWriteRepository(database),
         task_repository,
     )
-    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository)
+    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
 
     return AppContainer(
