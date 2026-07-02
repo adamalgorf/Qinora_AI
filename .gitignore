@@ -6,6 +6,7 @@ __pycache__/
 backend/.tmp/
 *.py[cod]
 *.tsbuildinfo
+*.log
 *.sqlite3
 backend/data/
 .env
