@@ -9,7 +9,6 @@ from qinora.application.read_models import (
     InvoiceRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
-    ParsedTransportRequestDraft,
     QuoteDetailRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
@@ -76,21 +75,6 @@ class AgentConfigRepository(Protocol):
 
 class AgentDispatcher(Protocol):
     async def dispatch(self, *, event_type: str, entity_id: str) -> None:
-        pass
-
-
-class RequestParsingLLM(Protocol):
-    """Reasoning-agent port: turns free text (e.g. an RFQ email body) into
-    a structured draft transport request.
-
-    This is the only thing application/domain code knows about the
-    'request_parsing_agent' (Parsek). Implementations live in
-    infrastructure/llm/ - today a LangChain + Azure OpenAI adapter and a
-    deterministic stub. Swapping frameworks means adding a new class here,
-    never touching this protocol or its callers.
-    """
-
-    async def parse(self, *, raw_text: str) -> ParsedTransportRequestDraft:
         pass
 
 

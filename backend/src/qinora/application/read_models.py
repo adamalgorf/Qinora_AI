@@ -1,34 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime
-
-
-@dataclass(frozen=True)
-class ParsedCargoLine:
-    description: str
-    quantity: int | None
-    weight_kg: float | None
-    length_cm: float | None
-    width_cm: float | None
-    height_cm: float | None
-
-
-@dataclass(frozen=True)
-class ParsedTransportRequestDraft:
-    """Output of a RequestParsingLLM implementation (see application/ports.py).
-
-    Framework-agnostic on purpose: neither this dataclass nor anything that
-    consumes it (RequestParsingAgent) knows LangChain exists. Only the
-    infrastructure adapter does.
-    """
-
-    mode: str
-    origin: str
-    destination: str
-    cargo: tuple[ParsedCargoLine, ...]
-    loading_time: datetime | None
-    unloading_time: datetime | None
-    confidence: float
-    missing_fields: tuple[str, ...]
 
 
 @dataclass(frozen=True)
