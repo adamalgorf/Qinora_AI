@@ -55,6 +55,11 @@ from qinora.application.request_intake import (
     CreateRequestCommand,
     CreateRequestUseCase,
 )
+from qinora.application.request_parsing_agent import (
+    ParseFreeTextRequestCommand,
+    ParseFreeTextRequestResult,
+    RequestParsingAgent,
+)
 from qinora.application.shipment_workflow import ShipmentWorkflow, UpdateShipmentStatusCommand
 from qinora.application.stale_request_escalation import (
     EscalateStaleRequestsCommand,
@@ -92,6 +97,8 @@ __all__ = [
     "DEFAULT_AGENT_CONFIGS",
     "DemoFlowResult",
     "DemoFlowUseCase",
+    "ParseFreeTextRequestCommand",
+    "ParseFreeTextRequestResult",
     "PricingGateError",
     "ProcessOutboundQueueCommand",
     "ProcessOutboundQueueResult",
@@ -109,6 +116,7 @@ __all__ = [
     "QuoteWorkflow",
     "RequestNotFoundError",
     "RequestNotQuotableError",
+    "RequestParsingAgent",
     "Role",
     "RunTrackingSimulatorCommand",
     "SendQuoteCommand",

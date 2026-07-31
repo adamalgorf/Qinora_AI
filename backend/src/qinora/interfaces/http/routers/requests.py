@@ -4,6 +4,7 @@ from qinora.application import (
     AuthContext,
     CargoLineCommand,
     CreateRequestCommand,
+    ParseFreeTextRequestCommand,
     Role,
 )
 from qinora.interfaces.http.auth import require_roles
@@ -12,6 +13,10 @@ from qinora.interfaces.http.dependencies import AUTH_CONTEXT, CONTAINER
 from qinora.interfaces.http.schemas import (
     CreateRequestPayload,
     CreateRequestResponse,
+    ParsedCargoLinePayload,
+    ParsedRequestDraftPayload,
+    ParseFreeTextRequestPayload,
+    ParseFreeTextRequestResponse,
     RequestListItem,
 )
 
@@ -64,4 +69,47 @@ async def create_transport_request(
         complete=result.complete,
         review_reason=result.review_reason,
         adr_un_numbers=list(result.adr_un_numbers),
+    )
+
+
+@router.post(
+    "/requests/parse",
+    response_model=ParseFreeTextRequestResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def parse_free_text_request(
+    payload: ParseFreeTextRequestPayload,
+    container: AppContainer = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> ParseFreeTextRequestResponse:
+    """Runs the request_parsing_agent (Parsek) over free text (e.g. an RFQ
+    email body) and, if confidence is high enough and no fields are
+    missing, creates the transport request. Low-confidence or incomplete
+    drafts are logged for human review instead of auto-created.
+    """
+    require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+    result = await container.request_parsing_agent.execute(
+        ParseFreeTextRequestCommand(customer=payload.customer, raw_text=payload.raw_text)
+    )
+
+    return ParseFreeTextRequestResponse(
+        draft=ParsedRequestDraftPayload(
+            mode=result.draft.mode,
+            origin=result.draft.origin,
+            destination=result.draft.destination,
+            cargo=[
+                ParsedCargoLinePayload(**line.__dict__) for line in result.draft.cargo
+            ],
+            loading_time=result.draft.loading_time,
+            unloading_time=result.draft.unloading_time,
+            confidence=result.draft.confidence,
+            missing_fields=list(result.draft.missing_fields),
+        ),
+        needs_human_review=result.needs_human_review,
+        request=(
+            RequestListItem(**result.request_result.request.__dict__)
+            if result.request_result
+            else None
+        ),
+        agent_confidence=result.agent_log.confidence,
     )
