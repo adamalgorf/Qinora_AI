@@ -13,14 +13,12 @@ from qinora.application import (
     ProcessOutboundQueueUseCase,
     QuoteResponseWorkflow,
     QuoteWorkflow,
-    RequestParsingAgent,
     ShipmentWorkflow,
     StaleRequestEscalator,
     TrackingSimulator,
 )
-from qinora.application.ports import RequestParsingLLM, ShipmentWriteRepository
+from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
-from qinora.infrastructure.llm import LangChainRequestParsingLLM, StubRequestParsingLLM
 from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
     PostgresAgentConfigRepository,
@@ -40,7 +38,7 @@ from qinora.infrastructure.postgres import (
     PostgresStaleRequestRepository,
     PostgresWebhookEventRepository,
 )
-from qinora.infrastructure.settings import LLMProvider, PersistenceDriver, Settings
+from qinora.infrastructure.settings import PersistenceDriver, Settings
 from qinora.infrastructure.sqlite import (
     SQLiteAgentConfigRepository,
     SQLiteAgentLogWriteRepository,
@@ -81,19 +79,6 @@ class AppContainer:
     stale_request_escalator: StaleRequestEscalator
     tracking_simulator: TrackingSimulator
     shipment_repository: ShipmentWriteRepository
-    request_parsing_agent: RequestParsingAgent
-
-
-def build_request_parsing_llm(settings: Settings) -> RequestParsingLLM:
-    """Selects the RequestParsingLLM implementation per LLM_PROVIDER.
-
-    Defaults to the deterministic stub so the app runs without any Azure
-    OpenAI credentials. Set LLM_PROVIDER=azure_openai once real credentials
-    are available (see .env.example / infrastructure/settings.py).
-    """
-    if settings.llm_provider is LLMProvider.AZURE_OPENAI:
-        return LangChainRequestParsingLLM(settings)
-    return StubRequestParsingLLM()
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -135,11 +120,6 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     )
     quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
-    request_parsing_agent = RequestParsingAgent(
-        build_request_parsing_llm(settings),
-        create_request,
-        SQLiteAgentLogWriteRepository(database),
-    )
 
     return AppContainer(
         settings=settings,
@@ -184,7 +164,6 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             invoice_audit,
         ),
         shipment_repository=shipment_repository,
-        request_parsing_agent=request_parsing_agent,
     )
 
 
@@ -223,11 +202,6 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     )
     quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
-    request_parsing_agent = RequestParsingAgent(
-        build_request_parsing_llm(settings),
-        create_request,
-        PostgresAgentLogWriteRepository(database),
-    )
 
     return AppContainer(
         settings=settings,
@@ -272,5 +246,4 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             invoice_audit,
         ),
         shipment_repository=shipment_repository,
-        request_parsing_agent=request_parsing_agent,
     )

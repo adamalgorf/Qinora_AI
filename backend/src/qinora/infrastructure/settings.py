@@ -9,18 +9,6 @@ class PersistenceDriver(StrEnum):
     POSTGRES = "postgres"
 
 
-class LLMProvider(StrEnum):
-    """Which backend implements the LLM-facing ports (e.g. RequestParsingLLM).
-
-    STUB requires no credentials and is the default so the app keeps
-    working out of the box. Switch to AZURE_OPENAI once real Azure OpenAI
-    credentials are available (see AZURE_OPENAI_* below).
-    """
-
-    STUB = "stub"
-    AZURE_OPENAI = "azure_openai"
-
-
 @dataclass(frozen=True)
 class Settings:
     email_webhook_secret: str
@@ -29,11 +17,6 @@ class Settings:
     persistence_driver: PersistenceDriver
     database_url: str | None
     postgres_tenant_id: str
-    llm_provider: LLMProvider
-    azure_openai_endpoint: str | None
-    azure_openai_api_key: str | None
-    azure_openai_deployment: str | None
-    azure_openai_api_version: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -47,9 +30,4 @@ class Settings:
                 "QINORA_POSTGRES_TENANT_ID",
                 "00000000-0000-0000-0000-000000000001",
             ),
-            llm_provider=LLMProvider(os.getenv("LLM_PROVIDER", "stub")),
-            azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-            azure_openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
         )
