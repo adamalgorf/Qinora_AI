@@ -27,6 +27,7 @@ def test_postgres_container_requires_database_url(tmp_path: Path) -> None:
         persistence_driver=PersistenceDriver.POSTGRES,
         database_url=None,
         postgres_tenant_id="11111111-1111-1111-1111-111111111111",
+        cors_allowed_origins=("*",),
     )
 
     with pytest.raises(RuntimeError, match="DATABASE_URL is required"):

@@ -1,15 +1,10 @@
-databases:
-  - name: qinora-db
-    plan: starter
-    postgresMajorVersion: "16"
-
 services:
-  - type: pserv
-    name: backend
+  - type: web
+    name: qinora-backend
     env: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    plan: free
     envVars:
       - key: EMAIL_WEBHOOK_SECRET
         generateValue: true
@@ -19,14 +14,25 @@ services:
         value: postgres
       - key: QINORA_POSTGRES_TENANT_ID
         value: "00000000-0000-0000-0000-000000000001"
+      # Paste the connection string from your Supabase project's
+      # Project Settings -> Database -> Connection string (URI).
       - key: DATABASE_URL
-        fromDatabase:
-          name: qinora-db
-          property: connectionString
+        sync: false
+      # Fill in once the frontend static site's URL is known (see below).
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
 
   - type: web
-    name: frontend
-    env: docker
-    dockerfilePath: ./frontend/Dockerfile
-    dockerContext: .
-    plan: starter
+    name: qinora-frontend
+    env: static
+    buildCommand: npm ci && npm run build -w @qinora/frontend
+    staticPublishPath: frontend/dist
+    envVars:
+      # Fill in once the backend service's URL is known, e.g.
+      # https://qinora-backend.onrender.com (no trailing slash, no /api).
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -17,6 +17,7 @@ class Settings:
     persistence_driver: PersistenceDriver
     database_url: str | None
     postgres_tenant_id: str
+    cors_allowed_origins: tuple[str, ...]
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -29,5 +30,10 @@ class Settings:
             postgres_tenant_id=os.getenv(
                 "QINORA_POSTGRES_TENANT_ID",
                 "00000000-0000-0000-0000-000000000001",
+            ),
+            cors_allowed_origins=tuple(
+                origin.strip()
+                for origin in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
+                if origin.strip()
             ),
         )

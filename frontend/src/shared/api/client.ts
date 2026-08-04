@@ -324,8 +324,10 @@ export function clearAuthToken(): void {
   window.localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     headers: jsonHeaders(),
   });
 
@@ -337,7 +339,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export async function apiPost<TResponse, TPayload>(path: string, payload: TPayload): Promise<TResponse> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(payload),
