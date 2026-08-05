@@ -42,6 +42,14 @@ export type TokenResponse = {
   user: AuthMe;
 };
 
+export type AuthConfig = {
+  login_required: boolean;
+};
+
+export type LoginPayload = {
+  password: string;
+};
+
 export type RequestListItem = {
   id: string;
   public_id: string;

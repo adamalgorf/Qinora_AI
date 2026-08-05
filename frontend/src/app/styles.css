@@ -869,3 +869,42 @@ tbody tr.highlight-row:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.login-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-card {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: linear-gradient(180deg, hsl(222 38% 10% / 0.96), hsl(222 47% 6% / 0.96));
+  padding: 28px;
+  box-shadow: var(--shadow-soft);
+}
+
+.login-card input {
+  min-height: 42px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background) / 0.68);
+  color: hsl(var(--foreground));
+  padding: 0 12px;
+  outline: 0;
+}
+
+.login-card input:focus {
+  border-color: hsl(var(--ring));
+  outline: 3px solid hsl(var(--ring) / 0.16);
+}
+
+.login-error {
+  color: hsl(0 84% 65%);
+  font-size: 0.84rem;
+}

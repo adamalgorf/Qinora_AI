@@ -18,6 +18,7 @@ class Settings:
     database_url: str | None
     postgres_tenant_id: str
     cors_allowed_origins: tuple[str, ...]
+    app_password: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -36,4 +37,5 @@ class Settings:
                 for origin in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
                 if origin.strip()
             ),
+            app_password=os.getenv("QINORA_APP_PASSWORD") or None,
         )

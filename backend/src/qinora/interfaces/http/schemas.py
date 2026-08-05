@@ -37,6 +37,14 @@ class TokenResponse(BaseModel):
     user: AuthMeResponse
 
 
+class AuthConfigResponse(BaseModel):
+    login_required: bool
+
+
+class LoginRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
 class KpiItem(BaseModel):
     label: str
     value: str

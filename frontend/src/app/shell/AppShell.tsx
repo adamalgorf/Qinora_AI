@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,11 +22,14 @@ import {
   clearAuthToken,
   getAuthToken,
   setAuthToken,
+  type AuthConfig,
   type AuthMe,
   type DevTokenPayload,
+  type LoginPayload,
   type SearchResultItem,
   type TokenResponse,
 } from "@/shared/api/client";
+import { LoginScreen } from "./LoginScreen";
 
 const navItems = [
   { label: "Tower", href: "/", icon: Activity },
@@ -42,11 +45,35 @@ const navItems = [
 
 export function AppShell() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const normalizedSearchTerm = searchTerm.trim();
+
+  const configQuery = useQuery({
+    queryKey: ["auth-config"],
+    queryFn: () => apiGet<AuthConfig>("/auth/config"),
+  });
+  const loginRequired = configQuery.data?.login_required ?? false;
+
   const authQuery = useQuery({
-    queryKey: ["auth-me"],
+    queryKey: ["auth-me", loginRequired],
+    enabled: configQuery.isSuccess,
     queryFn: async () => {
+      if (loginRequired) {
+        if (!getAuthToken()) {
+          return null;
+        }
+        try {
+          return await apiGet<AuthMe>("/auth/me");
+        } catch (error) {
+          if (isUnauthorized(error)) {
+            clearAuthToken();
+            return null;
+          }
+          throw error;
+        }
+      }
+
       const currentUser = await getCurrentUser();
       if (getAuthToken()) {
         return currentUser;
@@ -61,6 +88,16 @@ export function AppShell() {
       return session.user;
     },
   });
+
+  const loginMutation = useMutation({
+    mutationFn: (password: string) =>
+      apiPost<TokenResponse, LoginPayload>("/auth/login", { password }),
+    onSuccess: (session) => {
+      setAuthToken(session.access_token);
+      queryClient.setQueryData(["auth-me", true], session.user);
+    },
+  });
+
   const searchQuery = useQuery({
     queryKey: ["global-search", normalizedSearchTerm],
     queryFn: () =>
@@ -83,6 +120,20 @@ export function AppShell() {
   function selectSearchResult(result: SearchResultItem) {
     navigate(result.href);
     setSearchTerm("");
+  }
+
+  if (configQuery.isLoading || authQuery.isLoading) {
+    return null;
+  }
+
+  if (loginRequired && !authQuery.data) {
+    return (
+      <LoginScreen
+        error={loginMutation.isError ? "Fel lösenord." : null}
+        isSubmitting={loginMutation.isPending}
+        onSubmit={(password) => loginMutation.mutate(password)}
+      />
+    );
   }
 
   return (
