@@ -2,7 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   apiGet,
   apiPost,
@@ -177,19 +186,23 @@ export function QuotesPage() {
       title="Quotes"
     >
       <form className="request-form" onSubmit={submitQuote}>
-        <select
-          aria-label="Request ID"
+        <Select
           disabled={requestsQuery.isLoading || !quotableRequests.length}
           value={form.requestId}
-          onChange={(event) => setForm((current) => ({ ...current, requestId: event.target.value }))}
+          onValueChange={(value) => setForm((current) => ({ ...current, requestId: value }))}
         >
-          {quotableRequests.map((request) => (
-            <option key={request.id} value={request.id}>
-              {request.public_id} - {request.customer} - {request.lane}
-            </option>
-          ))}
-        </select>
-        <input
+          <SelectTrigger aria-label="Request ID">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {quotableRequests.map((request) => (
+              <SelectItem key={request.id} value={request.id}>
+                {request.public_id} - {request.customer} - {request.lane}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
           aria-label="Customer price"
           inputMode="decimal"
           value={form.customerPrice}
@@ -197,7 +210,7 @@ export function QuotesPage() {
             setForm((current) => ({ ...current, customerPrice: event.target.value }))
           }
         />
-        <input
+        <Input
           aria-label="Currency"
           value={form.currency}
           onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))}
@@ -206,7 +219,11 @@ export function QuotesPage() {
           {createMutation.isPending ? "Creating..." : "Create quote"}
         </Button>
       </form>
-      {error ? <p className="form-feedback">{error}</p> : null}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <DataTable
         columns={[
           { key: "id", label: "ID" },
@@ -227,6 +244,7 @@ export function QuotesPage() {
           },
           {
             key: "id",
+            id: "action",
             label: "Action",
             render: (value, row) =>
               row.status === "draft" || row.status === "revised"
@@ -253,7 +271,7 @@ export function QuotesPage() {
       <section className="quote-detail-panel" aria-label="Quote detail">
         <div className="queue-panel-header">
           <h3>Commercial timeline</h3>
-          <span className="muted">{detailQuery.data?.quote.status ?? "No quote selected"}</span>
+          <span className="text-sm text-muted-foreground">{detailQuery.data?.quote.status ?? "No quote selected"}</span>
         </div>
         <div className="quote-detail-grid">
           <div>
@@ -271,7 +289,7 @@ export function QuotesPage() {
                 </div>
               ))}
               {!detailQuery.isLoading && (detailQuery.data?.line_items ?? []).length === 0 ? (
-                <p className="muted">No line items.</p>
+                <p className="text-sm text-muted-foreground">No line items.</p>
               ) : null}
             </div>
           </div>
@@ -287,7 +305,7 @@ export function QuotesPage() {
               ))}
               {!detailQuery.isLoading &&
               (detailQuery.data?.acceptance_events ?? []).length === 0 ? (
-                <p className="muted">No commercial events yet.</p>
+                <p className="text-sm text-muted-foreground">No commercial events yet.</p>
               ) : null}
             </div>
           </div>
@@ -384,7 +402,7 @@ export function QuotesPage() {
             </div>
           ))}
           {!outboundQuery.isLoading && (outboundQuery.data ?? []).length === 0 ? (
-            <p className="muted">No queued replies.</p>
+            <p className="text-sm text-muted-foreground">No queued replies.</p>
           ) : null}
         </div>
       </section>

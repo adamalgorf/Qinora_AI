@@ -11,10 +11,32 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import {
   apiGet,
   apiPost,
@@ -44,7 +66,9 @@ const navItems = [
 
 export function AppShell() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const normalizedSearchTerm = searchTerm.trim();
 
@@ -105,20 +129,21 @@ export function AppShell() {
   });
 
   useEffect(() => {
-    function focusGlobalSearch(event: KeyboardEvent) {
+    function toggleSearch(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        document.getElementById("global-search")?.focus();
+        setSearchOpen((open) => !open);
       }
     }
 
-    window.addEventListener("keydown", focusGlobalSearch);
-    return () => window.removeEventListener("keydown", focusGlobalSearch);
+    window.addEventListener("keydown", toggleSearch);
+    return () => window.removeEventListener("keydown", toggleSearch);
   }, []);
 
   function selectSearchResult(result: SearchResultItem) {
     navigate(result.href);
     setSearchTerm("");
+    setSearchOpen(false);
   }
 
   if (configQuery.isLoading || authQuery.isLoading) {
@@ -135,66 +160,100 @@ export function AppShell() {
     );
   }
 
+  const searchResults = searchQuery.data ?? [];
+
   return (
-    <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
-        <div className="brand">
-          <span className="brand-mark">Q</span>
-          <span>QiNora</span>
-        </div>
-        <div className="global-search">
-          <Search aria-hidden="true" size={16} />
-          <input
-            id="global-search"
-            aria-label="Search QiNora"
-            autoComplete="off"
-            placeholder="Search QiNora"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-          <kbd>Ctrl K</kbd>
-        </div>
-        {normalizedSearchTerm.length >= 2 ? (
-          <div className="search-results" role="listbox" aria-label="Search results">
-            {searchQuery.isLoading ? <p className="muted">Searching...</p> : null}
-            {(searchQuery.data ?? []).map((result) => (
-              <button
-                key={`${result.entity_type}-${result.id}`}
-                type="button"
-                role="option"
-                onClick={() => selectSearchResult(result)}
-              >
-                <span>{result.entity_type}</span>
-                <strong>{result.label}</strong>
-                <small>{result.description}</small>
-              </button>
-            ))}
-            {!searchQuery.isLoading && (searchQuery.data ?? []).length === 0 ? (
-              <p className="muted">No matches.</p>
-            ) : null}
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <div className="brand">
+            <span className="brand-mark">Q</span>
+            <span className="group-data-[collapsible=icon]:hidden">QiNora</span>
           </div>
-        ) : null}
-        <nav className="nav-list">
-          {navItems.map((item) => (
-            <Button
-              asChild
-              className="nav-item"
-              key={item.label}
-              title={item.label}
-              variant="ghost"
-            >
-              <NavLink to={item.href}>
-                <item.icon aria-hidden="true" size={18} />
-                <span>{item.label}</span>
-              </NavLink>
-            </Button>
-          ))}
-        </nav>
-      </aside>
-      <main className="main-surface">
-        <Outlet />
-      </main>
-    </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location.pathname === item.href}
+                      tooltip={item.label}
+                    >
+                      <NavLink to={item.href}>
+                        <item.icon aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+      <SidebarInset>
+        <header className="app-header">
+          <SidebarTrigger />
+          <Button
+            className="search-trigger"
+            onClick={() => setSearchOpen(true)}
+            variant="outline"
+          >
+            <Search aria-hidden="true" size={16} />
+            <span>Search QiNora</span>
+            <kbd>Ctrl K</kbd>
+          </Button>
+        </header>
+        <main className="main-surface">
+          <Outlet />
+        </main>
+      </SidebarInset>
+      <Dialog onOpenChange={setSearchOpen} open={searchOpen}>
+        <DialogContent className="overflow-hidden p-0">
+          <Command shouldFilter={false}>
+            <CommandInput
+              onValueChange={setSearchTerm}
+              placeholder="Search QiNora"
+              value={searchTerm}
+            />
+            <CommandList>
+              {searchQuery.isLoading ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  Searching...
+                </div>
+              ) : null}
+              {!searchQuery.isLoading && normalizedSearchTerm.length >= 2 ? (
+                <CommandEmpty>No matches.</CommandEmpty>
+              ) : null}
+              {searchResults.length > 0 ? (
+                <CommandGroup heading="Results">
+                  {searchResults.map((result) => (
+                    <CommandItem
+                      key={`${result.entity_type}-${result.id}`}
+                      onSelect={() => selectSearchResult(result)}
+                      value={`${result.entity_type}-${result.id}`}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {result.entity_type}
+                        </span>
+                        <span className="font-medium">{result.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {result.description}
+                        </span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
+            </CommandList>
+          </Command>
+        </DialogContent>
+      </Dialog>
+    </SidebarProvider>
   );
 }
 

@@ -3,7 +3,17 @@ import { ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   apiGet,
   apiPost,
@@ -131,7 +141,11 @@ export function ShipmentsPage() {
         loading={query.isLoading}
         rows={query.data}
       />
-      {error ? <p className="form-feedback">{error}</p> : null}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="quote-actions">
         <Button
           disabled={trackingMutation.isPending}
@@ -191,48 +205,54 @@ export function ShipmentsPage() {
             <strong>Record an audited shipment exception</strong>
           </div>
         </div>
-        <label>
-          Shipment
-          <select
-            aria-label="Override shipment"
+        <div className="grid gap-1.5">
+          <Label htmlFor="override-shipment">Shipment</Label>
+          <Select
             value={overrideForm.shipmentId}
-            onChange={(event) =>
-              setOverrideForm((current) => ({ ...current, shipmentId: event.target.value }))
+            onValueChange={(value) =>
+              setOverrideForm((current) => ({ ...current, shipmentId: value }))
             }
           >
-            {(query.data ?? []).map((shipment) => (
-              <option key={shipment.id} value={shipment.id}>
-                {shipment.public_id} - {shipment.status}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Status
-          <select
-            aria-label="Override status"
+            <SelectTrigger id="override-shipment">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(query.data ?? []).map((shipment) => (
+                <SelectItem key={shipment.id} value={shipment.id}>
+                  {shipment.public_id} - {shipment.status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="override-status">Status</Label>
+          <Select
             value={overrideForm.status}
-            onChange={(event) =>
-              setOverrideForm((current) => ({ ...current, status: event.target.value }))
-            }
+            onValueChange={(value) => setOverrideForm((current) => ({ ...current, status: value }))}
           >
-            <option value="needs_review">Needs review</option>
-            <option value="manual_review">Manual review</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="booked">Booked</option>
-            <option value="in_transit">In transit</option>
-          </select>
-        </label>
-        <label className="override-reason">
-          Reason
-          <input
-            aria-label="Override reason"
+            <SelectTrigger id="override-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="needs_review">Needs review</SelectItem>
+              <SelectItem value="manual_review">Manual review</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="booked">Booked</SelectItem>
+              <SelectItem value="in_transit">In transit</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="override-reason grid gap-1.5">
+          <Label htmlFor="override-reason">Reason</Label>
+          <Input
+            id="override-reason"
             value={overrideForm.reason}
             onChange={(event) =>
               setOverrideForm((current) => ({ ...current, reason: event.target.value }))
             }
           />
-        </label>
+        </div>
         <Button disabled={overrideMutation.isPending} type="submit" variant="secondary">
           {overrideMutation.isPending ? "Recording..." : "Record override"}
         </Button>

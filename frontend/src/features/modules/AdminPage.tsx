@@ -1,7 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Power } from "lucide-react";
+import { Bot } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   apiGet,
   apiPost,
@@ -62,38 +74,34 @@ export function AdminPage() {
                 <span>{agent.agent_key}</span>
                 <strong>{agent.agent_name}</strong>
               </div>
-              <label className="agent-toggle">
-                <input
-                  aria-label={`Enable ${agent.agent_name}`}
-                  checked={agent.is_enabled}
-                  type="checkbox"
-                  onChange={(event) =>
-                    patchConfig(agent, { is_enabled: event.currentTarget.checked })
-                  }
-                />
-                <Power aria-hidden="true" />
-              </label>
+              <Switch
+                aria-label={`Enable ${agent.agent_name}`}
+                checked={agent.is_enabled}
+                onCheckedChange={(checked) => patchConfig(agent, { is_enabled: checked })}
+              />
             </div>
-            <label>
-              Auto Mode
-              <select
-                aria-label={`${agent.agent_name} auto mode`}
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${agent.agent_key}-auto-mode`}>Auto Mode</Label>
+              <Select
                 value={agent.auto_mode}
-                onChange={(event) =>
-                  patchConfig(agent, {
-                    auto_mode: event.currentTarget.value as AgentConfigItem["auto_mode"],
-                  })
+                onValueChange={(value) =>
+                  patchConfig(agent, { auto_mode: value as AgentConfigItem["auto_mode"] })
                 }
               >
-                <option value="manual">Manual</option>
-                <option value="assisted">Assisted</option>
-                <option value="guarded_auto">Guarded Auto</option>
-              </select>
-            </label>
-            <label>
-              Min confidence
-              <input
-                aria-label={`${agent.agent_name} min confidence`}
+                <SelectTrigger id={`${agent.agent_key}-auto-mode`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="assisted">Assisted</SelectItem>
+                  <SelectItem value="guarded_auto">Guarded Auto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${agent.agent_key}-min-confidence`}>Min confidence</Label>
+              <Input
+                id={`${agent.agent_key}-min-confidence`}
                 max="1"
                 min="0"
                 step="0.01"
@@ -103,13 +111,19 @@ export function AdminPage() {
                   patchConfig(agent, { min_confidence: Number(event.currentTarget.value) })
                 }
               />
-            </label>
+            </div>
           </section>
         ))}
       </div>
-      {configsQuery.isLoading ? <p className="muted">Loading agent configs...</p> : null}
+      {configsQuery.isLoading ? (
+        <div className="grid gap-2">
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : null}
       {updateConfig.isError ? (
-        <p className="form-feedback">Agent config update failed.</p>
+        <Alert variant="destructive">
+          <AlertDescription>Agent config update failed.</AlertDescription>
+        </Alert>
       ) : null}
       <div className="queue-panel">
         <div className="queue-panel-header">

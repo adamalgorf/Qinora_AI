@@ -3,7 +3,17 @@ import { Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   apiGet,
   apiPost,
@@ -125,55 +135,59 @@ export function RequestsPage() {
             </div>
           </div>
           <div className="request-grid">
-            <label>
-              Customer
-              <input
-                aria-label="Customer"
+            <div className="grid gap-1.5">
+              <Label htmlFor="request-customer">Customer</Label>
+              <Input
+                id="request-customer"
                 value={form.customer}
                 onChange={(event) => updateField("customer", event.target.value)}
               />
-            </label>
-            <label>
-              Origin
-              <input
-                aria-label="Origin"
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="request-origin">Origin</Label>
+              <Input
+                id="request-origin"
                 value={form.origin}
                 onChange={(event) => updateField("origin", event.target.value)}
               />
-            </label>
-            <label>
-              Destination
-              <input
-                aria-label="Destination"
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="request-destination">Destination</Label>
+              <Input
+                id="request-destination"
                 value={form.destination}
                 onChange={(event) => updateField("destination", event.target.value)}
               />
-            </label>
-            <label>
-              Mode
-              <select
-                aria-label="Mode"
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="request-mode">Mode</Label>
+              <Select
                 value={form.mode}
-                onChange={(event) =>
-                  updateField("mode", event.target.value as CreateRequestPayload["mode"])
+                onValueChange={(value) =>
+                  updateField("mode", value as CreateRequestPayload["mode"])
                 }
               >
-                <option value="ltl">LTL</option>
-                <option value="ftl">FTL</option>
-                <option value="air">Air</option>
-                <option value="ocean">Ocean</option>
-                <option value="rail">Rail</option>
-                <option value="intermodal">Intermodal</option>
-              </select>
-            </label>
-            <label>
-              Loading time
-              <input
-                aria-label="Loading time"
+                <SelectTrigger id="request-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ltl">LTL</SelectItem>
+                  <SelectItem value="ftl">FTL</SelectItem>
+                  <SelectItem value="air">Air</SelectItem>
+                  <SelectItem value="ocean">Ocean</SelectItem>
+                  <SelectItem value="rail">Rail</SelectItem>
+                  <SelectItem value="intermodal">Intermodal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="request-loading-time">Loading time</Label>
+              <Input
+                id="request-loading-time"
                 value={form.loadingTime}
                 onChange={(event) => updateField("loadingTime", event.target.value)}
               />
-            </label>
+            </div>
           </div>
         </div>
 
@@ -191,61 +205,61 @@ export function RequestsPage() {
           <div className="cargo-lines">
             {cargoLines.map((line, index) => (
               <div className="cargo-line" key={line.id}>
-                <label className="cargo-description">
-                  Description
-                  <input
-                    aria-label={`Cargo ${index + 1} description`}
+                <div className="cargo-description grid gap-1.5">
+                  <Label htmlFor={`cargo-${line.id}-description`}>Description</Label>
+                  <Input
+                    id={`cargo-${line.id}-description`}
                     value={line.description}
                     onChange={(event) =>
                       updateCargoLine(line.id, "description", event.target.value)
                     }
                   />
-                </label>
-                <label>
-                  Qty
-                  <input
-                    aria-label={`Cargo ${index + 1} quantity`}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`cargo-${line.id}-quantity`}>Qty</Label>
+                  <Input
+                    id={`cargo-${line.id}-quantity`}
                     inputMode="numeric"
                     value={line.quantity}
                     onChange={(event) => updateCargoLine(line.id, "quantity", event.target.value)}
                   />
-                </label>
-                <label>
-                  Kg
-                  <input
-                    aria-label={`Cargo ${index + 1} weight`}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`cargo-${line.id}-weight`}>Kg</Label>
+                  <Input
+                    id={`cargo-${line.id}-weight`}
                     inputMode="decimal"
                     value={line.weightKg}
                     onChange={(event) => updateCargoLine(line.id, "weightKg", event.target.value)}
                   />
-                </label>
-                <label>
-                  L cm
-                  <input
-                    aria-label={`Cargo ${index + 1} length`}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`cargo-${line.id}-length`}>L cm</Label>
+                  <Input
+                    id={`cargo-${line.id}-length`}
                     inputMode="decimal"
                     value={line.lengthCm}
                     onChange={(event) => updateCargoLine(line.id, "lengthCm", event.target.value)}
                   />
-                </label>
-                <label>
-                  W cm
-                  <input
-                    aria-label={`Cargo ${index + 1} width`}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`cargo-${line.id}-width`}>W cm</Label>
+                  <Input
+                    id={`cargo-${line.id}-width`}
                     inputMode="decimal"
                     value={line.widthCm}
                     onChange={(event) => updateCargoLine(line.id, "widthCm", event.target.value)}
                   />
-                </label>
-                <label>
-                  H cm
-                  <input
-                    aria-label={`Cargo ${index + 1} height`}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`cargo-${line.id}-height`}>H cm</Label>
+                  <Input
+                    id={`cargo-${line.id}-height`}
                     inputMode="decimal"
                     value={line.heightCm}
                     onChange={(event) => updateCargoLine(line.id, "heightCm", event.target.value)}
                   />
-                </label>
+                </div>
                 <Button
                   aria-label={`Remove cargo ${index + 1}`}
                   disabled={cargoLines.length === 1}
@@ -268,13 +282,21 @@ export function RequestsPage() {
         </div>
       </form>
       {createMutation.data?.review_reason ? (
-        <p className="form-feedback">{createMutation.data.review_reason}</p>
+        <Alert variant="destructive">
+          <AlertDescription>{createMutation.data.review_reason}</AlertDescription>
+        </Alert>
       ) : null}
       {createMutation.data?.complete ? (
-        <p className="form-success">Request parsed and ready for quoting.</p>
+        <Alert>
+          <AlertDescription>Request parsed and ready for quoting.</AlertDescription>
+        </Alert>
       ) : null}
       {createMutation.error ? (
-        <p className="form-feedback">{createMutation.error.detail ?? createMutation.error.title}</p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            {createMutation.error.detail ?? createMutation.error.title}
+          </AlertDescription>
+        </Alert>
       ) : null}
       <DataTable
         columns={[

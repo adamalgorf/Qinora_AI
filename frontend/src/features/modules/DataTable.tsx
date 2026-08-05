@@ -1,9 +1,22 @@
 import { useEffect, useRef } from "react";
 
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+
 type DataTableProps<T extends Record<string, unknown>> = {
   rows: T[] | undefined;
   columns: Array<{
     key: keyof T;
+    /** Overrides the React key when two columns share the same data `key`. */
+    id?: string;
     label: string;
     render?: (value: T[keyof T], row: T) => string;
   }>;
@@ -31,51 +44,55 @@ export function DataTable<T extends Record<string, unknown>>({
   }, [highlightId, rows]);
 
   if (loading) {
-    return <p className="muted">Syncing with backend...</p>;
+    return (
+      <div className="grid gap-2">
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+    );
   }
 
   if (!rows?.length) {
-    return <p className="muted">No records yet.</p>;
+    return <p className="text-sm text-muted-foreground">No records yet.</p>;
   }
 
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={String(column.key)}>{column.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => {
-            const rowKey = String(row.id ?? index);
-            const publicId = String(row.public_id ?? "");
-            const isHighlighted = Boolean(
-              highlightId && (rowKey === highlightId || publicId === highlightId),
-            );
+    <Table>
+      <TableHeader>
+        <TableRow>
+          {columns.map((column) => (
+            <TableHead key={column.id ?? String(column.key)}>{column.label}</TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row, index) => {
+          const rowKey = String(row.id ?? index);
+          const publicId = String(row.public_id ?? "");
+          const isHighlighted = Boolean(
+            highlightId && (rowKey === highlightId || publicId === highlightId),
+          );
 
-            return (
-              <tr
-                aria-current={isHighlighted ? "true" : undefined}
-                className={isHighlighted ? "highlight-row" : undefined}
-                key={rowKey}
-                ref={isHighlighted ? highlightedRowRef : undefined}
-              >
-                {columns.map((column) => {
-                  const value = row[column.key];
-                  return (
-                    <td key={String(column.key)}>
-                      {column.render ? column.render(value, row) : String(value ?? "")}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+          return (
+            <TableRow
+              aria-current={isHighlighted ? "true" : undefined}
+              className={cn(isHighlighted && "bg-accent/40")}
+              key={rowKey}
+              ref={isHighlighted ? highlightedRowRef : undefined}
+            >
+              {columns.map((column) => {
+                const value = row[column.key];
+                return (
+                  <TableCell key={column.id ?? String(column.key)}>
+                    {column.render ? column.render(value, row) : String(value ?? "")}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

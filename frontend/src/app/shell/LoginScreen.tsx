@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type LoginScreenProps = {
   error: string | null;
@@ -20,26 +23,40 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
 
   return (
     <div className="login-screen">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <div className="brand">
-          <span className="brand-mark">Q</span>
-          <span>QiNora</span>
-        </div>
-        <p className="muted">Ange lösenordet för att fortsätta.</p>
-        <input
-          autoComplete="current-password"
-          autoFocus
-          aria-label="Password"
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Lösenord"
-          type="password"
-          value={password}
-        />
-        {error ? <p className="login-error">{error}</p> : null}
-        <Button disabled={isSubmitting || password.trim().length === 0} type="submit">
-          {isSubmitting ? "Loggar in..." : "Logga in"}
-        </Button>
-      </form>
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <div className="brand">
+            <span className="brand-mark">Q</span>
+            <span>QiNora</span>
+          </div>
+          <CardTitle>Welcome back</CardTitle>
+          <CardDescription>Ange lösenordet för att fortsätta.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={handleSubmit}>
+            <div className="grid gap-2">
+              <Label htmlFor="login-password">Password</Label>
+              <Input
+                autoComplete="current-password"
+                autoFocus
+                id="login-password"
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Lösenord"
+                type="password"
+                value={password}
+              />
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <Button
+              className="w-full"
+              disabled={isSubmitting || password.trim().length === 0}
+              type="submit"
+            >
+              {isSubmitting ? "Loggar in..." : "Logga in"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

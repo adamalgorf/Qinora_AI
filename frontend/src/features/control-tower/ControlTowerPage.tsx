@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   apiGet,
   apiPost,
@@ -105,7 +106,7 @@ export function ControlTowerPage() {
         </section>
       ) : null}
       {demoFlowMutation.error ? (
-        <p className="form-feedback">Demo flow could not be completed.</p>
+        <p className="text-sm text-destructive">Demo flow could not be completed.</p>
       ) : null}
 
       <div className="kpi-grid">
@@ -149,7 +150,10 @@ export function ControlTowerPage() {
           </CardHeader>
           <CardContent className="agent-list">
             {tasksQuery.isLoading ? (
-              <p className="muted">Syncing exceptions...</p>
+              <div className="grid gap-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
             ) : (
               tasks.map((task) => (
                 <div className="agent-row" key={task.id}>
@@ -173,7 +177,10 @@ export function ControlTowerPage() {
           </CardHeader>
           <CardContent className="agent-list">
             {summaryQuery.isLoading ? (
-              <p className="muted">Syncing with backend...</p>
+              <div className="grid gap-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
             ) : (
               (summary?.agentActivity ?? []).map((activity) => (
                 <div className="agent-row" key={`${activity.agent}-${activity.event}`}>
