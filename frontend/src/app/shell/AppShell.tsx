@@ -14,7 +14,6 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   apiGet,
@@ -142,10 +141,6 @@ export function AppShell() {
         <div className="brand">
           <span className="brand-mark">Q</span>
           <span>QiNora</span>
-        </div>
-        <div className="session-chip">
-          <span>{authQuery.data?.tenant_id ?? "dev-tenant"}</span>
-          <Badge variant="secondary">{authQuery.data?.roles[0] ?? "admin"}</Badge>
         </div>
         <div className="global-search">
           <Search aria-hidden="true" size={16} />
