@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from qinora.application import (
@@ -19,6 +20,7 @@ from qinora.application import (
 )
 from qinora.application.ports import ShipmentWriteRepository
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
+from qinora.infrastructure.migrations import iter_migration_files, run_migrations
 from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
     PostgresAgentConfigRepository,
@@ -170,6 +172,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
 def _build_postgres_container(settings: Settings) -> AppContainer:
     if settings.database_url is None:
         raise RuntimeError("DATABASE_URL is required when QINORA_PERSISTENCE=postgres")
+
+    run_migrations(settings.database_url, iter_migration_files(Path("migrations")))
 
     database = PostgresDatabase(settings.database_url, settings.postgres_tenant_id)
     dispatcher = RecordingAgentDispatcher()
