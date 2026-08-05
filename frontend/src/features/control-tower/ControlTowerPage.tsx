@@ -146,7 +146,7 @@ export function ControlTowerPage() {
         <Card className="agent-card">
           <CardHeader>
             <CardDescription>Exception feed</CardDescription>
-            <CardTitle className="text-xl">Open operational tasks</CardTitle>
+            <CardTitle>Open operational tasks</CardTitle>
           </CardHeader>
           <CardContent className="agent-list">
             {tasksQuery.isLoading ? (
@@ -173,7 +173,7 @@ export function ControlTowerPage() {
         <Card className="agent-card">
           <CardHeader>
             <CardDescription>Workflow activity</CardDescription>
-            <CardTitle className="text-xl">Latest automation decisions</CardTitle>
+            <CardTitle>Latest automation decisions</CardTitle>
           </CardHeader>
           <CardContent className="agent-list">
             {summaryQuery.isLoading ? (

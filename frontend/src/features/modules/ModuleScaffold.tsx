@@ -23,7 +23,7 @@ export function ModuleScaffold({ title, description, badge, children }: ModuleSc
       <Card className="data-card">
         <CardHeader>
           <CardDescription>Live API data</CardDescription>
-          <CardTitle className="text-xl">Operational records</CardTitle>
+          <CardTitle>Operational records</CardTitle>
         </CardHeader>
         <CardContent>{children}</CardContent>
       </Card>
