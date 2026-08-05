@@ -8,6 +8,7 @@ from qinora.application import DEFAULT_AGENT_CONFIGS
 from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
+    CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
     InboxRecord,
@@ -709,6 +710,75 @@ class PostgresRequestWriteRepository:
             status=status,
             weight_kg=total_weight,
         )
+
+
+class PostgresCarrierOfferWriteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_offer(
+        self,
+        *,
+        request_id: str,
+        carrier_name: str,
+        price: float | None,
+        currency: str | None,
+        transit_days: int | None,
+        notes: str | None,
+        confidence: float,
+    ) -> CarrierOfferRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.carrier_offers
+                  (tenant_id, request_id, carrier_name, price, currency, transit_days,
+                    notes, confidence)
+                values (%s, %s, %s, %s, %s, %s, %s, %s)
+                returning id, request_id, carrier_name, price, currency, transit_days,
+                  notes, confidence, created_at
+                """,
+                (
+                    self._database.tenant_id,
+                    request_id,
+                    carrier_name,
+                    price,
+                    currency,
+                    transit_days,
+                    notes,
+                    confidence,
+                ),
+            )
+            row = cursor.fetchone()
+        return _carrier_offer_from_postgres_row(row)
+
+    async def list_offers_for_request(self, request_id: str) -> list[CarrierOfferRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, request_id, carrier_name, price, currency, transit_days,
+                  notes, confidence, created_at
+                from public.carrier_offers
+                where tenant_id = %s and request_id = %s
+                order by created_at
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            rows = cursor.fetchall()
+        return [_carrier_offer_from_postgres_row(row) for row in rows]
+
+
+def _carrier_offer_from_postgres_row(row: dict[str, Any]) -> CarrierOfferRecord:
+    return CarrierOfferRecord(
+        id=str(row["id"]),
+        request_id=str(row["request_id"]),
+        carrier_name=row["carrier_name"],
+        price=float(row["price"]) if row["price"] is not None else None,
+        currency=row["currency"],
+        transit_days=row["transit_days"],
+        notes=row["notes"],
+        confidence=float(row["confidence"]),
+        created_at=row["created_at"].isoformat(),
+    )
 
 
 class PostgresStaleRequestRepository:

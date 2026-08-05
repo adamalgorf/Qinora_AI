@@ -3,9 +3,15 @@ from qinora.application.agent_config import (
     AgentAutoMode,
     AgentConfigService,
     UpdateAgentConfigCommand,
+    should_auto_act,
 )
 from qinora.application.auth import AuthContext, AuthorizationError, Role, require_any_role
 from qinora.application.booking_workflow import BookingResult, BookingWorkflow, BookQuoteCommand
+from qinora.application.carrier_offer_agent import (
+    CarrierOfferParsingAgent,
+    ParseCarrierOfferCommand,
+    ParseCarrierOfferResult,
+)
 from qinora.application.contact_matching import (
     ContactMatchingUseCase,
     MatchContactCommand,
@@ -55,6 +61,11 @@ from qinora.application.request_intake import (
     CreateRequestCommand,
     CreateRequestUseCase,
 )
+from qinora.application.request_parsing_agent import (
+    ParseFreeTextRequestCommand,
+    ParseFreeTextRequestResult,
+    RequestParsingAgent,
+)
 from qinora.application.shipment_workflow import ShipmentWorkflow, UpdateShipmentStatusCommand
 from qinora.application.stale_request_escalation import (
     EscalateStaleRequestsCommand,
@@ -76,6 +87,13 @@ __all__ = [
     "BookQuoteCommand",
     "BookingResult",
     "BookingWorkflow",
+    "CarrierOfferParsingAgent",
+    "ParseCarrierOfferCommand",
+    "ParseCarrierOfferResult",
+    "ParseFreeTextRequestCommand",
+    "ParseFreeTextRequestResult",
+    "RequestParsingAgent",
+    "should_auto_act",
     "EmailWebhookCommand",
     "EmailWebhookUseCase",
     "EscalateStaleRequestsCommand",

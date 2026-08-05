@@ -571,7 +571,7 @@ def test_agent_configs_can_be_listed_and_updated_by_admin(client: TestClient) ->
     assert listed.json()[0]["agent_key"]
 
     updated = client.post(
-        "/agents/intake_agent/config",
+        "/agents/request_parsing_agent/config",
         json={
             "is_enabled": False,
             "auto_mode": "guarded_auto",
@@ -581,20 +581,20 @@ def test_agent_configs_can_be_listed_and_updated_by_admin(client: TestClient) ->
 
     assert updated.status_code == 200
     body = updated.json()
-    assert body["agent_key"] == "intake_agent"
+    assert body["agent_key"] == "request_parsing_agent"
     assert body["is_enabled"] is False
     assert body["auto_mode"] == "guarded_auto"
     assert body["min_confidence"] == 0.91
 
     configs = client.get("/agents/configs").json()
-    intake = next(item for item in configs if item["agent_key"] == "intake_agent")
+    intake = next(item for item in configs if item["agent_key"] == "request_parsing_agent")
     assert intake["is_enabled"] is False
     assert intake["auto_mode"] == "guarded_auto"
 
 
 def test_agent_config_update_requires_admin_role(client: TestClient) -> None:
     response = client.post(
-        "/agents/intake_agent/config",
+        "/agents/request_parsing_agent/config",
         headers={"x-role": "4pl_tower"},
         json={
             "is_enabled": True,

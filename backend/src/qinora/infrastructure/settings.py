@@ -9,6 +9,11 @@ class PersistenceDriver(StrEnum):
     POSTGRES = "postgres"
 
 
+class LLMProvider(StrEnum):
+    STUB = "stub"
+    OPENAI = "openai"
+
+
 @dataclass(frozen=True)
 class Settings:
     email_webhook_secret: str
@@ -19,6 +24,9 @@ class Settings:
     postgres_tenant_id: str
     cors_allowed_origins: tuple[str, ...]
     app_password: str | None
+    llm_provider: LLMProvider
+    openai_api_key: str | None
+    openai_model: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -38,4 +46,7 @@ class Settings:
                 if origin.strip()
             ),
             app_password=os.getenv("QINORA_APP_PASSWORD") or None,
+            llm_provider=LLMProvider(os.getenv("LLM_PROVIDER", "stub")),
+            openai_api_key=os.getenv("OPENAI_API_KEY") or None,
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         )

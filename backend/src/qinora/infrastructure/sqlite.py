@@ -8,6 +8,7 @@ from qinora.application import DEFAULT_AGENT_CONFIGS
 from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
+    CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
     InboxRecord,
@@ -213,6 +214,18 @@ class SQLiteDatabase:
                   quote_id text not null,
                   intent text not null,
                   body_text text not null,
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists carrier_offers (
+                  id text primary key,
+                  request_id text not null,
+                  carrier_name text not null,
+                  price real,
+                  currency text,
+                  transit_days integer,
+                  notes text,
+                  confidence real not null,
                   created_at text not null default current_timestamp
                 );
                 """
@@ -484,6 +497,12 @@ class SQLiteDatabase:
         )
 
     def _seed_agent_configs(self, connection: sqlite3.Connection) -> None:
+        current_keys = tuple(config.agent_key for config in DEFAULT_AGENT_CONFIGS)
+        placeholders = ",".join("?" * len(current_keys))
+        connection.execute(
+            f"delete from agent_configs where agent_key not in ({placeholders})",
+            current_keys,
+        )
         for config in DEFAULT_AGENT_CONFIGS:
             connection.execute(
                 """
@@ -1027,6 +1046,73 @@ class SQLiteRequestWriteRepository:
             status=status,
             weight_kg=total_weight,
         )
+
+
+class SQLiteCarrierOfferWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_offer(
+        self,
+        *,
+        request_id: str,
+        carrier_name: str,
+        price: float | None,
+        currency: str | None,
+        transit_days: int | None,
+        notes: str | None,
+        confidence: float,
+    ) -> CarrierOfferRecord:
+        offer_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into carrier_offers
+                  (id, request_id, carrier_name, price, currency, transit_days, notes, confidence)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                returning id, request_id, carrier_name, price, currency, transit_days, notes,
+                  confidence, created_at
+                """,
+                (
+                    offer_id,
+                    request_id,
+                    carrier_name,
+                    price,
+                    currency,
+                    transit_days,
+                    notes,
+                    confidence,
+                ),
+            ).fetchone()
+        return _carrier_offer_from_sqlite_row(row)
+
+    async def list_offers_for_request(self, request_id: str) -> list[CarrierOfferRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select id, request_id, carrier_name, price, currency, transit_days, notes,
+                  confidence, created_at
+                from carrier_offers
+                where request_id = ?
+                order by created_at
+                """,
+                (request_id,),
+            ).fetchall()
+        return [_carrier_offer_from_sqlite_row(row) for row in rows]
+
+
+def _carrier_offer_from_sqlite_row(row: sqlite3.Row) -> CarrierOfferRecord:
+    return CarrierOfferRecord(
+        id=row["id"],
+        request_id=row["request_id"],
+        carrier_name=row["carrier_name"],
+        price=row["price"],
+        currency=row["currency"],
+        transit_days=row["transit_days"],
+        notes=row["notes"],
+        confidence=row["confidence"],
+        created_at=row["created_at"],
+    )
 
 
 class SQLiteStaleRequestRepository:

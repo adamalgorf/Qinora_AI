@@ -104,6 +104,71 @@ class CreateRequestResponse(BaseModel):
     adr_un_numbers: list[str]
 
 
+class ParseFreeTextRequestPayload(BaseModel):
+    customer: str = Field(min_length=1)
+    raw_text: str = Field(min_length=1, description="Free-text RFQ/request, e.g. an email body")
+
+
+class ParsedCargoLinePayload(BaseModel):
+    description: str
+    quantity: int | None = None
+    weight_kg: float | None = None
+    length_cm: float | None = None
+    width_cm: float | None = None
+    height_cm: float | None = None
+
+
+class ParsedRequestDraftPayload(BaseModel):
+    mode: str
+    origin: str
+    destination: str
+    cargo: list[ParsedCargoLinePayload]
+    loading_time: datetime | None
+    unloading_time: datetime | None
+    confidence: float
+    missing_fields: list[str]
+
+
+class ParseFreeTextRequestResponse(BaseModel):
+    draft: ParsedRequestDraftPayload
+    needs_human_review: bool
+    request: RequestListItem | None
+    agent_confidence: float
+
+
+class ParseCarrierOfferPayload(BaseModel):
+    raw_text: str = Field(min_length=1, description="Free-text carrier reply, e.g. an email body")
+
+
+class ParsedCarrierOfferPayload(BaseModel):
+    carrier_name: str
+    price: float | None = None
+    currency: str | None = None
+    transit_days: int | None = None
+    notes: str | None = None
+    confidence: float
+    missing_fields: list[str]
+
+
+class CarrierOfferItem(BaseModel):
+    id: str
+    request_id: str
+    carrier_name: str
+    price: float | None
+    currency: str | None
+    transit_days: int | None
+    notes: str | None
+    confidence: float
+    created_at: str
+
+
+class ParseCarrierOfferResponse(BaseModel):
+    draft: ParsedCarrierOfferPayload
+    needs_human_review: bool
+    offer: CarrierOfferItem | None
+    agent_confidence: float
+
+
 class QuoteListItem(BaseModel):
     id: str
     status: str

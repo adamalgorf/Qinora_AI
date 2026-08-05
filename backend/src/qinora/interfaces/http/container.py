@@ -5,6 +5,7 @@ from typing import Any
 from qinora.application import (
     AgentConfigService,
     BookingWorkflow,
+    CarrierOfferParsingAgent,
     ContactMatchingUseCase,
     CreateRequestUseCase,
     DemoFlowUseCase,
@@ -14,17 +15,32 @@ from qinora.application import (
     ProcessOutboundQueueUseCase,
     QuoteResponseWorkflow,
     QuoteWorkflow,
+    RequestParsingAgent,
     ShipmentWorkflow,
     StaleRequestEscalator,
     TrackingSimulator,
 )
-from qinora.application.ports import ShipmentWriteRepository
+from qinora.application.ports import (
+    CarrierOfferParsingLLM,
+    QuoteReplyInterpretationLLM,
+    RequestParsingLLM,
+    ShipmentWriteRepository,
+)
 from qinora.infrastructure.in_memory import RecordingAgentDispatcher
+from qinora.infrastructure.llm import (
+    OpenAICarrierOfferParsingLLM,
+    OpenAIQuoteReplyInterpretationLLM,
+    OpenAIRequestParsingLLM,
+    StubCarrierOfferParsingLLM,
+    StubQuoteReplyInterpretationLLM,
+    StubRequestParsingLLM,
+)
 from qinora.infrastructure.migrations import iter_migration_files, run_migrations
 from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
     PostgresAgentConfigRepository,
     PostgresAgentLogWriteRepository,
+    PostgresCarrierOfferWriteRepository,
     PostgresContactReadRepository,
     PostgresDatabase,
     PostgresInboundEmailRepository,
@@ -40,10 +56,11 @@ from qinora.infrastructure.postgres import (
     PostgresStaleRequestRepository,
     PostgresWebhookEventRepository,
 )
-from qinora.infrastructure.settings import PersistenceDriver, Settings
+from qinora.infrastructure.settings import LLMProvider, PersistenceDriver, Settings
 from qinora.infrastructure.sqlite import (
     SQLiteAgentConfigRepository,
     SQLiteAgentLogWriteRepository,
+    SQLiteCarrierOfferWriteRepository,
     SQLiteContactReadRepository,
     SQLiteDatabase,
     SQLiteInboundEmailRepository,
@@ -59,6 +76,24 @@ from qinora.infrastructure.sqlite import (
     SQLiteStaleRequestRepository,
     SQLiteWebhookEventRepository,
 )
+
+
+def build_request_parsing_llm(settings: Settings) -> RequestParsingLLM:
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAIRequestParsingLLM(settings)
+    return StubRequestParsingLLM()
+
+
+def build_carrier_offer_parsing_llm(settings: Settings) -> CarrierOfferParsingLLM:
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAICarrierOfferParsingLLM(settings)
+    return StubCarrierOfferParsingLLM()
+
+
+def build_quote_reply_interpretation_llm(settings: Settings) -> QuoteReplyInterpretationLLM:
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAIQuoteReplyInterpretationLLM(settings)
+    return StubQuoteReplyInterpretationLLM()
 
 
 @dataclass(frozen=True)
@@ -81,6 +116,8 @@ class AppContainer:
     stale_request_escalator: StaleRequestEscalator
     tracking_simulator: TrackingSimulator
     shipment_repository: ShipmentWriteRepository
+    request_parsing_agent: RequestParsingAgent
+    carrier_offer_agent: CarrierOfferParsingAgent
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -122,6 +159,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     )
     quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
+    agent_log_repository = SQLiteAgentLogWriteRepository(database)
 
     return AppContainer(
         settings=settings,
@@ -150,6 +188,9 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             quote_repository,
             quote_response_repository,
             booking_workflow,
+            build_quote_reply_interpretation_llm(settings),
+            agent_log_repository,
+            agent_config_service,
         ),
         booking_workflow=booking_workflow,
         shipment_workflow=shipment_workflow,
@@ -166,6 +207,18 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             invoice_audit,
         ),
         shipment_repository=shipment_repository,
+        request_parsing_agent=RequestParsingAgent(
+            build_request_parsing_llm(settings),
+            create_request,
+            agent_log_repository,
+            agent_config_service,
+        ),
+        carrier_offer_agent=CarrierOfferParsingAgent(
+            build_carrier_offer_parsing_llm(settings),
+            SQLiteCarrierOfferWriteRepository(database),
+            agent_log_repository,
+            agent_config_service,
+        ),
     )
 
 
@@ -206,6 +259,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     )
     quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
+    agent_log_repository = PostgresAgentLogWriteRepository(database)
 
     return AppContainer(
         settings=settings,
@@ -234,6 +288,9 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             quote_repository,
             quote_response_repository,
             booking_workflow,
+            build_quote_reply_interpretation_llm(settings),
+            agent_log_repository,
+            agent_config_service,
         ),
         booking_workflow=booking_workflow,
         shipment_workflow=shipment_workflow,
@@ -250,4 +307,16 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             invoice_audit,
         ),
         shipment_repository=shipment_repository,
+        request_parsing_agent=RequestParsingAgent(
+            build_request_parsing_llm(settings),
+            create_request,
+            agent_log_repository,
+            agent_config_service,
+        ),
+        carrier_offer_agent=CarrierOfferParsingAgent(
+            build_carrier_offer_parsing_llm(settings),
+            PostgresCarrierOfferWriteRepository(database),
+            agent_log_repository,
+            agent_config_service,
+        ),
     )

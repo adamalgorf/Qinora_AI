@@ -3,14 +3,18 @@ from typing import Protocol
 from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
+    CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
+    ParsedCarrierOfferDraft,
+    ParsedTransportRequestDraft,
     QuoteDetailRecord,
     QuoteRecord,
+    QuoteReplyInterpretation,
     QuoteResponseEventRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -75,6 +79,53 @@ class AgentConfigRepository(Protocol):
 
 class AgentDispatcher(Protocol):
     async def dispatch(self, *, event_type: str, entity_id: str) -> None:
+        pass
+
+
+class RequestParsingLLM(Protocol):
+    """Turns free text (e.g. an RFQ email body) into a structured draft
+    transport request. The only thing application code knows about the
+    "Parsek" agent - implementations live in infrastructure/llm/.
+    """
+
+    async def parse(self, *, raw_text: str) -> ParsedTransportRequestDraft:
+        pass
+
+
+class CarrierOfferParsingLLM(Protocol):
+    """Turns free text (a carrier's reply to a booking request) into a
+    structured draft offer - the "Remy Rates" agent's only LLM dependency.
+    """
+
+    async def parse(self, *, raw_text: str) -> ParsedCarrierOfferDraft:
+        pass
+
+
+class QuoteReplyInterpretationLLM(Protocol):
+    """Turns a customer's free-text reply to a quote into a structured
+    intent (accept/revise/reject) plus any revised price mentioned - the
+    "Rex Response" agent's only LLM dependency.
+    """
+
+    async def interpret(self, *, body_text: str) -> QuoteReplyInterpretation:
+        pass
+
+
+class CarrierOfferWriteRepository(Protocol):
+    async def create_offer(
+        self,
+        *,
+        request_id: str,
+        carrier_name: str,
+        price: float | None,
+        currency: str | None,
+        transit_days: int | None,
+        notes: str | None,
+        confidence: float,
+    ) -> CarrierOfferRecord:
+        pass
+
+    async def list_offers_for_request(self, request_id: str) -> list[CarrierOfferRecord]:
         pass
 
 

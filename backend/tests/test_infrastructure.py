@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from qinora.infrastructure.migrations import iter_migration_files
-from qinora.infrastructure.settings import PersistenceDriver, Settings
+from qinora.infrastructure.settings import LLMProvider, PersistenceDriver, Settings
 from qinora.interfaces.http.container import build_container
 
 
@@ -29,6 +29,9 @@ def test_postgres_container_requires_database_url(tmp_path: Path) -> None:
         postgres_tenant_id="11111111-1111-1111-1111-111111111111",
         cors_allowed_origins=("*",),
         app_password=None,
+        llm_provider=LLMProvider.STUB,
+        openai_api_key=None,
+        openai_model="gpt-4o-mini",
     )
 
     with pytest.raises(RuntimeError, match="DATABASE_URL is required"):
