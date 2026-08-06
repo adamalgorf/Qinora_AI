@@ -169,9 +169,14 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 260px;
   justify-content: flex-start;
   color: hsl(var(--muted-foreground));
+}
+
+@media (min-width: 640px) {
+  .search-trigger.search-trigger {
+    width: 240px;
+  }
 }
 
 .app-header-actions {
@@ -337,8 +342,25 @@ h1 {
 
 .request-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 22px;
+}
+
+/* Grid items default to min-width:auto, which lets long, unwrapped content
+   (e.g. a Select's value text) blow past its track and get clipped by an
+   ancestor's overflow:hidden instead of shrinking. Force them to shrink. */
+.request-form > *,
+.request-grid > *,
+.cargo-line > *,
+.override-panel > *,
+.quote-detail-grid > *,
+.tower-split > *,
+.demo-flow-panel > *,
+.agent-config-grid > *,
+.kpi-grid > *,
+.pipeline > * {
+  min-width: 0;
 }
 
 .request-section {
@@ -350,6 +372,7 @@ h1 {
 
 .request-section-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -519,6 +542,7 @@ h1 {
 
 .queue-panel-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -605,6 +629,12 @@ h1 {
   color: hsl(var(--muted-foreground));
 }
 
+@media (max-width: 1024px) {
+  .agent-config-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 860px) {
   .main-surface {
     padding: 22px;
@@ -657,6 +687,23 @@ h1 {
   .request-grid,
   .cargo-line {
     grid-template-columns: 1fr;
+  }
+
+  .app-header {
+    padding: 10px 16px;
+    gap: 8px;
+  }
+
+  .main-surface {
+    padding: 16px;
+  }
+
+  .request-section,
+  .quote-detail-panel,
+  .queue-panel,
+  .override-panel,
+  .agent-config-card {
+    padding: 12px;
   }
 }
 

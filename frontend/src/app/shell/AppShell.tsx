@@ -199,13 +199,14 @@ export function AppShell() {
         <header className="app-header">
           <SidebarTrigger />
           <Button
+            aria-label="Search QiNora"
             className="search-trigger"
             onClick={() => setSearchOpen(true)}
             variant="outline"
           >
             <Search aria-hidden="true" size={16} />
-            <span>Search QiNora</span>
-            <kbd>Ctrl K</kbd>
+            <span className="hidden sm:inline">Search QiNora</span>
+            <kbd className="hidden sm:inline-flex">Ctrl K</kbd>
           </Button>
           <div className="app-header-actions">
             <ThemeToggle />
