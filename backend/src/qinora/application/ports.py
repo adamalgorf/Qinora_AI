@@ -6,6 +6,7 @@ from qinora.application.read_models import (
     CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
+    InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -16,6 +17,7 @@ from qinora.application.read_models import (
     QuoteRecord,
     QuoteReplyInterpretation,
     QuoteResponseEventRecord,
+    RequestDetailRecord,
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
@@ -133,6 +135,9 @@ class OperationalReadRepository(Protocol):
     async def list_requests(self) -> list[RequestRecord]:
         pass
 
+    async def get_request_detail(self, request_id: str) -> RequestDetailRecord | None:
+        pass
+
     async def list_quotes(self) -> list[QuoteRecord]:
         pass
 
@@ -152,6 +157,9 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_inbox(self) -> list[InboxRecord]:
+        pass
+
+    async def get_inbox_detail(self, message_id: str) -> InboxDetailRecord | None:
         pass
 
     async def list_agent_logs(self) -> list[AgentLogRecord]:

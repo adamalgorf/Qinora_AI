@@ -5,12 +5,14 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierRecord,
     ContactRecord,
+    InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteDetailRecord,
     QuoteRecord,
+    RequestDetailRecord,
     RequestRecord,
     SearchResultRecord,
     ShipmentEventRecord,
@@ -73,6 +75,9 @@ class OperationalQueries:
     async def list_requests(self) -> list[RequestRecord]:
         return await self._repository.list_requests()
 
+    async def get_request_detail(self, request_id: str) -> RequestDetailRecord | None:
+        return await self._repository.get_request_detail(request_id)
+
     async def list_quotes(self) -> list[QuoteRecord]:
         return await self._repository.list_quotes()
 
@@ -93,6 +98,9 @@ class OperationalQueries:
 
     async def list_inbox(self) -> list[InboxRecord]:
         return await self._repository.list_inbox()
+
+    async def get_inbox_detail(self, message_id: str) -> InboxDetailRecord | None:
+        return await self._repository.get_inbox_detail(message_id)
 
     async def list_agent_logs(self) -> list[AgentLogRecord]:
         return await self._repository.list_agent_logs()

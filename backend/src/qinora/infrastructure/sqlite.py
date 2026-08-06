@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
+    InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -20,6 +21,8 @@ from qinora.application.read_models import (
     QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
+    RequestCargoLineRecord,
+    RequestDetailRecord,
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
@@ -650,6 +653,57 @@ class SQLiteOperationalReadRepository:
             )
         ]
 
+    async def get_request_detail(self, request_id: str) -> RequestDetailRecord | None:
+        row = self._fetch_one(
+            """
+            select id, public_id, customer, lane, mode, status, weight_kg, review_reason, created_at
+            from transport_requests
+            where id = ?
+            """,
+            (request_id,),
+        )
+        if row is None:
+            return None
+
+        cargo_rows = self._fetch_all(
+            """
+            select id, description, quantity, weight_kg, length_cm, width_cm, height_cm,
+              hazardous, un_number
+            from request_cargo
+            where request_id = ?
+            order by rowid
+            """,
+            (request_id,),
+        )
+
+        return RequestDetailRecord(
+            request=RequestRecord(
+                id=row["id"],
+                public_id=row["public_id"],
+                customer=row["customer"],
+                lane=row["lane"],
+                mode=row["mode"],
+                status=row["status"],
+                weight_kg=row["weight_kg"],
+            ),
+            review_reason=row["review_reason"],
+            created_at=row["created_at"],
+            cargo_lines=tuple(
+                RequestCargoLineRecord(
+                    id=cargo_row["id"],
+                    description=cargo_row["description"],
+                    quantity=cargo_row["quantity"],
+                    weight_kg=cargo_row["weight_kg"],
+                    length_cm=cargo_row["length_cm"],
+                    width_cm=cargo_row["width_cm"],
+                    height_cm=cargo_row["height_cm"],
+                    hazardous=bool(cargo_row["hazardous"]),
+                    un_number=cargo_row["un_number"],
+                )
+                for cargo_row in cargo_rows
+            ),
+        )
+
     async def list_quotes(self) -> list[QuoteRecord]:
         return [
             QuoteRecord(**dict(row))
@@ -809,6 +863,29 @@ class SQLiteOperationalReadRepository:
                 """
             )
         ]
+
+    async def get_inbox_detail(self, message_id: str) -> InboxDetailRecord | None:
+        row = self._fetch_one(
+            """
+            select id, sender, subject, created_at as received_at, classification, body_text
+            from email_inbound
+            where id = ?
+            """,
+            (message_id,),
+        )
+        if row is None:
+            return None
+
+        return InboxDetailRecord(
+            message=InboxRecord(
+                id=row["id"],
+                sender=row["sender"],
+                subject=row["subject"],
+                received_at=row["received_at"],
+                classification=row["classification"],
+            ),
+            body_text=row["body_text"],
+        )
 
     async def list_agent_logs(self) -> list[AgentLogRecord]:
         return [

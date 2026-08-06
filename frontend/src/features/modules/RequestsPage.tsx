@@ -5,6 +5,13 @@ import { useSearchParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -14,12 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   apiGet,
   apiPost,
   type ApiProblem,
   type CreateRequestPayload,
   type CreateRequestResponse,
+  type RequestDetailResponse,
   type RequestListItem,
 } from "@/shared/api/client";
 
@@ -55,6 +64,12 @@ export function RequestsPage() {
   const query = useQuery({
     queryKey: ["requests"],
     queryFn: () => apiGet<RequestListItem[]>("/requests"),
+  });
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const detailQuery = useQuery({
+    queryKey: ["request-detail", selectedRequestId],
+    queryFn: () => apiGet<RequestDetailResponse>(`/requests/${selectedRequestId}`),
+    enabled: Boolean(selectedRequestId),
   });
   const [form, setForm] = useState({
     customer: "Scania",
@@ -310,7 +325,86 @@ export function RequestsPage() {
         highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
+        onRowClick={(row) => setSelectedRequestId(row.id)}
       />
+      <Dialog
+        open={selectedRequestId !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRequestId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detailQuery.data?.request.public_id ?? "Request"}</DialogTitle>
+            <DialogDescription>
+              {detailQuery.data?.request.customer} · {detailQuery.data?.request.lane}
+            </DialogDescription>
+          </DialogHeader>
+          {detailQuery.isLoading ? (
+            <div className="grid gap-2">
+              <Skeleton className="h-5 w-full" />
+              <Skeleton className="h-5 w-full" />
+              <Skeleton className="h-5 w-full" />
+            </div>
+          ) : detailQuery.data ? (
+            <div className="grid gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Mode</div>
+                  <div>{detailQuery.data.request.mode}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Status</div>
+                  <div>{detailQuery.data.request.status}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Weight</div>
+                  <div>{detailQuery.data.request.weight_kg} kg</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Created</div>
+                  <div>{detailQuery.data.created_at}</div>
+                </div>
+              </div>
+              {detailQuery.data.review_reason ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{detailQuery.data.review_reason}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div>
+                <div className="mb-2 text-xs uppercase text-muted-foreground">
+                  Cargo ({detailQuery.data.cargo_lines.length})
+                </div>
+                {detailQuery.data.cargo_lines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No cargo lines recorded.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {detailQuery.data.cargo_lines.map((line) => (
+                      <div className="agent-row" key={line.id}>
+                        <div>
+                          <strong>{line.description}</strong>
+                          <span>
+                            {[
+                              line.quantity ? `${line.quantity} pcs` : null,
+                              line.weight_kg ? `${line.weight_kg} kg` : null,
+                              line.length_cm && line.width_cm && line.height_cm
+                                ? `${line.length_cm}x${line.width_cm}x${line.height_cm} cm`
+                                : null,
+                              line.hazardous ? `ADR ${line.un_number ?? ""}`.trim() : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </ModuleScaffold>
   );
 }

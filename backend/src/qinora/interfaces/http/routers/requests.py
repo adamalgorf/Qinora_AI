@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from qinora.application import (
     AuthContext,
@@ -22,6 +22,8 @@ from qinora.interfaces.http.schemas import (
     ParsedRequestDraftPayload,
     ParseFreeTextRequestPayload,
     ParseFreeTextRequestResponse,
+    RequestCargoLineItem,
+    RequestDetailResponse,
     RequestListItem,
 )
 
@@ -34,6 +36,23 @@ async def list_requests(container: AppContainer = CONTAINER) -> list[RequestList
         RequestListItem(**item.__dict__)
         for item in await container.operational_queries.list_requests()
     ]
+
+
+@router.get("/requests/{request_id}", response_model=RequestDetailResponse)
+async def request_detail(
+    request_id: str,
+    container: AppContainer = CONTAINER,
+) -> RequestDetailResponse:
+    detail = await container.operational_queries.get_request_detail(request_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    return RequestDetailResponse(
+        request=RequestListItem(**detail.request.__dict__),
+        review_reason=detail.review_reason,
+        created_at=detail.created_at,
+        cargo_lines=[RequestCargoLineItem(**line.__dict__) for line in detail.cargo_lines],
+    )
 
 
 @router.post(

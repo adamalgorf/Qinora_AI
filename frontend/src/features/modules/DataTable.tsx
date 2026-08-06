@@ -22,6 +22,7 @@ type DataTableProps<T extends Record<string, unknown>> = {
   }>;
   highlightId?: string;
   loading: boolean;
+  onRowClick?: (row: T) => void;
 };
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -29,6 +30,7 @@ export function DataTable<T extends Record<string, unknown>>({
   columns,
   highlightId,
   loading,
+  onRowClick,
 }: DataTableProps<T>) {
   const highlightedRowRef = useRef<HTMLTableRowElement | null>(null);
 
@@ -77,9 +79,10 @@ export function DataTable<T extends Record<string, unknown>>({
           return (
             <TableRow
               aria-current={isHighlighted ? "true" : undefined}
-              className={cn(isHighlighted && "bg-accent/40")}
+              className={cn(isHighlighted && "bg-accent/40", onRowClick && "cursor-pointer")}
               key={rowKey}
               ref={isHighlighted ? highlightedRowRef : undefined}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((column) => {
                 const value = row[column.key];

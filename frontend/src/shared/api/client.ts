@@ -60,6 +60,25 @@ export type RequestListItem = {
   weight_kg: number;
 };
 
+export type RequestCargoLineItem = {
+  id: string;
+  description: string;
+  quantity: number | null;
+  weight_kg: number | null;
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
+  hazardous: boolean;
+  un_number: string | null;
+};
+
+export type RequestDetailResponse = {
+  request: RequestListItem;
+  review_reason: string | null;
+  created_at: string;
+  cargo_lines: RequestCargoLineItem[];
+};
+
 export type CreateRequestPayload = {
   customer: string;
   origin: string;
@@ -272,6 +291,11 @@ export type InboxListItem = {
   subject: string;
   received_at: string;
   classification: string;
+};
+
+export type InboxDetailResponse = {
+  message: InboxListItem;
+  body_text: string;
 };
 
 export type AgentLogListItem = {

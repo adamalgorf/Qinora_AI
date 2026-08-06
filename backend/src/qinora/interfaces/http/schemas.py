@@ -78,6 +78,25 @@ class RequestListItem(BaseModel):
     weight_kg: float
 
 
+class RequestCargoLineItem(BaseModel):
+    id: str
+    description: str
+    quantity: int | None
+    weight_kg: float | None
+    length_cm: float | None
+    width_cm: float | None
+    height_cm: float | None
+    hazardous: bool
+    un_number: str | None
+
+
+class RequestDetailResponse(BaseModel):
+    request: RequestListItem
+    review_reason: str | None
+    created_at: str
+    cargo_lines: list[RequestCargoLineItem]
+
+
 class CargoLinePayload(BaseModel):
     description: str = Field(min_length=1)
     quantity: int | None = Field(default=None, ge=1)
@@ -368,6 +387,11 @@ class InboxListItem(BaseModel):
     subject: str
     received_at: str
     classification: str
+
+
+class InboxDetailResponse(BaseModel):
+    message: InboxListItem
+    body_text: str
 
 
 class AgentLogListItem(BaseModel):

@@ -88,6 +88,27 @@ class RequestRecord:
 
 
 @dataclass(frozen=True)
+class RequestCargoLineRecord:
+    id: str
+    description: str
+    quantity: int | None
+    weight_kg: float | None
+    length_cm: float | None
+    width_cm: float | None
+    height_cm: float | None
+    hazardous: bool
+    un_number: str | None
+
+
+@dataclass(frozen=True)
+class RequestDetailRecord:
+    request: RequestRecord
+    review_reason: str | None
+    created_at: str
+    cargo_lines: tuple[RequestCargoLineRecord, ...]
+
+
+@dataclass(frozen=True)
 class StaleRequestRecord:
     id: str
     public_id: str
@@ -216,6 +237,12 @@ class InboxRecord:
     subject: str
     received_at: str
     classification: str
+
+
+@dataclass(frozen=True)
+class InboxDetailRecord:
+    message: InboxRecord
+    body_text: str
 
 
 @dataclass(frozen=True)

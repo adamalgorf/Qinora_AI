@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
+    InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
     OperationalTaskRecord,
@@ -20,6 +21,8 @@ from qinora.application.read_models import (
     QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
+    RequestCargoLineRecord,
+    RequestDetailRecord,
     RequestRecord,
     ShipmentEventRecord,
     ShipmentRecord,
@@ -153,6 +156,62 @@ class PostgresOperationalReadRepository:
                 (self._database.tenant_id,),
             )
         ]
+
+    async def get_request_detail(self, request_id: str) -> RequestDetailRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, public_id, customer, lane, origin, destination, mode, status,
+                  weight_kg, review_reason, created_at
+                from public.transport_requests
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            request_row = cursor.fetchone()
+            if request_row is None:
+                return None
+
+            cursor.execute(
+                """
+                select id, description, quantity, weight_kg, length_cm, width_cm, height_cm,
+                  hazardous, un_number
+                from public.request_cargo
+                where tenant_id = %s and request_id = %s
+                order by created_at
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            cargo_rows = cursor.fetchall()
+
+        return RequestDetailRecord(
+            request=RequestRecord(
+                id=str(request_row["id"]),
+                public_id=request_row["public_id"],
+                customer=request_row["customer"] or "Unknown customer",
+                lane=request_row["lane"]
+                or _lane(request_row["origin"], request_row["destination"]),
+                mode=request_row["mode"],
+                status=request_row["status"],
+                weight_kg=float(request_row["weight_kg"] or 0),
+            ),
+            review_reason=request_row["review_reason"],
+            created_at=request_row["created_at"].isoformat(),
+            cargo_lines=tuple(
+                RequestCargoLineRecord(
+                    id=str(row["id"]),
+                    description=row["description"],
+                    quantity=row["quantity"],
+                    weight_kg=float(row["weight_kg"]) if row["weight_kg"] is not None else None,
+                    length_cm=float(row["length_cm"]) if row["length_cm"] is not None else None,
+                    width_cm=float(row["width_cm"]) if row["width_cm"] is not None else None,
+                    height_cm=float(row["height_cm"]) if row["height_cm"] is not None else None,
+                    hazardous=bool(row["hazardous"]),
+                    un_number=row["un_number"],
+                )
+                for row in cargo_rows
+            ),
+        )
 
     async def list_quotes(self) -> list[QuoteRecord]:
         return [
@@ -382,6 +441,30 @@ class PostgresOperationalReadRepository:
                 (self._database.tenant_id,),
             )
         ]
+
+    async def get_inbox_detail(self, message_id: str) -> InboxDetailRecord | None:
+        rows = self._fetch_all(
+            """
+            select id, sender, subject, created_at, classification, body_text
+            from public.email_inbound
+            where tenant_id = %s and id = %s
+            """,
+            (self._database.tenant_id, message_id),
+        )
+        if not rows:
+            return None
+
+        row = rows[0]
+        return InboxDetailRecord(
+            message=InboxRecord(
+                id=str(row["id"]),
+                sender=row["sender"],
+                subject=row["subject"],
+                received_at=row["created_at"].isoformat(),
+                classification=row["classification"] or "pending",
+            ),
+            body_text=row["body_text"],
+        )
 
     async def list_agent_logs(self) -> list[AgentLogRecord]:
         return [
