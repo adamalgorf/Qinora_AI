@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 
+import { StatusChip } from "@/components/ui/status-chip";
 import { apiGet, type InvoiceListItem } from "@/shared/api/client";
 
 import { DataTable } from "./DataTable";
@@ -21,20 +22,33 @@ export function InvoicesPage() {
     >
       <DataTable
         columns={[
-          { key: "public_id", label: "ID" },
-          { key: "shipment_id", label: "Shipment" },
-          { key: "status", label: "Status" },
+          { key: "public_id", label: "ID", mono: true },
+          { key: "shipment_id", label: "Shipment", mono: true },
+          {
+            key: "status",
+            label: "Status",
+            render: (value) => <StatusChip status={String(value)} />,
+          },
           {
             key: "invoice_amount",
             label: "Invoice",
+            align: "right",
+            mono: true,
             render: (value, row) => `${value} ${row.currency}`,
           },
           {
             key: "quote_amount",
             label: "Quote",
+            align: "right",
+            mono: true,
             render: (value, row) => `${value} ${row.currency}`,
           },
-          { key: "discrepancy_amount", label: "Discrepancy" },
+          {
+            key: "discrepancy_amount",
+            label: "Discrepancy",
+            align: "right",
+            mono: true,
+          },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}

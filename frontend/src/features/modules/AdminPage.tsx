@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ConfidenceBar } from "@/components/ui/confidence-bar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,6 +21,7 @@ import {
   type AgentLogListItem,
   type UpdateAgentConfigPayload,
 } from "@/shared/api/client";
+import { getAgentColor } from "@/shared/agents/colors";
 
 import { DataTable } from "./DataTable";
 import { ModuleScaffold } from "./ModuleScaffold";
@@ -66,10 +67,12 @@ export function AdminPage() {
       title="Admin"
     >
       <div className="agent-config-grid">
-        {(configsQuery.data ?? []).map((agent) => (
+        {(configsQuery.data ?? []).map((agent) => {
+          const color = getAgentColor(agent.agent_key);
+          return (
           <section className="agent-config-card" key={agent.agent_key}>
             <div className="agent-config-head">
-              <Bot aria-hidden="true" />
+              <span aria-hidden="true" className={`size-2.5 rounded-full ${color.dot}`} />
               <div>
                 <span>{agent.agent_key}</span>
                 <strong>{agent.agent_name}</strong>
@@ -113,7 +116,8 @@ export function AdminPage() {
               />
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
       {configsQuery.isLoading ? (
         <div className="grid gap-2">
@@ -139,13 +143,26 @@ export function AdminPage() {
         </div>
       <DataTable
         columns={[
-          { key: "agent_name", label: "Agent" },
+          {
+            key: "agent_name",
+            label: "Agent",
+            render: (value) => {
+              const name = String(value ?? "");
+              const color = getAgentColor(name);
+              return (
+                <span className="flex items-center gap-2">
+                  <span aria-hidden="true" className={`size-2 rounded-full ${color.dot}`} />
+                  {name}
+                </span>
+              );
+            },
+          },
           { key: "step", label: "Step" },
-          { key: "entity_id", label: "Entity" },
+          { key: "entity_id", label: "Entity", mono: true },
           {
             key: "confidence",
             label: "Confidence",
-            render: (value) => `${Math.round(Number(value) * 100)}%`,
+            render: (value) => <ConfidenceBar value={Number(value)} />,
           },
         ]}
         loading={logsQuery.isLoading}

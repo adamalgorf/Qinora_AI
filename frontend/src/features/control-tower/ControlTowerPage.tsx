@@ -5,7 +5,9 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfidenceBar } from "@/components/ui/confidence-bar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getAgentColor } from "@/shared/agents/colors";
 import {
   apiGet,
   apiPost,
@@ -126,7 +128,7 @@ export function ControlTowerPage() {
                 />
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className={`text-2xl font-bold tracking-tight ${accent}`}>{kpi.value}</div>
+                <div className={`text-2xl font-semibold tracking-tight ${accent}`}>{kpi.value}</div>
                 <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
               </CardContent>
             </Card>
@@ -185,15 +187,21 @@ export function ControlTowerPage() {
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : (
-              (summary?.agentActivity ?? []).map((activity) => (
-                <div className="agent-row" key={`${activity.agent}-${activity.event}`}>
-                  <div>
-                    <strong>{activity.agent}</strong>
-                    <span>{activity.event}</span>
+              (summary?.agentActivity ?? []).map((activity) => {
+                const color = getAgentColor(activity.agent);
+                return (
+                  <div className="agent-row" key={`${activity.agent}-${activity.event}`}>
+                    <div>
+                      <strong className="flex items-center gap-2">
+                        <span aria-hidden="true" className={`size-2 rounded-full ${color.dot}`} />
+                        {activity.agent}
+                      </strong>
+                      <span>{activity.event}</span>
+                    </div>
+                    <ConfidenceBar value={activity.confidence} />
                   </div>
-                  <Badge variant="outline">{Math.round(activity.confidence * 100)}%</Badge>
-                </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>

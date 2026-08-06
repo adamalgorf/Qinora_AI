@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StatusChip } from "@/components/ui/status-chip";
 import {
   apiGet,
   apiPost,
@@ -226,20 +227,27 @@ export function QuotesPage() {
       ) : null}
       <DataTable
         columns={[
-          { key: "id", label: "ID" },
+          { key: "id", label: "ID", mono: true },
           {
             key: "request_id",
             label: "Request",
+            mono: true,
             render: (value) => {
               const request = (requestsQuery.data ?? []).find((item) => item.id === value);
               return request?.public_id ?? String(value ?? "");
             },
           },
-          { key: "status", label: "Status" },
-          { key: "version", label: "Version" },
+          {
+            key: "status",
+            label: "Status",
+            render: (value) => <StatusChip status={String(value)} />,
+          },
+          { key: "version", label: "Version", align: "right" },
           {
             key: "customer_price",
             label: "Customer price",
+            align: "right",
+            mono: true,
             render: (value, row) => `${value} ${row.currency}`,
           },
           {

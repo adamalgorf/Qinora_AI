@@ -5,13 +5,6 @@ import { useSearchParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,7 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import {
   apiGet,
   apiPost,
@@ -315,55 +316,69 @@ export function RequestsPage() {
       ) : null}
       <DataTable
         columns={[
-          { key: "public_id", label: "ID" },
+          { key: "public_id", label: "ID", mono: true },
           { key: "customer", label: "Customer" },
           { key: "lane", label: "Lane" },
           { key: "mode", label: "Mode" },
-          { key: "status", label: "Status" },
-          { key: "weight_kg", label: "Weight kg" },
+          {
+            key: "status",
+            label: "Status",
+            render: (value) => <StatusChip status={String(value)} />,
+          },
+          {
+            key: "weight_kg",
+            label: "Weight kg",
+            align: "right",
+            mono: true,
+            render: (value) => `${value}`,
+          },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
         rows={query.data}
         onRowClick={(row) => setSelectedRequestId(row.id)}
       />
-      <Dialog
+      <Sheet
         open={selectedRequestId !== null}
         onOpenChange={(open) => {
           if (!open) setSelectedRequestId(null);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{detailQuery.data?.request.public_id ?? "Request"}</DialogTitle>
-            <DialogDescription>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
+          <SheetHeader>
+            <SheetTitle className="font-mono">
+              {detailQuery.data?.request.public_id ?? "Request"}
+            </SheetTitle>
+            <SheetDescription>
               {detailQuery.data?.request.customer} · {detailQuery.data?.request.lane}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           {detailQuery.isLoading ? (
-            <div className="grid gap-2">
+            <div className="grid gap-2 py-4">
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-5 w-full" />
             </div>
           ) : detailQuery.data ? (
-            <div className="grid gap-4 text-sm">
+            <div className="grid gap-4 py-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs uppercase text-muted-foreground">Mode</div>
                   <div>{detailQuery.data.request.mode}</div>
                 </div>
                 <div>
-                  <div className="text-xs uppercase text-muted-foreground">Status</div>
-                  <div>{detailQuery.data.request.status}</div>
+                  <div className="mb-1 text-xs uppercase text-muted-foreground">Status</div>
+                  <StatusChip status={detailQuery.data.request.status} />
                 </div>
                 <div>
                   <div className="text-xs uppercase text-muted-foreground">Weight</div>
-                  <div>{detailQuery.data.request.weight_kg} kg</div>
+                  <div className="font-mono tabular-nums">
+                    {detailQuery.data.request.weight_kg} kg
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs uppercase text-muted-foreground">Created</div>
-                  <div>{detailQuery.data.created_at}</div>
+                  <div className="font-mono">{detailQuery.data.created_at}</div>
                 </div>
               </div>
               {detailQuery.data.review_reason ? (
@@ -403,8 +418,8 @@ export function RequestsPage() {
               </div>
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </ModuleScaffold>
   );
 }

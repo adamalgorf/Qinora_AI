@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StatusChip } from "@/components/ui/status-chip";
 import {
   apiGet,
   apiPost,
@@ -131,11 +132,15 @@ export function ShipmentsPage() {
     >
       <DataTable
         columns={[
-          { key: "public_id", label: "ID" },
+          { key: "public_id", label: "ID", mono: true },
           { key: "lane", label: "Lane" },
-          { key: "status", label: "Status" },
-          { key: "carrier_id", label: "Carrier" },
-          { key: "eta", label: "ETA" },
+          {
+            key: "status",
+            label: "Status",
+            render: (value) => <StatusChip status={String(value)} />,
+          },
+          { key: "carrier_id", label: "Carrier", mono: true },
+          { key: "eta", label: "ETA", mono: true },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}

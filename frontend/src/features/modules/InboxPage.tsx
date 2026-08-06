@@ -2,13 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { apiGet, type InboxDetailResponse, type InboxListItem } from "@/shared/api/client";
 
 import { DataTable } from "./DataTable";
@@ -36,37 +37,41 @@ export function InboxPage() {
         columns={[
           { key: "sender", label: "Sender" },
           { key: "subject", label: "Subject" },
-          { key: "classification", label: "Classification" },
-          { key: "received_at", label: "Received" },
+          {
+            key: "classification",
+            label: "Classification",
+            render: (value) => <StatusChip status={String(value)} />,
+          },
+          { key: "received_at", label: "Received", mono: true },
         ]}
         loading={query.isLoading}
         rows={query.data}
         onRowClick={(row) => setSelectedMessageId(row.id)}
       />
-      <Dialog
+      <Sheet
         open={selectedMessageId !== null}
         onOpenChange={(open) => {
           if (!open) setSelectedMessageId(null);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{detailQuery.data?.message.subject ?? "Message"}</DialogTitle>
-            <DialogDescription>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
+          <SheetHeader>
+            <SheetTitle>{detailQuery.data?.message.subject ?? "Message"}</SheetTitle>
+            <SheetDescription>
               {detailQuery.data?.message.sender} · {detailQuery.data?.message.received_at}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           {detailQuery.isLoading ? (
-            <div className="grid gap-2">
+            <div className="grid gap-2 py-4">
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-5 w-full" />
               <Skeleton className="h-16 w-full" />
             </div>
           ) : detailQuery.data ? (
-            <div className="grid gap-3 text-sm">
+            <div className="grid gap-3 py-4 text-sm">
               <div>
-                <div className="text-xs uppercase text-muted-foreground">Classification</div>
-                <div>{detailQuery.data.message.classification}</div>
+                <div className="mb-1 text-xs uppercase text-muted-foreground">Classification</div>
+                <StatusChip status={detailQuery.data.message.classification} />
               </div>
               <div>
                 <div className="mb-1 text-xs uppercase text-muted-foreground">Body</div>
@@ -76,8 +81,8 @@ export function InboxPage() {
               </div>
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </ModuleScaffold>
   );
 }
