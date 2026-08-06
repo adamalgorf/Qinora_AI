@@ -3,6 +3,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
 
+import { ThemeProvider } from "@/shared/theme/ThemeProvider";
+
 import { AppShell } from "./shell/AppShell";
 import { ControlTowerPage } from "../features/control-tower/ControlTowerPage";
 import { AdminPage } from "../features/modules/AdminPage";
@@ -36,8 +38,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

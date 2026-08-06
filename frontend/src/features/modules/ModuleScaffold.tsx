@@ -14,7 +14,7 @@ export function ModuleScaffold({ title, description, badge, children }: ModuleSc
   return (
     <section className="module-page">
       <header className="module-header">
-        <Badge className="border-cyan-400/30 bg-cyan-400/10 text-cyan-200" variant="outline">
+        <Badge className="border-primary/30 bg-primary/10 text-primary" variant="outline">
           {badge}
         </Badge>
         <h1>{title}</h1>

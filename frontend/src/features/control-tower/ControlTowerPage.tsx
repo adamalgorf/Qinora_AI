@@ -15,6 +15,7 @@ import {
 } from "@/shared/api/client";
 
 const iconByMetric = [Clock3, CheckCircle2, AlertTriangle, Bot];
+const accentByMetric = ["text-primary", "text-success", "text-warning", "text-info"];
 
 export function ControlTowerPage() {
   const queryClient = useQueryClient();
@@ -48,7 +49,7 @@ export function ControlTowerPage() {
     <section className="tower-page">
       <header className="page-header">
         <div>
-          <Badge className="mb-4 border-cyan-400/30 bg-cyan-400/10 text-cyan-200" variant="outline">
+          <Badge className="mb-4 border-primary/30 bg-primary/10 text-primary" variant="outline">
             <RadioTower aria-hidden="true" className="size-3.5" />
             Control Tower
           </Badge>
@@ -59,7 +60,6 @@ export function ControlTowerPage() {
           </p>
         </div>
         <Button
-          className="primary-action"
           disabled={summaryQuery.isLoading || demoFlowMutation.isPending}
           type="button"
           onClick={() => demoFlowMutation.mutate()}
@@ -112,17 +112,23 @@ export function ControlTowerPage() {
       <div className="kpi-grid">
         {(summary?.kpis ?? []).map((kpi, index) => {
           const Icon = iconByMetric[index] ?? Bot;
+          const accent = accentByMetric[index] ?? "text-primary";
 
           return (
-            <Card className="metric-card" key={kpi.label}>
-              <CardHeader>
-                <div className="metric-topline">
-                  <Icon aria-hidden="true" className="size-4 text-cyan-200" />
-                  <Badge variant="secondary">{kpi.trend}</Badge>
-                </div>
-                <CardDescription>{kpi.label}</CardDescription>
-                <CardTitle>{kpi.value}</CardTitle>
+            <Card className="group transition-colors" key={kpi.label}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2">
+                <CardTitle className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {kpi.label}
+                </CardTitle>
+                <Icon
+                  aria-hidden="true"
+                  className={`size-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100 ${accent}`}
+                />
               </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className={`text-2xl font-bold tracking-tight ${accent}`}>{kpi.value}</div>
+                <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
+              </CardContent>
             </Card>
           );
         })}

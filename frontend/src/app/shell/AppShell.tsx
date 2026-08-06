@@ -50,6 +50,7 @@ import {
   type SearchResultItem,
   type TokenResponse,
 } from "@/shared/api/client";
+import { ThemeToggle } from "@/shared/theme/ThemeToggle";
 import { LoginScreen } from "./LoginScreen";
 
 const navItems = [
@@ -206,6 +207,9 @@ export function AppShell() {
             <span>Search QiNora</span>
             <kbd>Ctrl K</kbd>
           </Button>
+          <div className="app-header-actions">
+            <ThemeToggle />
+          </div>
         </header>
         <main className="main-surface">
           <Outlet />
