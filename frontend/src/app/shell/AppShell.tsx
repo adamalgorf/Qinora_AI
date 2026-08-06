@@ -204,13 +204,13 @@ export function AppShell() {
           <SidebarTrigger />
           <Button
             aria-label="Sök i QiNora"
-            className="search-trigger"
+            className="search-trigger rounded-full shadow-none"
             onClick={() => setSearchOpen(true)}
-            variant="outline"
+            variant="secondary"
           >
-            <Search aria-hidden="true" size={16} />
-            <span className="hidden sm:inline">Sök i QiNora</span>
-            <kbd className="hidden sm:inline-flex">Ctrl K</kbd>
+            <Search aria-hidden="true" className="sm:hidden" size={16} />
+            <span className="hidden sm:inline">Sök</span>
+            <kbd className="hidden sm:inline-flex">⌘K</kbd>
           </Button>
           <div className="app-header-actions">
             <ThemeToggle />
