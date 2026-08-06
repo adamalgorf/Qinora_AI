@@ -15,6 +15,7 @@ import { InvoicesPage } from "../features/modules/InvoicesPage";
 import { QuotesPage } from "../features/modules/QuotesPage";
 import { RequestsPage } from "../features/modules/RequestsPage";
 import { ShipmentsPage } from "../features/modules/ShipmentsPage";
+import { SettingsPage } from "../features/settings/SettingsPage";
 import "./styles.css";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: "invoices", element: <InvoicesPage /> },
       { path: "carriers", element: <CarriersPage /> },
       { path: "admin", element: <AdminPage /> },
+      { path: "settings", element: <SettingsPage /> },
     ],
   },
 ]);

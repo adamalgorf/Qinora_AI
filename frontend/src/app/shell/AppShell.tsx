@@ -1,5 +1,6 @@
 import {
   Activity,
+  Bot,
   ContactRound,
   FileCheck2,
   FileText,
@@ -27,6 +28,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -51,6 +53,7 @@ import {
   type TokenResponse,
 } from "@/shared/api/client";
 import { ThemeToggle } from "@/shared/theme/ThemeToggle";
+import { APP_VERSION } from "@/shared/version";
 import { LoadingScreen } from "./LoadingScreen";
 import { LoginScreen } from "./LoginScreen";
 import { Logo } from "./Logo";
@@ -64,7 +67,7 @@ const navItems = [
   { label: "Sändningar", href: "/shipments", icon: Truck },
   { label: "Fakturor", href: "/invoices", icon: FileCheck2 },
   { label: "Transportörer", href: "/carriers", icon: Users },
-  { label: "Admin", href: "/admin", icon: Settings },
+  { label: "Admin", href: "/admin", icon: Bot },
 ];
 
 export function AppShell() {
@@ -198,6 +201,25 @@ export function AppShell() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname === "/settings"}
+                tooltip="Inställningar"
+              >
+                <NavLink to="/settings">
+                  <Settings aria-hidden="true" />
+                  <span>Inställningar</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          <div className="px-2 pb-1 text-xs text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
+            QiNora v{APP_VERSION}
+          </div>
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <header className="app-header">

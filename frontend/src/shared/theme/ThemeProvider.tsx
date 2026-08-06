@@ -5,9 +5,14 @@ type Theme = "light" | "dark";
 type ThemeContextValue = {
   theme: Theme;
   toggle: () => void;
+  setTheme: (theme: Theme) => void;
 };
 
-const ThemeContext = createContext<ThemeContextValue>({ theme: "dark", toggle: () => {} });
+const ThemeContext = createContext<ThemeContextValue>({
+  theme: "dark",
+  toggle: () => {},
+  setTheme: () => {},
+});
 
 const STORAGE_KEY = "qinora-theme";
 
@@ -23,7 +28,7 @@ function getInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -33,10 +38,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   function toggle() {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
+    setThemeState((current) => (current === "dark" ? "light" : "dark"));
   }
 
-  return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={{ theme, toggle, setTheme: setThemeState }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme(): ThemeContextValue {
