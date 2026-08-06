@@ -50,7 +50,7 @@ class BookingWorkflow:
             carrier_id=intelligence.selected_carrier_id,
             lane=lane,
             status=status,
-            eta="Pending",
+            eta="Väntar",
         )
 
         return BookingResult(
@@ -62,11 +62,11 @@ class BookingWorkflow:
 
     async def _resolve_quote_lane(self, request_id: str | None) -> str:
         if request_id is None:
-            return "Pending lane confirmation"
+            return "Väntar på sträckbekräftelse"
 
         requests = await self._operational_queries.list_requests()
         for request in requests:
             if request.id == request_id:
                 return request.lane
 
-        return "Pending lane confirmation"
+        return "Väntar på sträckbekräftelse"

@@ -70,7 +70,7 @@ def test_dashboard_summary_returns_control_tower_data(client: TestClient) -> Non
     response = client.get("/dashboard/summary")
 
     assert response.status_code == 200
-    assert response.json()["kpis"][0]["label"] == "Open requests"
+    assert response.json()["kpis"][0]["label"] == "Öppna förfrågningar"
 
 
 def test_health_and_readiness_endpoints(client: TestClient) -> None:

@@ -62,8 +62,8 @@ export function AdminPage() {
 
   return (
     <ModuleScaffold
-      badge="Agent Ops"
-      description="Agent audit trail and operational health signals for tower/admin roles."
+      badge="Agentdrift"
+      description="Agentloggar och driftstatus för styrning och admin."
       title="Admin"
     >
       <div className="agent-config-grid">
@@ -78,13 +78,13 @@ export function AdminPage() {
                 <strong>{agent.agent_name}</strong>
               </div>
               <Switch
-                aria-label={`Enable ${agent.agent_name}`}
+                aria-label={`Aktivera ${agent.agent_name}`}
                 checked={agent.is_enabled}
                 onCheckedChange={(checked) => patchConfig(agent, { is_enabled: checked })}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor={`${agent.agent_key}-auto-mode`}>Auto Mode</Label>
+              <Label htmlFor={`${agent.agent_key}-auto-mode`}>Automatikläge</Label>
               <Select
                 value={agent.auto_mode}
                 onValueChange={(value) =>
@@ -95,14 +95,14 @@ export function AdminPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="assisted">Assisted</SelectItem>
-                  <SelectItem value="guarded_auto">Guarded Auto</SelectItem>
+                  <SelectItem value="manual">Manuell</SelectItem>
+                  <SelectItem value="assisted">Assisterad</SelectItem>
+                  <SelectItem value="guarded_auto">Bevakad automatik</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor={`${agent.agent_key}-min-confidence`}>Min confidence</Label>
+              <Label htmlFor={`${agent.agent_key}-min-confidence`}>Min. tillförlitlighet</Label>
               <Input
                 id={`${agent.agent_key}-min-confidence`}
                 max="1"
@@ -126,19 +126,19 @@ export function AdminPage() {
       ) : null}
       {updateConfig.isError ? (
         <Alert variant="destructive">
-          <AlertDescription>Agent config update failed.</AlertDescription>
+          <AlertDescription>Det gick inte att uppdatera agentinställningen.</AlertDescription>
         </Alert>
       ) : null}
       <div className="queue-panel">
         <div className="queue-panel-header">
-          <h3>Agent audit trail</h3>
+          <h3>Agentloggbok</h3>
           <Button
             disabled={logsQuery.isFetching}
             type="button"
             variant="secondary"
             onClick={() => logsQuery.refetch()}
           >
-            Refresh
+            Uppdatera
           </Button>
         </div>
       <DataTable
@@ -157,11 +157,11 @@ export function AdminPage() {
               );
             },
           },
-          { key: "step", label: "Step" },
-          { key: "entity_id", label: "Entity", mono: true },
+          { key: "step", label: "Steg" },
+          { key: "entity_id", label: "Objekt", mono: true },
           {
             key: "confidence",
-            label: "Confidence",
+            label: "Tillförlitlighet",
             render: (value) => <ConfidenceBar value={Number(value)} />,
           },
         ]}

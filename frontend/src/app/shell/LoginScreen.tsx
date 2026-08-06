@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Logo } from "./Logo";
 
 type LoginScreenProps = {
   error: string | null;
@@ -26,16 +27,18 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="brand">
-            <span className="brand-mark">Q</span>
+            <span className="brand-mark">
+              <Logo />
+            </span>
             <span>QiNora</span>
           </div>
-          <CardTitle>Welcome back</CardTitle>
+          <CardTitle>Välkommen tillbaka</CardTitle>
           <CardDescription>Ange lösenordet för att fortsätta.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={handleSubmit}>
             <div className="grid gap-2">
-              <Label htmlFor="login-password">Password</Label>
+              <Label htmlFor="login-password">Lösenord</Label>
               <Input
                 autoComplete="current-password"
                 autoFocus

@@ -62,7 +62,7 @@ export function DataTable<T extends Record<string, unknown>>({
   }
 
   if (!rows?.length) {
-    return <p className="text-sm text-muted-foreground">No records yet.</p>;
+    return <p className="text-sm text-muted-foreground">Inga poster ännu.</p>;
   }
 
   return (

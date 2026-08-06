@@ -17,13 +17,13 @@ export function InvoicesPage() {
   return (
     <ModuleScaffold
       badge="Auri Audit"
-      description="Carrier invoice audit against accepted quote amount and discrepancy rules."
-      title="Invoices"
+      description="Granskning av transportörsfakturor mot accepterat offertbelopp och avvikelseregler."
+      title="Fakturor"
     >
       <DataTable
         columns={[
           { key: "public_id", label: "ID", mono: true },
-          { key: "shipment_id", label: "Shipment", mono: true },
+          { key: "shipment_id", label: "Sändning", mono: true },
           {
             key: "status",
             label: "Status",
@@ -31,21 +31,21 @@ export function InvoicesPage() {
           },
           {
             key: "invoice_amount",
-            label: "Invoice",
+            label: "Faktura",
             align: "right",
             mono: true,
             render: (value, row) => `${value} ${row.currency}`,
           },
           {
             key: "quote_amount",
-            label: "Quote",
+            label: "Offert",
             align: "right",
             mono: true,
             render: (value, row) => `${value} ${row.currency}`,
           },
           {
             key: "discrepancy_amount",
-            label: "Discrepancy",
+            label: "Avvikelse",
             align: "right",
             mono: true,
           },

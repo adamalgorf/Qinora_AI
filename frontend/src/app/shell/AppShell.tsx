@@ -53,16 +53,17 @@ import {
 import { ThemeToggle } from "@/shared/theme/ThemeToggle";
 import { LoadingScreen } from "./LoadingScreen";
 import { LoginScreen } from "./LoginScreen";
+import { Logo } from "./Logo";
 
 const navItems = [
   { label: "Tower", href: "/", icon: Activity },
-  { label: "Inbox", href: "/inbox", icon: Inbox },
-  { label: "Requests", href: "/requests", icon: RadioTower },
-  { label: "Contacts", href: "/contacts", icon: ContactRound },
-  { label: "Quotes", href: "/quotes", icon: FileText },
-  { label: "Shipments", href: "/shipments", icon: Truck },
-  { label: "Invoices", href: "/invoices", icon: FileCheck2 },
-  { label: "Carriers", href: "/carriers", icon: Users },
+  { label: "Inkorg", href: "/inbox", icon: Inbox },
+  { label: "Förfrågningar", href: "/requests", icon: RadioTower },
+  { label: "Kontakter", href: "/contacts", icon: ContactRound },
+  { label: "Offerter", href: "/quotes", icon: FileText },
+  { label: "Sändningar", href: "/shipments", icon: Truck },
+  { label: "Fakturor", href: "/invoices", icon: FileCheck2 },
+  { label: "Transportörer", href: "/carriers", icon: Users },
   { label: "Admin", href: "/admin", icon: Settings },
 ];
 
@@ -169,7 +170,9 @@ export function AppShell() {
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="brand">
-            <span className="brand-mark">Q</span>
+            <span className="brand-mark">
+              <Logo />
+            </span>
             <span className="group-data-[collapsible=icon]:hidden">QiNora</span>
           </div>
         </SidebarHeader>
@@ -200,13 +203,13 @@ export function AppShell() {
         <header className="app-header">
           <SidebarTrigger />
           <Button
-            aria-label="Search QiNora"
+            aria-label="Sök i QiNora"
             className="search-trigger"
             onClick={() => setSearchOpen(true)}
             variant="outline"
           >
             <Search aria-hidden="true" size={16} />
-            <span className="hidden sm:inline">Search QiNora</span>
+            <span className="hidden sm:inline">Sök i QiNora</span>
             <kbd className="hidden sm:inline-flex">Ctrl K</kbd>
           </Button>
           <div className="app-header-actions">
@@ -222,20 +225,20 @@ export function AppShell() {
           <Command shouldFilter={false}>
             <CommandInput
               onValueChange={setSearchTerm}
-              placeholder="Search QiNora"
+              placeholder="Sök i QiNora"
               value={searchTerm}
             />
             <CommandList>
               {searchQuery.isLoading ? (
                 <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  Searching...
+                  Söker…
                 </div>
               ) : null}
               {!searchQuery.isLoading && normalizedSearchTerm.length >= 2 ? (
-                <CommandEmpty>No matches.</CommandEmpty>
+                <CommandEmpty>Inga träffar.</CommandEmpty>
               ) : null}
               {searchResults.length > 0 ? (
-                <CommandGroup heading="Results">
+                <CommandGroup heading="Resultat">
                   {searchResults.map((result) => (
                     <CommandItem
                       key={`${result.entity_type}-${result.id}`}

@@ -157,7 +157,7 @@ class SeedDataStore:
                     None,
                     "Stockholm -> Oslo",
                     ShipmentStatus.NEEDS_REVIEW,
-                    "Pending",
+                    "Väntar",
                 ),
             ],
             carriers=carriers,

@@ -86,7 +86,7 @@ export function QuotesPage() {
       ]);
     },
     onError: (problem: { detail?: string }) => {
-      setError(problem.detail ?? "Quote could not be sent");
+      setError(problem.detail ?? "Offerten kunde inte skickas");
     },
   });
   const acceptMutation = useMutation({
@@ -103,7 +103,7 @@ export function QuotesPage() {
       ]);
     },
     onError: (problem: { detail?: string }) => {
-      setError(problem.detail ?? "Quote could not be accepted");
+      setError(problem.detail ?? "Offerten kunde inte accepteras");
     },
   });
   const replyMutation = useMutation({
@@ -120,7 +120,7 @@ export function QuotesPage() {
       ]);
     },
     onError: (problem: { detail?: string }) => {
-      setError(problem.detail ?? "Quote reply could not be interpreted");
+      setError(problem.detail ?? "Svaret på offerten kunde inte tolkas");
     },
   });
   const processQueueMutation = useMutation({
@@ -133,7 +133,7 @@ export function QuotesPage() {
       await queryClient.invalidateQueries({ queryKey: ["outbound-replies"] });
     },
     onError: (problem: { detail?: string }) => {
-      setError(problem.detail ?? "Outbound queue could not be processed");
+      setError(problem.detail ?? "Utgående kö kunde inte bearbetas");
     },
   });
 
@@ -169,7 +169,7 @@ export function QuotesPage() {
   function submitQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.requestId) {
-      setError("Create a transport request before quoting.");
+      setError("Skapa en transportförfrågan innan du offererar.");
       return;
     }
 
@@ -183,8 +183,8 @@ export function QuotesPage() {
   return (
     <ModuleScaffold
       badge="Quinn Quote"
-      description="Versioned quote records with status, price and currency from the backend API."
-      title="Quotes"
+      description="Versionshanterade offerter med status, pris och valuta från backend-API:et."
+      title="Offerter"
     >
       <form className="request-form" onSubmit={submitQuote}>
         <Select
@@ -192,7 +192,7 @@ export function QuotesPage() {
           value={form.requestId}
           onValueChange={(value) => setForm((current) => ({ ...current, requestId: value }))}
         >
-          <SelectTrigger aria-label="Request ID">
+          <SelectTrigger aria-label="Förfrågan">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -204,7 +204,7 @@ export function QuotesPage() {
           </SelectContent>
         </Select>
         <Input
-          aria-label="Customer price"
+          aria-label="Kundpris"
           inputMode="decimal"
           value={form.customerPrice}
           onChange={(event) =>
@@ -212,12 +212,12 @@ export function QuotesPage() {
           }
         />
         <Input
-          aria-label="Currency"
+          aria-label="Valuta"
           value={form.currency}
           onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))}
         />
         <Button disabled={createMutation.isPending} type="submit">
-          {createMutation.isPending ? "Creating..." : "Create quote"}
+          {createMutation.isPending ? "Skapar…" : "Skapa offert"}
         </Button>
       </form>
       {error ? (
@@ -230,7 +230,7 @@ export function QuotesPage() {
           { key: "id", label: "ID", mono: true },
           {
             key: "request_id",
-            label: "Request",
+            label: "Förfrågan",
             mono: true,
             render: (value) => {
               const request = (requestsQuery.data ?? []).find((item) => item.id === value);
@@ -245,7 +245,7 @@ export function QuotesPage() {
           { key: "version", label: "Version", align: "right" },
           {
             key: "customer_price",
-            label: "Customer price",
+            label: "Kundpris",
             align: "right",
             mono: true,
             render: (value, row) => `${value} ${row.currency}`,
@@ -253,11 +253,11 @@ export function QuotesPage() {
           {
             key: "id",
             id: "action",
-            label: "Action",
+            label: "Åtgärd",
             render: (value, row) =>
               row.status === "draft" || row.status === "revised"
-                ? `Send via API: ${value}`
-                : "No action",
+                ? `Skicka via API: ${value}`
+                : "Ingen åtgärd",
           },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
@@ -272,18 +272,18 @@ export function QuotesPage() {
             variant={quote.id === selectedQuoteId ? "default" : "secondary"}
             onClick={() => setSelectedQuoteId(quote.id)}
           >
-            Details {quote.id}
+            Detaljer {quote.id}
           </Button>
         ))}
       </div>
-      <section className="quote-detail-panel" aria-label="Quote detail">
+      <section className="quote-detail-panel" aria-label="Offertdetaljer">
         <div className="queue-panel-header">
-          <h3>Commercial timeline</h3>
-          <span className="text-sm text-muted-foreground">{detailQuery.data?.quote.status ?? "No quote selected"}</span>
+          <h3>Kommersiell tidslinje</h3>
+          <span className="text-sm text-muted-foreground">{detailQuery.data?.quote.status ?? "Ingen offert vald"}</span>
         </div>
         <div className="quote-detail-grid">
           <div>
-            <h4>Line items</h4>
+            <h4>Radposter</h4>
             <div className="agent-list">
               {(detailQuery.data?.line_items ?? []).map((item) => (
                 <div className="agent-row" key={item.id}>
@@ -297,12 +297,12 @@ export function QuotesPage() {
                 </div>
               ))}
               {!detailQuery.isLoading && (detailQuery.data?.line_items ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">No line items.</p>
+                <p className="text-sm text-muted-foreground">Inga radposter.</p>
               ) : null}
             </div>
           </div>
           <div>
-            <h4>Events</h4>
+            <h4>Händelser</h4>
             <div className="timeline-list">
               {(detailQuery.data?.acceptance_events ?? []).map((event) => (
                 <article className="timeline-item" key={event.id}>
@@ -313,7 +313,7 @@ export function QuotesPage() {
               ))}
               {!detailQuery.isLoading &&
               (detailQuery.data?.acceptance_events ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">No commercial events yet.</p>
+                <p className="text-sm text-muted-foreground">Inga kommersiella händelser än.</p>
               ) : null}
             </div>
           </div>
@@ -329,7 +329,7 @@ export function QuotesPage() {
               type="button"
               variant="secondary"
             >
-              Send {quote.id}
+              Skicka {quote.id}
             </Button>
           ))}
         {(query.data ?? [])
@@ -341,21 +341,21 @@ export function QuotesPage() {
                   replyMutation.mutate({
                     quoteId: quote.id,
                     payload: {
-                      body_text: "Accepted, please go ahead",
+                      body_text: "Accepterar, kör igång",
                       ...acceptancePayloadForQuote(quote),
                     },
                   })
                 }
                 type="button"
               >
-                Rex accept {quote.id}
+                Rex accepterar {quote.id}
               </Button>
               <Button
                 onClick={() =>
                   replyMutation.mutate({
                     quoteId: quote.id,
                     payload: {
-                      body_text: "Please revise with a lower price",
+                      body_text: "Vänligen revidera med lägre pris",
                       revised_customer_price: Math.max(1, quote.customer_price - 500),
                     },
                   })
@@ -363,40 +363,40 @@ export function QuotesPage() {
                 type="button"
                 variant="secondary"
               >
-                Revise
+                Revidera
               </Button>
               <Button
                 onClick={() =>
                   replyMutation.mutate({
                     quoteId: quote.id,
-                    payload: { body_text: "No thanks, we reject this quote" },
+                    payload: { body_text: "Nej tack, vi avböjer offerten" },
                   })
                 }
                 type="button"
                 variant="ghost"
               >
-                Reject
+                Avböj
               </Button>
               <Button
                 onClick={() => acceptMutation.mutate(quote)}
                 type="button"
                 variant="secondary"
               >
-                Direct accept
+                Direktacceptera
               </Button>
             </div>
           ))}
       </div>
-      <section className="queue-panel" aria-label="Outbound reply queue">
+      <section className="queue-panel" aria-label="Utgående svarskö">
         <div className="queue-panel-header">
-          <h3>Outbound reply queue</h3>
+          <h3>Utgående svarskö</h3>
           <Button
             disabled={processQueueMutation.isPending}
             onClick={() => processQueueMutation.mutate()}
             type="button"
             variant="secondary"
           >
-            {processQueueMutation.isPending ? "Processing..." : "Process queue"}
+            {processQueueMutation.isPending ? "Bearbetar…" : "Bearbeta kö"}
           </Button>
         </div>
         <div className="agent-list">
@@ -410,7 +410,7 @@ export function QuotesPage() {
             </div>
           ))}
           {!outboundQuery.isLoading && (outboundQuery.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No queued replies.</p>
+            <p className="text-sm text-muted-foreground">Inga köade svar.</p>
           ) : null}
         </div>
       </section>

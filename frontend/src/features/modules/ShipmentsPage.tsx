@@ -36,7 +36,7 @@ export function ShipmentsPage() {
   const [overrideForm, setOverrideForm] = useState({
     shipmentId: "",
     status: "needs_review",
-    reason: "Carrier confirmation requires operator review",
+    reason: "Transportörsbekräftelse kräver operatörsgranskning",
   });
   const [error, setError] = useState<string | null>(null);
   const query = useQuery({
@@ -76,7 +76,7 @@ export function ShipmentsPage() {
       ]);
     },
     onError: (problem: { detail?: string }) => {
-      setError(problem.detail ?? "Invoice audit could not be completed");
+      setError(problem.detail ?? "Fakturagranskningen kunde inte slutföras");
     },
   });
   const overrideMutation = useMutation({
@@ -109,7 +109,7 @@ export function ShipmentsPage() {
   function auditInvoiceForShipment(shipment: ShipmentListItem) {
     const quote = (quotesQuery.data ?? []).find((item) => item.id === shipment.quote_id);
     if (!quote) {
-      setError("Quote amount is required before invoice audit.");
+      setError("Offertbelopp krävs innan fakturagranskning.");
       return;
     }
 
@@ -127,19 +127,19 @@ export function ShipmentsPage() {
   return (
     <ModuleScaffold
       badge="Bex + Trak"
-      description="Booked and in-transit shipments with carrier assignment and ETA."
-      title="Shipments"
+      description="Bokade och pågående sändningar med transportörstilldelning och ETA."
+      title="Sändningar"
     >
       <DataTable
         columns={[
           { key: "public_id", label: "ID", mono: true },
-          { key: "lane", label: "Lane" },
+          { key: "lane", label: "Sträcka" },
           {
             key: "status",
             label: "Status",
             render: (value) => <StatusChip status={String(value)} />,
           },
-          { key: "carrier_id", label: "Carrier", mono: true },
+          { key: "carrier_id", label: "Transportör", mono: true },
           { key: "eta", label: "ETA", mono: true },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
@@ -157,7 +157,7 @@ export function ShipmentsPage() {
           onClick={() => trackingMutation.mutate()}
           type="button"
         >
-          {trackingMutation.isPending ? "Running Trak Flow..." : "Run tracking simulator"}
+          {trackingMutation.isPending ? "Kör Trak-flöde…" : "Kör spårningssimulator"}
         </Button>
         {(query.data ?? []).map((shipment) => {
           const nextStatus =
@@ -176,7 +176,7 @@ export function ShipmentsPage() {
               type="button"
               variant="secondary"
             >
-              Move {shipment.public_id} to {nextStatus}
+              Flytta {shipment.public_id} till {nextStatus}
             </Button>
           );
         })}
@@ -188,7 +188,7 @@ export function ShipmentsPage() {
               onClick={() => auditInvoiceForShipment(shipment)}
               type="button"
             >
-              Audit invoice for {shipment.public_id}
+              Granska faktura för {shipment.public_id}
             </Button>
           ))}
       </div>
@@ -206,12 +206,12 @@ export function ShipmentsPage() {
         <div className="override-heading">
           <ShieldAlert aria-hidden="true" />
           <div>
-            <span>Manual override</span>
-            <strong>Record an audited shipment exception</strong>
+            <span>Manuell override</span>
+            <strong>Registrera ett granskat sändningsundantag</strong>
           </div>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="override-shipment">Shipment</Label>
+          <Label htmlFor="override-shipment">Sändning</Label>
           <Select
             value={overrideForm.shipmentId}
             onValueChange={(value) =>
@@ -240,16 +240,16 @@ export function ShipmentsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="needs_review">Needs review</SelectItem>
-              <SelectItem value="manual_review">Manual review</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="booked">Booked</SelectItem>
-              <SelectItem value="in_transit">In transit</SelectItem>
+              <SelectItem value="needs_review">Behöver granskning</SelectItem>
+              <SelectItem value="manual_review">Manuell granskning</SelectItem>
+              <SelectItem value="cancelled">Avbokad</SelectItem>
+              <SelectItem value="booked">Bokad</SelectItem>
+              <SelectItem value="in_transit">Under transport</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="override-reason grid gap-1.5">
-          <Label htmlFor="override-reason">Reason</Label>
+          <Label htmlFor="override-reason">Anledning</Label>
           <Input
             id="override-reason"
             value={overrideForm.reason}
@@ -259,7 +259,7 @@ export function ShipmentsPage() {
           />
         </div>
         <Button disabled={overrideMutation.isPending} type="submit" variant="secondary">
-          {overrideMutation.isPending ? "Recording..." : "Record override"}
+          {overrideMutation.isPending ? "Registrerar…" : "Registrera override"}
         </Button>
       </form>
     </ModuleScaffold>

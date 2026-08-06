@@ -49,18 +49,18 @@ class OperationalQueries:
 
         return DashboardSummary(
             kpis=[
-                {"label": "Open requests", "value": str(open_requests), "trend": "+12%"},
-                {"label": "On-time", "value": "96%", "trend": "+3%"},
-                {"label": "Exceptions", "value": str(exceptions), "trend": "-18%"},
-                {"label": "Agent health", "value": "98%", "trend": "+1%"},
+                {"label": "Öppna förfrågningar", "value": str(open_requests), "trend": "+12%"},
+                {"label": "I tid", "value": "96%", "trend": "+3%"},
+                {"label": "Avvikelser", "value": str(exceptions), "trend": "-18%"},
+                {"label": "Agenthälsa", "value": "98%", "trend": "+1%"},
             ],
             pipeline=[
-                {"status": "New", "count": 8},
-                {"status": "Parsing", "count": 3},
-                {"status": "Quoted", "count": 12},
-                {"status": "Booked", "count": 9},
-                {"status": "In transit", "count": 17},
-                {"status": "Needs review", "count": exceptions},
+                {"status": "Nya", "count": 8},
+                {"status": "Tolkas", "count": 3},
+                {"status": "Offererad", "count": 12},
+                {"status": "Bokad", "count": 9},
+                {"status": "Under transport", "count": 17},
+                {"status": "Behöver granskning", "count": exceptions},
             ],
             agent_activity=[
                 {

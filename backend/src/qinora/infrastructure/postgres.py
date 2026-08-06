@@ -140,7 +140,7 @@ class PostgresOperationalReadRepository:
             RequestRecord(
                 id=str(row["id"]),
                 public_id=row["public_id"],
-                customer=row["customer"] or "Unknown customer",
+                customer=row["customer"] or "Okänd kund",
                 lane=row["lane"] or _lane(row["origin"], row["destination"]),
                 mode=row["mode"],
                 status=row["status"],
@@ -188,7 +188,7 @@ class PostgresOperationalReadRepository:
             request=RequestRecord(
                 id=str(request_row["id"]),
                 public_id=request_row["public_id"],
-                customer=request_row["customer"] or "Unknown customer",
+                customer=request_row["customer"] or "Okänd kund",
                 lane=request_row["lane"]
                 or _lane(request_row["origin"], request_row["destination"]),
                 mode=request_row["mode"],
@@ -322,9 +322,9 @@ class PostgresOperationalReadRepository:
                 public_id=row["public_id"],
                 quote_id=str(row["quote_id"]) if row["quote_id"] else "",
                 carrier_id=str(row["carrier_id"]) if row["carrier_id"] else None,
-                lane=row["lane"] or "Pending lane confirmation",
+                lane=row["lane"] or "Väntar på sträckbekräftelse",
                 status=row["status"],
-                eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Pending"),
+                eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Väntar"),
             )
             for row in self._fetch_all(
                 """
@@ -896,7 +896,7 @@ class PostgresStaleRequestRepository:
             StaleRequestRecord(
                 id=str(row["id"]),
                 public_id=row["public_id"],
-                customer=row["customer"] or "Unknown customer",
+                customer=row["customer"] or "Okänd kund",
                 review_reason=row["review_reason"],
                 created_at=row["created_at"].isoformat(),
             )
@@ -1134,9 +1134,9 @@ class PostgresShipmentWriteRepository:
             public_id=row["public_id"],
             quote_id=str(row["quote_id"]) if row["quote_id"] else "",
             carrier_id=str(row["carrier_id"]) if row["carrier_id"] else None,
-            lane=row["lane"] or "Pending lane confirmation",
+            lane=row["lane"] or "Väntar på sträckbekräftelse",
             status=row["status"],
-            eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Pending"),
+            eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Väntar"),
         )
 
     async def create_shipment(
@@ -1222,9 +1222,9 @@ class PostgresShipmentWriteRepository:
             public_id=row["public_id"],
             quote_id=str(row["quote_id"]) if row["quote_id"] else "",
             carrier_id=str(row["carrier_id"]) if row["carrier_id"] else None,
-            lane=row["lane"] or "Pending lane confirmation",
+            lane=row["lane"] or "Väntar på sträckbekräftelse",
             status=status,
-            eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Pending"),
+            eta=row["eta_label"] or (row["eta"].isoformat() if row["eta"] else "Väntar"),
         )
 
 
@@ -1555,7 +1555,7 @@ def _next_public_id(
 def _lane(origin: str | None, destination: str | None) -> str:
     if origin and destination:
         return f"{origin} -> {destination}"
-    return origin or destination or "Pending lane confirmation"
+    return origin or destination or "Väntar på sträckbekräftelse"
 
 
 def _split_lane(lane: str) -> tuple[str | None, str | None]:

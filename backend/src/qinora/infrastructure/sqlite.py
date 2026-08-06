@@ -363,7 +363,7 @@ class SQLiteDatabase:
                     None,
                     "Stockholm -> Oslo",
                     "needs_review",
-                    "Pending",
+                    "Väntar",
                 ),
             ],
         )

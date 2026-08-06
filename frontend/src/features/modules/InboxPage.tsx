@@ -29,20 +29,20 @@ export function InboxPage() {
 
   return (
     <ModuleScaffold
-      badge="Email relay"
-      description="Inbound messages ready for Nora Intake, invoice audit or operator review."
-      title="Inbox"
+      badge="E-postrelä"
+      description="Inkommande meddelanden redo för Nora Intake, fakturagranskning eller operatörsöversyn."
+      title="Inkorg"
     >
       <DataTable
         columns={[
-          { key: "sender", label: "Sender" },
-          { key: "subject", label: "Subject" },
+          { key: "sender", label: "Avsändare" },
+          { key: "subject", label: "Ämne" },
           {
             key: "classification",
-            label: "Classification",
+            label: "Klassificering",
             render: (value) => <StatusChip status={String(value)} />,
           },
-          { key: "received_at", label: "Received", mono: true },
+          { key: "received_at", label: "Mottaget", mono: true },
         ]}
         loading={query.isLoading}
         rows={query.data}
@@ -56,7 +56,7 @@ export function InboxPage() {
       >
         <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
           <SheetHeader>
-            <SheetTitle>{detailQuery.data?.message.subject ?? "Message"}</SheetTitle>
+            <SheetTitle>{detailQuery.data?.message.subject ?? "Meddelande"}</SheetTitle>
             <SheetDescription>
               {detailQuery.data?.message.sender} · {detailQuery.data?.message.received_at}
             </SheetDescription>
@@ -70,11 +70,11 @@ export function InboxPage() {
           ) : detailQuery.data ? (
             <div className="grid gap-3 py-4 text-sm">
               <div>
-                <div className="mb-1 text-xs uppercase text-muted-foreground">Classification</div>
+                <div className="mb-1 text-xs uppercase text-muted-foreground">Klassificering</div>
                 <StatusChip status={detailQuery.data.message.classification} />
               </div>
               <div>
-                <div className="mb-1 text-xs uppercase text-muted-foreground">Body</div>
+                <div className="mb-1 text-xs uppercase text-muted-foreground">Meddelandetext</div>
                 <p className="whitespace-pre-wrap rounded-md border border-border/40 bg-muted/40 p-3">
                   {detailQuery.data.body_text}
                 </p>

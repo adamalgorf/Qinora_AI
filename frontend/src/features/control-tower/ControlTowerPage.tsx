@@ -53,12 +53,12 @@ export function ControlTowerPage() {
         <div>
           <Badge className="mb-4 border-primary/30 bg-primary/10 text-primary" variant="outline">
             <RadioTower aria-hidden="true" className="size-3.5" />
-            Control Tower
+            Kontrolltorn
           </Badge>
           <h1>Överblick</h1>
           <p className="page-lede">
-            Intake, quotes, carrier matching, booking and invoice audit connected through one
-            deterministic backend workflow.
+            Inflöde, offerter, transportörsmatchning, bokning och fakturagranskning kopplat genom
+            ett deterministiskt backend-flöde.
           </p>
         </div>
         <Button
@@ -67,17 +67,17 @@ export function ControlTowerPage() {
           onClick={() => demoFlowMutation.mutate()}
         >
           <Play aria-hidden="true" />
-          {demoFlowMutation.isPending ? "Running flow..." : "Run demo flow"}
+          {demoFlowMutation.isPending ? "Kör flöde…" : "Kör demoflöde"}
         </Button>
       </header>
       {demoFlow ? (
-        <section className="demo-flow-panel" aria-label="Demo flow result">
+        <section className="demo-flow-panel" aria-label="Resultat av demoflöde">
           <div>
             <Badge variant="secondary">{demoFlow.shipment_status}</Badge>
-            <h2>{demoFlow.request.public_id} completed order-to-cash</h2>
+            <h2>{demoFlow.request.public_id} slutförde flödet från förfrågan till betalning</h2>
             <p>
-              {demoFlow.quote.id} accepted after outbound send, {demoFlow.shipment.public_id}{" "}
-              finished as {demoFlow.shipment.status} and {demoFlow.invoice.public_id} approved.
+              {demoFlow.quote.id} accepterades efter utskick, {demoFlow.shipment.public_id}{" "}
+              slutfördes som {demoFlow.shipment.status} och {demoFlow.invoice.public_id} godkändes.
             </p>
           </div>
           <ol>
@@ -85,30 +85,30 @@ export function ControlTowerPage() {
               <li key={step}>{step}</li>
             ))}
           </ol>
-          <div className="demo-flow-links" aria-label="Created flow records">
+          <div className="demo-flow-links" aria-label="Skapade poster i flödet">
             <Button asChild size="sm" variant="secondary">
               <Link to={`/requests?highlight=${demoFlow.request.id}`}>
-                Request {demoFlow.request.public_id}
+                Förfrågan {demoFlow.request.public_id}
               </Link>
             </Button>
             <Button asChild size="sm" variant="secondary">
-              <Link to={`/quotes?highlight=${demoFlow.quote.id}`}>Quote</Link>
+              <Link to={`/quotes?highlight=${demoFlow.quote.id}`}>Offert</Link>
             </Button>
             <Button asChild size="sm" variant="secondary">
               <Link to={`/shipments?highlight=${demoFlow.shipment.id}`}>
-                Shipment {demoFlow.shipment.public_id}
+                Sändning {demoFlow.shipment.public_id}
               </Link>
             </Button>
             <Button asChild size="sm" variant="secondary">
               <Link to={`/invoices?highlight=${demoFlow.invoice.id}`}>
-                Invoice {demoFlow.invoice.public_id}
+                Faktura {demoFlow.invoice.public_id}
               </Link>
             </Button>
           </div>
         </section>
       ) : null}
       {demoFlowMutation.error ? (
-        <p className="text-sm text-destructive">Demo flow could not be completed.</p>
+        <p className="text-sm text-destructive">Demoflödet kunde inte slutföras.</p>
       ) : null}
 
       <div className="kpi-grid">
@@ -150,8 +150,8 @@ export function ControlTowerPage() {
       <div className="tower-split">
         <Card className="agent-card">
           <CardHeader>
-            <CardDescription>Exception feed</CardDescription>
-            <CardTitle>Open operational tasks</CardTitle>
+            <CardDescription>Avvikelseflöde</CardDescription>
+            <CardTitle>Öppna driftuppgifter</CardTitle>
           </CardHeader>
           <CardContent className="agent-list">
             {tasksQuery.isLoading ? (
@@ -177,8 +177,8 @@ export function ControlTowerPage() {
 
         <Card className="agent-card">
           <CardHeader>
-            <CardDescription>Workflow activity</CardDescription>
-            <CardTitle>Latest automation decisions</CardTitle>
+            <CardDescription>Flödesaktivitet</CardDescription>
+            <CardTitle>Senaste automationsbeslut</CardTitle>
           </CardHeader>
           <CardContent className="agent-list">
             {summaryQuery.isLoading ? (

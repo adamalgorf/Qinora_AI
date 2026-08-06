@@ -16,16 +16,16 @@ export function CarriersPage() {
   return (
     <ModuleScaffold
       badge="Carrier Intelligence"
-      description="Tenant carrier directory feeding eligibility, scoring and confidence ranking."
-      title="Carriers"
+      description="Transportörskatalog för denna klient som driver behörighet, poängsättning och tillförlitlighetsrankning."
+      title="Transportörer"
     >
       <DataTable
         columns={[
-          { key: "display_name", label: "Carrier" },
-          { key: "modes", label: "Modes", render: (value) => (value as string[]).join(", ") },
-          { key: "lane_score", label: "Lane score" },
-          { key: "performance_score", label: "Performance" },
-          { key: "preferred", label: "Preferred", render: (value) => (value ? "Yes" : "No") },
+          { key: "display_name", label: "Transportör" },
+          { key: "modes", label: "Transportsätt", render: (value) => (value as string[]).join(", ") },
+          { key: "lane_score", label: "Sträckpoäng", align: "right", mono: true },
+          { key: "performance_score", label: "Prestanda", align: "right", mono: true },
+          { key: "preferred", label: "Föredragen", render: (value) => (value ? "Ja" : "Nej") },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}

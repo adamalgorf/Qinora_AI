@@ -139,20 +139,20 @@ export function RequestsPage() {
   return (
     <ModuleScaffold
       badge="Nora + Parsek"
-      description="Parsed customer transport requests with modes, lanes and validation states."
-      title="Requests"
+      description="Tolkade kundförfrågningar med transportsätt, sträckor och valideringsstatus."
+      title="Förfrågningar"
     >
       <form className="request-form" onSubmit={submitRequest}>
         <div className="request-section">
           <div className="request-section-header">
             <div>
-              <span>Transport order</span>
-              <strong>Lane and service</strong>
+              <span>Transportorder</span>
+              <strong>Sträcka och tjänst</strong>
             </div>
           </div>
           <div className="request-grid">
             <div className="grid gap-1.5">
-              <Label htmlFor="request-customer">Customer</Label>
+              <Label htmlFor="request-customer">Kund</Label>
               <Input
                 id="request-customer"
                 value={form.customer}
@@ -160,7 +160,7 @@ export function RequestsPage() {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="request-origin">Origin</Label>
+              <Label htmlFor="request-origin">Ursprung</Label>
               <Input
                 id="request-origin"
                 value={form.origin}
@@ -176,7 +176,7 @@ export function RequestsPage() {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="request-mode">Mode</Label>
+              <Label htmlFor="request-mode">Transportsätt</Label>
               <Select
                 value={form.mode}
                 onValueChange={(value) =>
@@ -189,15 +189,15 @@ export function RequestsPage() {
                 <SelectContent>
                   <SelectItem value="ltl">LTL</SelectItem>
                   <SelectItem value="ftl">FTL</SelectItem>
-                  <SelectItem value="air">Air</SelectItem>
-                  <SelectItem value="ocean">Ocean</SelectItem>
-                  <SelectItem value="rail">Rail</SelectItem>
+                  <SelectItem value="air">Flyg</SelectItem>
+                  <SelectItem value="ocean">Sjöfrakt</SelectItem>
+                  <SelectItem value="rail">Järnväg</SelectItem>
                   <SelectItem value="intermodal">Intermodal</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="request-loading-time">Loading time</Label>
+              <Label htmlFor="request-loading-time">Lastningstid</Label>
               <Input
                 id="request-loading-time"
                 value={form.loadingTime}
@@ -210,19 +210,19 @@ export function RequestsPage() {
         <div className="request-section">
           <div className="request-section-header">
             <div>
-              <span>Cargo</span>
-              <strong>{cargoLines.length} line{cargoLines.length === 1 ? "" : "s"}</strong>
+              <span>Gods</span>
+              <strong>{cargoLines.length} rad{cargoLines.length === 1 ? "" : "er"}</strong>
             </div>
             <Button type="button" variant="secondary" onClick={addCargoLine}>
               <Plus aria-hidden="true" />
-              Add line
+              Lägg till rad
             </Button>
           </div>
           <div className="cargo-lines">
             {cargoLines.map((line, index) => (
               <div className="cargo-line" key={line.id}>
                 <div className="cargo-description grid gap-1.5">
-                  <Label htmlFor={`cargo-${line.id}-description`}>Description</Label>
+                  <Label htmlFor={`cargo-${line.id}-description`}>Beskrivning</Label>
                   <Input
                     id={`cargo-${line.id}-description`}
                     value={line.description}
@@ -232,7 +232,7 @@ export function RequestsPage() {
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`cargo-${line.id}-quantity`}>Qty</Label>
+                  <Label htmlFor={`cargo-${line.id}-quantity`}>Antal</Label>
                   <Input
                     id={`cargo-${line.id}-quantity`}
                     inputMode="numeric"
@@ -259,7 +259,7 @@ export function RequestsPage() {
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor={`cargo-${line.id}-width`}>W cm</Label>
+                  <Label htmlFor={`cargo-${line.id}-width`}>B cm</Label>
                   <Input
                     id={`cargo-${line.id}-width`}
                     inputMode="decimal"
@@ -277,7 +277,7 @@ export function RequestsPage() {
                   />
                 </div>
                 <Button
-                  aria-label={`Remove cargo ${index + 1}`}
+                  aria-label={`Ta bort gods ${index + 1}`}
                   disabled={cargoLines.length === 1}
                   size="icon"
                   type="button"
@@ -293,7 +293,7 @@ export function RequestsPage() {
 
         <div className="request-submit">
           <Button disabled={createMutation.isPending} type="submit">
-            {createMutation.isPending ? "Creating..." : "Create request"}
+            {createMutation.isPending ? "Skapar…" : "Skapa förfrågan"}
           </Button>
         </div>
       </form>
@@ -304,7 +304,7 @@ export function RequestsPage() {
       ) : null}
       {createMutation.data?.complete ? (
         <Alert>
-          <AlertDescription>Request parsed and ready for quoting.</AlertDescription>
+          <AlertDescription>Förfrågan tolkad och redo att offereras.</AlertDescription>
         </Alert>
       ) : null}
       {createMutation.error ? (
@@ -317,9 +317,9 @@ export function RequestsPage() {
       <DataTable
         columns={[
           { key: "public_id", label: "ID", mono: true },
-          { key: "customer", label: "Customer" },
-          { key: "lane", label: "Lane" },
-          { key: "mode", label: "Mode" },
+          { key: "customer", label: "Kund" },
+          { key: "lane", label: "Sträcka" },
+          { key: "mode", label: "Transportsätt" },
           {
             key: "status",
             label: "Status",
@@ -327,7 +327,7 @@ export function RequestsPage() {
           },
           {
             key: "weight_kg",
-            label: "Weight kg",
+            label: "Vikt kg",
             align: "right",
             mono: true,
             render: (value) => `${value}`,
@@ -347,7 +347,7 @@ export function RequestsPage() {
         <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
           <SheetHeader>
             <SheetTitle className="font-mono">
-              {detailQuery.data?.request.public_id ?? "Request"}
+              {detailQuery.data?.request.public_id ?? "Förfrågan"}
             </SheetTitle>
             <SheetDescription>
               {detailQuery.data?.request.customer} · {detailQuery.data?.request.lane}
@@ -363,7 +363,7 @@ export function RequestsPage() {
             <div className="grid gap-4 py-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs uppercase text-muted-foreground">Mode</div>
+                  <div className="text-xs uppercase text-muted-foreground">Transportsätt</div>
                   <div>{detailQuery.data.request.mode}</div>
                 </div>
                 <div>
@@ -371,13 +371,13 @@ export function RequestsPage() {
                   <StatusChip status={detailQuery.data.request.status} />
                 </div>
                 <div>
-                  <div className="text-xs uppercase text-muted-foreground">Weight</div>
+                  <div className="text-xs uppercase text-muted-foreground">Vikt</div>
                   <div className="font-mono tabular-nums">
                     {detailQuery.data.request.weight_kg} kg
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs uppercase text-muted-foreground">Created</div>
+                  <div className="text-xs uppercase text-muted-foreground">Skapad</div>
                   <div className="font-mono">{detailQuery.data.created_at}</div>
                 </div>
               </div>
@@ -388,10 +388,10 @@ export function RequestsPage() {
               ) : null}
               <div>
                 <div className="mb-2 text-xs uppercase text-muted-foreground">
-                  Cargo ({detailQuery.data.cargo_lines.length})
+                  Gods ({detailQuery.data.cargo_lines.length})
                 </div>
                 {detailQuery.data.cargo_lines.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No cargo lines recorded.</p>
+                  <p className="text-sm text-muted-foreground">Inga godsrader registrerade.</p>
                 ) : (
                   <div className="grid gap-2">
                     {detailQuery.data.cargo_lines.map((line) => (
@@ -400,7 +400,7 @@ export function RequestsPage() {
                           <strong>{line.description}</strong>
                           <span>
                             {[
-                              line.quantity ? `${line.quantity} pcs` : null,
+                              line.quantity ? `${line.quantity} st` : null,
                               line.weight_kg ? `${line.weight_kg} kg` : null,
                               line.length_cm && line.width_cm && line.height_cm
                                 ? `${line.length_cm}x${line.width_cm}x${line.height_cm} cm`

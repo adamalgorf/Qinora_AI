@@ -16,22 +16,24 @@ export function ContactsPage() {
   return (
     <ModuleScaffold
       badge="Miles Match"
-      description="CRM contacts used to match inbound senders, pricing defaults and customer terms."
-      title="Contacts"
+      description="CRM-kontakter som används för att matcha inkommande avsändare, standardpriser och kundvillkor."
+      title="Kontakter"
     >
       <DataTable
         columns={[
-          { key: "public_id", label: "ID" },
-          { key: "display_name", label: "Customer" },
-          { key: "email", label: "Email" },
-          { key: "domain", label: "Domain" },
+          { key: "public_id", label: "ID", mono: true },
+          { key: "display_name", label: "Kund" },
+          { key: "email", label: "E-post" },
+          { key: "domain", label: "Domän" },
           {
             key: "default_markup_percent",
-            label: "Markup",
+            label: "Påslag",
+            align: "right",
+            mono: true,
             render: (value) => `${Number(value).toFixed(1)}%`,
           },
           { key: "default_incoterms", label: "Incoterms" },
-          { key: "payment_terms", label: "Terms" },
+          { key: "payment_terms", label: "Villkor" },
         ]}
         highlightId={searchParams.get("highlight") ?? undefined}
         loading={query.isLoading}
