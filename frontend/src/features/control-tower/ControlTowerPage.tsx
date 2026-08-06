@@ -53,7 +53,7 @@ export function ControlTowerPage() {
             <RadioTower aria-hidden="true" className="size-3.5" />
             Control Tower
           </Badge>
-          <h1>Freight operations from request to invoice in one command layer.</h1>
+          <h1>Överblick</h1>
           <p className="page-lede">
             Intake, quotes, carrier matching, booking and invoice audit connected through one
             deterministic backend workflow.
