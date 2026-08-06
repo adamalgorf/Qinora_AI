@@ -141,9 +141,6 @@ export function ControlTowerPage() {
               <CardDescription>{column.status}</CardDescription>
               <CardTitle>{column.count}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="column-glow" />
-            </CardContent>
           </Card>
         ))}
       </div>

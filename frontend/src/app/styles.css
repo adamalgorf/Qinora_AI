@@ -262,10 +262,8 @@ h1 {
   align-items: start;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--accent) / 0.06)),
-    hsl(var(--card) / 0.8);
+  background: hsl(var(--muted) / 0.5);
   padding: 18px;
-  box-shadow: var(--shadow-soft);
 }
 
 .demo-flow-panel h2 {
@@ -304,26 +302,8 @@ h1 {
   gap: 6px;
 }
 
-.pipeline-column {
-  min-height: 240px;
-  overflow: hidden;
-  position: relative;
-}
-
 .pipeline-column [data-slot="card-title"] {
-  font-size: 2rem;
-}
-
-.column-glow {
-  height: 120px;
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--accent) / 0.14)),
-    repeating-linear-gradient(
-      90deg,
-      hsl(var(--foreground) / 0.06) 0 1px,
-      transparent 1px 18px
-    );
+  font-size: 1.75rem;
 }
 
 .tower-split {
@@ -363,11 +343,9 @@ h1 {
   min-width: 0;
 }
 
-.request-section {
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.6);
-  padding: 16px;
+.request-section + .request-section {
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .request-section-header {
@@ -432,10 +410,8 @@ h1 {
 }
 
 .quote-detail-panel {
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.6);
-  padding: 18px;
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .quote-detail-grid {
@@ -488,10 +464,8 @@ h1 {
 
 .queue-panel {
   margin-top: 22px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.6);
-  padding: 18px;
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .queue-panel h3 {
@@ -505,10 +479,8 @@ h1 {
   grid-template-columns: minmax(180px, 1.2fr) minmax(140px, 0.8fr) minmax(240px, 1.4fr) auto;
   gap: 12px;
   align-items: end;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.6);
-  padding: 16px;
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .override-heading {
@@ -558,7 +530,6 @@ h1 {
 
 .agent-list {
   display: grid;
-  gap: 12px;
 }
 
 .agent-config-grid {
@@ -615,9 +586,12 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  padding: 14px;
+  padding: 12px 2px;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+}
+
+.agent-list > .agent-row:last-child {
+  border-bottom: none;
 }
 
 .agent-row div {
@@ -698,10 +672,6 @@ h1 {
     padding: 16px;
   }
 
-  .request-section,
-  .quote-detail-panel,
-  .queue-panel,
-  .override-panel,
   .agent-config-card {
     padding: 12px;
   }

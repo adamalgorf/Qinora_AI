@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 type ModuleScaffoldProps = {
   title: string;
@@ -21,11 +21,7 @@ export function ModuleScaffold({ title, description, badge, children }: ModuleSc
         <p className="page-lede">{description}</p>
       </header>
       <Card className="data-card">
-        <CardHeader>
-          <CardDescription>Live API data</CardDescription>
-          <CardTitle>Operational records</CardTitle>
-        </CardHeader>
-        <CardContent>{children}</CardContent>
+        <CardContent className="pt-5">{children}</CardContent>
       </Card>
     </section>
   );
