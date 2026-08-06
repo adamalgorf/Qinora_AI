@@ -55,7 +55,7 @@ import { LoadingScreen } from "./LoadingScreen";
 import { LoginScreen } from "./LoginScreen";
 
 const navItems = [
-  { label: "Tower", href: "/", icon: Activity },
+  { label: "Överblick", href: "/", icon: Activity },
   { label: "Inbox", href: "/inbox", icon: Inbox },
   { label: "Requests", href: "/requests", icon: RadioTower },
   { label: "Contacts", href: "/contacts", icon: ContactRound },
