@@ -51,6 +51,7 @@ import {
   type TokenResponse,
 } from "@/shared/api/client";
 import { ThemeToggle } from "@/shared/theme/ThemeToggle";
+import { LoadingScreen } from "./LoadingScreen";
 import { LoginScreen } from "./LoginScreen";
 
 const navItems = [
@@ -148,7 +149,7 @@ export function AppShell() {
   }
 
   if (configQuery.isLoading || authQuery.isLoading) {
-    return null;
+    return <LoadingScreen />;
   }
 
   if (loginRequired && !authQuery.data) {

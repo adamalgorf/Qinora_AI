@@ -1,0 +1,16 @@
+name: Keep backend warm
+
+on:
+  schedule:
+    # Render's free tier spins a web service down after 15 minutes of
+    # inactivity, and the next request pays a ~30-60s cold-start penalty.
+    # Ping the health endpoint often enough that it never gets the chance.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: curl -fsS --max-time 25 https://qinora-backend.onrender.com/ready
