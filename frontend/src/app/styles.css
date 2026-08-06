@@ -176,6 +176,13 @@ button {
   color: hsl(var(--muted-foreground));
 }
 
+@media (min-width: 640px) {
+  .search-trigger.search-trigger {
+    width: 240px;
+    justify-content: flex-start;
+  }
+}
+
 .app-header-actions {
   display: flex;
   align-items: center;
@@ -184,6 +191,7 @@ button {
 }
 
 .search-trigger kbd {
+  margin-left: auto;
   font-family: inherit;
   font-size: 0.8rem;
   font-weight: 400;
