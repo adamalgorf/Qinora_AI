@@ -13,4 +13,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping backend health endpoint
-        run: curl -fsS --max-time 25 https://qinora-backend.onrender.com/ready
+        run: curl -fsS --max-time 90 --retry 2 --retry-delay 5 https://qinora-backend.onrender.com/ready
