@@ -18,6 +18,16 @@ services:
       # Project Settings -> Database -> Connection string (URI).
       - key: DATABASE_URL
         sync: false
+      - key: LLM_PROVIDER
+        value: openai
+      # Paste your OpenAI API key here (Render dashboard -> qinora-backend
+      # -> Environment). Enables the 3 real agents (Parsek, Remy Rates,
+      # Rex Response); leave LLM_PROVIDER at "stub" instead if you want to
+      # skip this.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
       # Fill in once the frontend static site's URL is known (see below).
       - key: CORS_ALLOWED_ORIGINS
         sync: false
