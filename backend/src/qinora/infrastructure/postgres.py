@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
+    InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
@@ -21,6 +22,7 @@ from qinora.application.read_models import (
     QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
+    RateProfileRecord,
     RequestCargoLineRecord,
     RequestDetailRecord,
     RequestRecord,
@@ -117,16 +119,34 @@ class PostgresInboundEmailRepository:
         sender: str,
         subject: str,
         body_text: str,
+        recipient: str = "",
+        message_id: str | None = None,
+        in_reply_to: str | None = None,
+        references_header: str | None = None,
     ) -> str:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                     insert into public.email_inbound
-                      (tenant_id, idempotency_key, sender, subject, body_text, classification)
-                    values (%s, %s, %s, %s, %s, %s)
+                      (
+                        tenant_id, idempotency_key, sender, recipient, subject, body_text,
+                        classification, message_id, in_reply_to, references_header
+                      )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     returning id
                     """,
-                (self._database.tenant_id, idempotency_key, sender, subject, body_text, "pending"),
+                (
+                    self._database.tenant_id,
+                    idempotency_key,
+                    sender,
+                    recipient,
+                    subject,
+                    body_text,
+                    "pending",
+                    message_id,
+                    in_reply_to,
+                    references_header,
+                ),
             )
             return str(cursor.fetchone()["id"])
 
@@ -758,6 +778,93 @@ class PostgresRequestWriteRepository:
                 ),
             )
             request_id = str(cursor.fetchone()["id"])
+            cursor.executemany(
+                """
+                insert into public.request_cargo
+                  (
+                    tenant_id, request_id, description, quantity, weight_kg,
+                    length_cm, width_cm, height_cm, hazardous, un_number
+                  )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        self._database.tenant_id,
+                        request_id,
+                        line.description,
+                        line.quantity,
+                        line.weight_kg,
+                        line.length_cm,
+                        line.width_cm,
+                        line.height_cm,
+                        False,
+                        None,
+                    )
+                    for line in request.cargo
+                ],
+            )
+
+        return RequestRecord(
+            id=request_id,
+            public_id=public_id,
+            customer=customer,
+            lane=lane,
+            mode=request.mode.value,
+            status=status,
+            weight_kg=total_weight,
+        )
+
+    async def update_transport_request(
+        self,
+        *,
+        request_id: str,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
+        origin, destination = _split_lane(lane)
+        total_weight = sum(line.weight_kg or 0 for line in request.cargo)
+
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select public_id
+                from public.transport_requests
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise LookupError(f"Transport request not found: {request_id}")
+            public_id = row["public_id"]
+
+            cursor.execute(
+                """
+                update public.transport_requests
+                set customer = %s, lane = %s, mode = %s, status = %s, origin = %s,
+                  destination = %s, review_reason = %s, weight_kg = %s
+                where tenant_id = %s and id = %s
+                """,
+                (
+                    customer,
+                    lane,
+                    request.mode.value,
+                    status,
+                    origin,
+                    destination,
+                    review_reason,
+                    total_weight,
+                    self._database.tenant_id,
+                    request_id,
+                ),
+            )
+            cursor.execute(
+                "delete from public.request_cargo where tenant_id = %s and request_id = %s",
+                (self._database.tenant_id, request_id),
+            )
             cursor.executemany(
                 """
                 insert into public.request_cargo
@@ -1487,6 +1594,268 @@ class PostgresOutboundReplyRepository:
         return _outbound_reply_record(row)
 
 
+_EMAIL_THREAD_COLUMNS = """
+    id, sender, recipient, subject, body_text, classification, message_id,
+    in_reply_to, references_header, request_id, quote_id, created_at
+"""
+
+
+class PostgresEmailThreadRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def get(self, email_id: str) -> InboundEmailRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, email_id),
+            )
+            row = cursor.fetchone()
+        return _inbound_email_from_postgres_row(row) if row else None
+
+    async def find_candidates_by_message_ids(
+        self, message_ids: tuple[str, ...]
+    ) -> list[InboundEmailRecord]:
+        if not message_ids:
+            return []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and message_id = any(%s)
+                order by created_at desc
+                """,
+                (self._database.tenant_id, list(message_ids)),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def find_candidates_by_sender(
+        self, sender: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and lower(sender) = %s
+                order by created_at desc
+                limit %s
+                """,
+                (self._database.tenant_id, sender.strip().lower(), limit),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def find_candidates_by_domain(
+        self, domain: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and lower(sender) like %s
+                order by created_at desc
+                limit %s
+                """,
+                (self._database.tenant_id, f"%@{domain.strip().lower()}", limit),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def list_thread_history(
+        self, *, request_id: str | None, quote_id: str | None
+    ) -> list[InboundEmailRecord]:
+        if not request_id and not quote_id:
+            return []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s
+                  and ((%s::text is not null and request_id = %s)
+                    or (%s::text is not null and quote_id = %s))
+                order by created_at asc
+                """,
+                (self._database.tenant_id, request_id, request_id, quote_id, quote_id),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def link_thread(
+        self, email_id: str, *, request_id: str | None, quote_id: str | None
+    ) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.email_inbound
+                set request_id = %s, quote_id = %s
+                where tenant_id = %s and id = %s
+                """,
+                (request_id, quote_id, self._database.tenant_id, email_id),
+            )
+
+    async def mark_classification(self, email_id: str, classification: str) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.email_inbound
+                set classification = %s
+                where tenant_id = %s and id = %s
+                """,
+                (classification, self._database.tenant_id, email_id),
+            )
+
+
+class PostgresRateProfileRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def find_matching(
+        self, *, mode: str, origin: str | None, destination: str | None
+    ) -> RateProfileRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, mode, origin, destination, base_price, price_per_kg, currency
+                from public.rate_profiles
+                where tenant_id = %s and mode = %s and origin is not distinct from %s
+                  and destination is not distinct from %s
+                """,
+                (self._database.tenant_id, mode, origin, destination),
+            )
+            row = cursor.fetchone()
+            if row is None and (origin is not None or destination is not None):
+                cursor.execute(
+                    """
+                    select id, mode, origin, destination, base_price, price_per_kg, currency
+                    from public.rate_profiles
+                    where tenant_id = %s and mode = %s
+                      and origin is null and destination is null
+                    """,
+                    (self._database.tenant_id, mode),
+                )
+                row = cursor.fetchone()
+        return _rate_profile_from_postgres_row(row) if row else None
+
+    async def list_all(self) -> list[RateProfileRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, mode, origin, destination, base_price, price_per_kg, currency
+                from public.rate_profiles
+                where tenant_id = %s
+                order by mode, origin, destination
+                """,
+                (self._database.tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return [_rate_profile_from_postgres_row(row) for row in rows]
+
+    async def create(
+        self,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.rate_profiles
+                  (tenant_id, mode, origin, destination, base_price, price_per_kg, currency)
+                values (%s, %s, %s, %s, %s, %s, %s)
+                returning id, mode, origin, destination, base_price, price_per_kg, currency
+                """,
+                (
+                    self._database.tenant_id,
+                    mode,
+                    origin,
+                    destination,
+                    base_price,
+                    price_per_kg,
+                    currency,
+                ),
+            )
+            row = cursor.fetchone()
+        return _rate_profile_from_postgres_row(row)
+
+    async def update(
+        self,
+        rate_profile_id: str,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.rate_profiles
+                set mode = %s, origin = %s, destination = %s, base_price = %s,
+                  price_per_kg = %s, currency = %s
+                where tenant_id = %s and id = %s
+                returning id, mode, origin, destination, base_price, price_per_kg, currency
+                """,
+                (
+                    mode,
+                    origin,
+                    destination,
+                    base_price,
+                    price_per_kg,
+                    currency,
+                    self._database.tenant_id,
+                    rate_profile_id,
+                ),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Rate profile not found: {rate_profile_id}")
+        return _rate_profile_from_postgres_row(row)
+
+
+def _inbound_email_from_postgres_row(row: dict[str, Any]) -> InboundEmailRecord:
+    return InboundEmailRecord(
+        id=str(row["id"]),
+        sender=row["sender"],
+        recipient=row["recipient"] or "",
+        subject=row["subject"],
+        body_text=row["body_text"],
+        classification=row["classification"],
+        message_id=row["message_id"],
+        in_reply_to=row["in_reply_to"],
+        references_header=row["references_header"],
+        request_id=str(row["request_id"]) if row["request_id"] else None,
+        quote_id=str(row["quote_id"]) if row["quote_id"] else None,
+        created_at=row["created_at"].isoformat(),
+    )
+
+
+def _rate_profile_from_postgres_row(row: dict[str, Any]) -> RateProfileRecord:
+    return RateProfileRecord(
+        id=str(row["id"]),
+        mode=row["mode"],
+        origin=row["origin"],
+        destination=row["destination"],
+        base_price=float(row["base_price"]),
+        price_per_kg=float(row["price_per_kg"]),
+        currency=row["currency"],
+    )
+
+
 def _quote_record(row: dict[str, Any]) -> QuoteRecord:
     return QuoteRecord(
         id=str(row["id"]),
@@ -1521,6 +1890,7 @@ def _agent_config_from_postgres_row(row: dict[str, Any]) -> AgentConfigRecord:
         is_enabled=bool(row["is_enabled"]),
         auto_mode=str(config.get("auto_mode", "manual")),
         min_confidence=float(config.get("min_confidence", 0)),
+        config=dict(config),
     )
 
 

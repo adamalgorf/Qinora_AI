@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -30,6 +30,7 @@ class ParsedTransportRequestDraft:
     unloading_time: datetime | None
     confidence: float
     missing_fields: tuple[str, ...]
+    action: str = "create"
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,7 @@ class AgentConfigRecord:
     is_enabled: bool
     auto_mode: str
     min_confidence: float
+    config: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -286,3 +288,36 @@ class QuoteResponseEventRecord:
     intent: str
     body_text: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class InboundEmailRecord:
+    """A single email_inbound row, including the threading columns added
+    for the email intake orchestrator (see application/thread_matching.py
+    and application/email_intake_orchestrator.py). Doubles as both the
+    "fetch one email" read shape and a thread-matching candidate row.
+    """
+
+    id: str
+    sender: str
+    recipient: str
+    subject: str
+    body_text: str
+    classification: str | None
+    message_id: str | None
+    in_reply_to: str | None
+    references_header: str | None
+    request_id: str | None
+    quote_id: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
+class RateProfileRecord:
+    id: str
+    mode: str
+    origin: str | None
+    destination: str | None
+    base_price: float
+    price_per_kg: float
+    currency: str

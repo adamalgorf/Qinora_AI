@@ -60,6 +60,9 @@ from qinora.application.request_intake import (
     CargoLineCommand,
     CreateRequestCommand,
     CreateRequestUseCase,
+    UpdateRequestCommand,
+    UpdateRequestResult,
+    UpdateRequestUseCase,
 )
 from qinora.application.request_parsing_agent import (
     ParseFreeTextRequestCommand,
@@ -139,6 +142,9 @@ __all__ = [
     "TrackingSimulator",
     "TrackingSimulatorResult",
     "UpdateAgentConfigCommand",
+    "UpdateRequestCommand",
+    "UpdateRequestResult",
+    "UpdateRequestUseCase",
     "UpdateShipmentStatusCommand",
     "QuoteWriteRepository",
     "WebhookEventRepository",

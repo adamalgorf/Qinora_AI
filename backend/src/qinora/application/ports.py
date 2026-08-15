@@ -6,6 +6,7 @@ from qinora.application.read_models import (
     CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
+    InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
@@ -17,6 +18,7 @@ from qinora.application.read_models import (
     QuoteRecord,
     QuoteReplyInterpretation,
     QuoteResponseEventRecord,
+    RateProfileRecord,
     RequestDetailRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -42,7 +44,50 @@ class InboundEmailRepository(Protocol):
         sender: str,
         subject: str,
         body_text: str,
+        recipient: str = "",
+        message_id: str | None = None,
+        in_reply_to: str | None = None,
+        references_header: str | None = None,
     ) -> str:
+        pass
+
+
+class EmailThreadRepository(Protocol):
+    """Threading lookups over email_inbound, plus the write-back methods the
+    intake orchestrator uses to record its gating decision and link a
+    message to the request/quote it resolved to (see
+    application/thread_matching.py and application/email_intake_orchestrator.py).
+    """
+
+    async def get(self, email_id: str) -> InboundEmailRecord | None:
+        pass
+
+    async def find_candidates_by_message_ids(
+        self, message_ids: tuple[str, ...]
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def find_candidates_by_sender(
+        self, sender: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def find_candidates_by_domain(
+        self, domain: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def list_thread_history(
+        self, *, request_id: str | None, quote_id: str | None
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def link_thread(
+        self, email_id: str, *, request_id: str | None, quote_id: str | None
+    ) -> None:
+        pass
+
+    async def mark_classification(self, email_id: str, classification: str) -> None:
         pass
 
 
@@ -187,6 +232,18 @@ class RequestWriteRepository(Protocol):
     ) -> RequestRecord:
         pass
 
+    async def update_transport_request(
+        self,
+        *,
+        request_id: str,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
+        pass
+
 
 class StaleRequestRepository(Protocol):
     async def list_stale_requests(self, cutoff: str) -> list[StaleRequestRecord]:
@@ -322,4 +379,39 @@ class OutboundReplyRepository(Protocol):
 
 class OutboundMailer(Protocol):
     async def send(self, reply: OutboundReplyRecord) -> None:
+        pass
+
+
+class RateProfileRepository(Protocol):
+    async def find_matching(
+        self, *, mode: str, origin: str | None, destination: str | None
+    ) -> RateProfileRecord | None:
+        pass
+
+    async def list_all(self) -> list[RateProfileRecord]:
+        pass
+
+    async def create(
+        self,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        pass
+
+    async def update(
+        self,
+        rate_profile_id: str,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
         pass

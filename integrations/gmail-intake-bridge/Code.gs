@@ -75,9 +75,13 @@ function forwardNewMail() {
 
 function sendToQinora_(message, secret, webhookUrl) {
   var payload = {
-    sender: message.getFrom().replace(/^.*<(.+)>$/, "$1"),
+    sender: extractEmailAddress_(message.getFrom()),
+    recipient: extractEmailAddress_(message.getTo()),
     subject: message.getSubject() || "(no subject)",
     body_text: message.getPlainBody().slice(0, 20000),
+    message_id: message.getHeader("Message-ID"),
+    in_reply_to: message.getHeader("In-Reply-To"),
+    references: message.getHeader("References"),
   };
   var body = JSON.stringify(payload);
   var signature = "sha256=" + toHex_(Utilities.computeHmacSha256Signature(body, secret));
@@ -107,6 +111,17 @@ function sendToQinora_(message, secret, webhookUrl) {
       response.getContentText()
   );
   return false;
+}
+
+// The QiNora webhook payload requires a bare address (recipient/sender are
+// validated as EmailStr - see interfaces/http/schemas.py). getFrom()/getTo()
+// can return "Display Name <addr@example.com>" and, for getTo(), multiple
+// comma-separated addresses - this takes the first address and strips any
+// display name.
+function extractEmailAddress_(raw) {
+  var first = (raw || "").split(",")[0];
+  var match = first.match(/<([^<>]+)>/);
+  return (match ? match[1] : first).trim();
 }
 
 function getOrCreateLabel_(name) {

@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     CarrierOfferRecord,
     CarrierRecord,
     ContactRecord,
+    InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
@@ -21,6 +22,7 @@ from qinora.application.read_models import (
     QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
+    RateProfileRecord,
     RequestCargoLineRecord,
     RequestDetailRecord,
     RequestRecord,
@@ -66,9 +68,15 @@ class SQLiteDatabase:
                   id text primary key,
                   idempotency_key text not null unique,
                   sender text not null,
+                  recipient text not null default '',
                   subject text not null,
                   body_text text not null,
                   classification text,
+                  message_id text,
+                  in_reply_to text,
+                  references_header text,
+                  request_id text,
+                  quote_id text,
                   created_at text not null default current_timestamp
                 );
 
@@ -231,6 +239,17 @@ class SQLiteDatabase:
                   confidence real not null,
                   created_at text not null default current_timestamp
                 );
+
+                create table if not exists rate_profiles (
+                  id text primary key,
+                  mode text not null,
+                  origin text,
+                  destination text,
+                  base_price real not null default 0,
+                  price_per_kg real not null default 0,
+                  currency text not null default 'SEK',
+                  created_at text not null default current_timestamp
+                );
                 """
             )
             _add_column_if_missing(
@@ -271,6 +290,17 @@ class SQLiteDatabase:
                 "is_active",
                 "integer not null default 1",
             )
+            _add_column_if_missing(
+                connection,
+                "email_inbound",
+                "recipient",
+                "text not null default ''",
+            )
+            _add_column_if_missing(connection, "email_inbound", "message_id", "text")
+            _add_column_if_missing(connection, "email_inbound", "in_reply_to", "text")
+            _add_column_if_missing(connection, "email_inbound", "references_header", "text")
+            _add_column_if_missing(connection, "email_inbound", "request_id", "text")
+            _add_column_if_missing(connection, "email_inbound", "quote_id", "text")
             self._seed(connection)
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
@@ -623,16 +653,34 @@ class SQLiteInboundEmailRepository:
         sender: str,
         subject: str,
         body_text: str,
+        recipient: str = "",
+        message_id: str | None = None,
+        in_reply_to: str | None = None,
+        references_header: str | None = None,
     ) -> str:
         email_id = str(uuid4())
         with self._database.connect() as connection:
             connection.execute(
                 """
                 insert into email_inbound
-                  (id, idempotency_key, sender, subject, body_text, classification)
-                values (?, ?, ?, ?, ?, ?)
+                  (
+                    id, idempotency_key, sender, recipient, subject, body_text,
+                    classification, message_id, in_reply_to, references_header
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (email_id, idempotency_key, sender, subject, body_text, "pending"),
+                (
+                    email_id,
+                    idempotency_key,
+                    sender,
+                    recipient,
+                    subject,
+                    body_text,
+                    "pending",
+                    message_id,
+                    in_reply_to,
+                    references_header,
+                ),
             )
         return email_id
 
@@ -1032,8 +1080,23 @@ class SQLiteAgentConfigRepository:
         auto_mode: str,
         min_confidence: float,
     ) -> AgentConfigRecord:
-        config = json.dumps({"auto_mode": auto_mode, "min_confidence": min_confidence})
         with self._database.connect() as connection:
+            current = connection.execute(
+                "select config from agent_configs where agent_key = ?",
+                (agent_key,),
+            ).fetchone()
+            if current is None:
+                raise LookupError(f"Agent config not found: {agent_key}")
+
+            # Merge rather than overwrite so keys the update UI doesn't know
+            # about yet (inbound_address, allowed_domains, own_addresses,
+            # required_fields - see application/email_routing.py) survive an
+            # auto_mode/min_confidence edit from the Admin agent-config form.
+            merged = json.loads(current["config"] or "{}")
+            merged["auto_mode"] = auto_mode
+            merged["min_confidence"] = min_confidence
+            config = json.dumps(merged)
+
             row = connection.execute(
                 """
                 update agent_configs
@@ -1088,6 +1151,84 @@ class SQLiteRequestWriteRepository:
                 ),
             )
 
+            connection.executemany(
+                """
+                insert into request_cargo
+                  (
+                    id, request_id, description, quantity, weight_kg,
+                    length_cm, width_cm, height_cm, hazardous, un_number
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        str(uuid4()),
+                        request_id,
+                        line.description,
+                        line.quantity,
+                        line.weight_kg,
+                        line.length_cm,
+                        line.width_cm,
+                        line.height_cm,
+                        0,
+                        None,
+                    )
+                    for line in request.cargo
+                ],
+            )
+
+        return RequestRecord(
+            id=request_id,
+            public_id=public_id,
+            customer=customer,
+            lane=lane,
+            mode=request.mode.value,
+            status=status,
+            weight_kg=total_weight,
+        )
+
+    async def update_transport_request(
+        self,
+        *,
+        request_id: str,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
+        total_weight = sum(line.weight_kg or 0 for line in request.cargo)
+
+        with self._database.connect() as connection:
+            row = connection.execute(
+                "select public_id from transport_requests where id = ?",
+                (request_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError(f"Transport request not found: {request_id}")
+            public_id = row["public_id"]
+
+            connection.execute(
+                """
+                update transport_requests
+                set customer = ?, lane = ?, mode = ?, status = ?, weight_kg = ?,
+                  review_reason = ?
+                where id = ?
+                """,
+                (
+                    customer,
+                    lane,
+                    request.mode.value,
+                    status,
+                    total_weight,
+                    review_reason,
+                    request_id,
+                ),
+            )
+            connection.execute(
+                "delete from request_cargo where request_id = ?",
+                (request_id,),
+            )
             connection.executemany(
                 """
                 insert into request_cargo
@@ -1737,6 +1878,208 @@ class SQLiteOutboundReplyRepository:
         return OutboundReplyRecord(**dict(row))
 
 
+_EMAIL_THREAD_COLUMNS = """
+    id, sender, recipient, subject, body_text, classification, message_id,
+    in_reply_to, references_header, request_id, quote_id, created_at
+"""
+
+
+class SQLiteEmailThreadRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def get(self, email_id: str) -> InboundEmailRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                f"select {_EMAIL_THREAD_COLUMNS} from email_inbound where id = ?",
+                (email_id,),
+            ).fetchone()
+        return _inbound_email_from_sqlite_row(row) if row else None
+
+    async def find_candidates_by_message_ids(
+        self, message_ids: tuple[str, ...]
+    ) -> list[InboundEmailRecord]:
+        if not message_ids:
+            return []
+        placeholders = ",".join("?" * len(message_ids))
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from email_inbound
+                where message_id in ({placeholders})
+                order by created_at desc
+                """,
+                message_ids,
+            ).fetchall()
+        return [_inbound_email_from_sqlite_row(row) for row in rows]
+
+    async def find_candidates_by_sender(
+        self, sender: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from email_inbound
+                where lower(sender) = ?
+                order by created_at desc
+                limit ?
+                """,
+                (sender.strip().lower(), limit),
+            ).fetchall()
+        return [_inbound_email_from_sqlite_row(row) for row in rows]
+
+    async def find_candidates_by_domain(
+        self, domain: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from email_inbound
+                where lower(sender) like ?
+                order by created_at desc
+                limit ?
+                """,
+                (f"%@{domain.strip().lower()}", limit),
+            ).fetchall()
+        return [_inbound_email_from_sqlite_row(row) for row in rows]
+
+    async def list_thread_history(
+        self, *, request_id: str | None, quote_id: str | None
+    ) -> list[InboundEmailRecord]:
+        if not request_id and not quote_id:
+            return []
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from email_inbound
+                where (request_id = ? and ? is not null)
+                   or (quote_id = ? and ? is not null)
+                order by created_at asc
+                """,
+                (request_id, request_id, quote_id, quote_id),
+            ).fetchall()
+        return [_inbound_email_from_sqlite_row(row) for row in rows]
+
+    async def link_thread(
+        self, email_id: str, *, request_id: str | None, quote_id: str | None
+    ) -> None:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update email_inbound set request_id = ?, quote_id = ? where id = ?",
+                (request_id, quote_id, email_id),
+            )
+
+    async def mark_classification(self, email_id: str, classification: str) -> None:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update email_inbound set classification = ? where id = ?",
+                (classification, email_id),
+            )
+
+
+class SQLiteRateProfileRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def find_matching(
+        self, *, mode: str, origin: str | None, destination: str | None
+    ) -> RateProfileRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, mode, origin, destination, base_price, price_per_kg, currency
+                from rate_profiles
+                where mode = ? and origin is ? and destination is ?
+                """,
+                (mode, origin, destination),
+            ).fetchone()
+            if row is None and (origin is not None or destination is not None):
+                row = connection.execute(
+                    """
+                    select id, mode, origin, destination, base_price, price_per_kg, currency
+                    from rate_profiles
+                    where mode = ? and origin is null and destination is null
+                    """,
+                    (mode,),
+                ).fetchone()
+        return RateProfileRecord(**dict(row)) if row else None
+
+    async def list_all(self) -> list[RateProfileRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select id, mode, origin, destination, base_price, price_per_kg, currency
+                from rate_profiles
+                order by mode, origin, destination
+                """
+            ).fetchall()
+        return [RateProfileRecord(**dict(row)) for row in rows]
+
+    async def create(
+        self,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        profile_id = str(uuid4())
+        with self._database.connect() as connection:
+            connection.execute(
+                """
+                insert into rate_profiles
+                  (id, mode, origin, destination, base_price, price_per_kg, currency)
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (profile_id, mode, origin, destination, base_price, price_per_kg, currency),
+            )
+        return RateProfileRecord(
+            id=profile_id,
+            mode=mode,
+            origin=origin,
+            destination=destination,
+            base_price=base_price,
+            price_per_kg=price_per_kg,
+            currency=currency,
+        )
+
+    async def update(
+        self,
+        rate_profile_id: str,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update rate_profiles
+                set mode = ?, origin = ?, destination = ?, base_price = ?,
+                  price_per_kg = ?, currency = ?
+                where id = ?
+                returning id, mode, origin, destination, base_price, price_per_kg, currency
+                """,
+                (mode, origin, destination, base_price, price_per_kg, currency, rate_profile_id),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Rate profile not found: {rate_profile_id}")
+        return RateProfileRecord(**dict(row))
+
+
+def _inbound_email_from_sqlite_row(row: sqlite3.Row) -> InboundEmailRecord:
+    return InboundEmailRecord(**dict(row))
+
+
 def _count(connection: sqlite3.Connection, table: str) -> int:
     row = connection.execute(f"select count(*) as count from {table}").fetchone()
     return int(row["count"])
@@ -1795,4 +2138,5 @@ def _agent_config_from_sqlite_row(row: sqlite3.Row) -> AgentConfigRecord:
         is_enabled=bool(row["is_enabled"]),
         auto_mode=str(config.get("auto_mode", "manual")),
         min_confidence=float(config.get("min_confidence", 0)),
+        config=config,
     )

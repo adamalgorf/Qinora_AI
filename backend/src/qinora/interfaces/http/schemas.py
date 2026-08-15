@@ -8,8 +8,12 @@ from pydantic import BaseModel, EmailStr, Field
 
 class EmailWebhookPayload(BaseModel):
     sender: EmailStr
+    recipient: EmailStr
     subject: str = Field(min_length=1, max_length=500)
     body_text: str = Field(min_length=1)
+    message_id: str | None = None
+    in_reply_to: str | None = None
+    references: str | None = None
 
 
 class EmailWebhookResponse(BaseModel):
@@ -455,3 +459,22 @@ class CarrierIntelligenceResponse(BaseModel):
     requires_manual_review: bool
     overall_confidence: float
     evaluations: list[CarrierEvaluationItem]
+
+
+class RateProfileItem(BaseModel):
+    id: str
+    mode: str
+    origin: str | None
+    destination: str | None
+    base_price: float
+    price_per_kg: float
+    currency: str
+
+
+class RateProfilePayload(BaseModel):
+    mode: Literal["ftl", "ltl", "ocean", "air", "rail", "intermodal"]
+    origin: str | None = None
+    destination: str | None = None
+    base_price: float = Field(ge=0)
+    price_per_kg: float = Field(ge=0)
+    currency: str = "SEK"

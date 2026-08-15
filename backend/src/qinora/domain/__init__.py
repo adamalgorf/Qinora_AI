@@ -14,6 +14,7 @@ from qinora.domain.quote import (
 )
 from qinora.domain.shipment_status import ShipmentStatus, assert_shipment_transition
 from qinora.domain.transport_request import (
+    DEFAULT_REQUIRED_FIELDS,
     CargoLineInput,
     TransportMode,
     TransportRequestInput,
@@ -21,6 +22,7 @@ from qinora.domain.transport_request import (
 )
 
 __all__ = [
+    "DEFAULT_REQUIRED_FIELDS",
     "CargoLineInput",
     "CarrierCandidate",
     "CarrierEvaluationInput",
