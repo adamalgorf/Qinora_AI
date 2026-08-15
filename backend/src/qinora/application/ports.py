@@ -223,6 +223,22 @@ class OperationalReadRepository(Protocol):
         pass
 
 
+class CarrierWriteRepository(Protocol):
+    async def create_carrier(
+        self,
+        *,
+        display_name: str,
+        modes: tuple[str, ...],
+        aliases: tuple[str, ...] = (),
+        email: str | None = None,
+        lane_score: float = 50.0,
+        max_weight_kg: float | None = None,
+        performance_score: float | None = None,
+        preferred: bool = False,
+    ) -> CarrierRecord:
+        pass
+
+
 class RequestWriteRepository(Protocol):
     async def create_transport_request(
         self,
@@ -465,6 +481,15 @@ class CarrierRfqRepository(Protocol):
         pass
 
     async def mark_superseded(self, rfq_ids: tuple[str, ...]) -> None:
+        pass
+
+    async def find_winning(self, request_id: str) -> CarrierRfqRecord | None:
+        """The RFQ (if any) whose offer actually got booked - status
+        'responded' and not among the ones mark_superseded() later closed
+        out. BookingWorkflow uses this to book the same carrier the
+        customer was actually quoted against, instead of re-running
+        evaluate_carriers() from scratch and possibly picking someone else.
+        """
         pass
 
 

@@ -2295,6 +2295,73 @@ class SQLiteCarrierRfqRepository:
                 rfq_ids,
             )
 
+    async def find_winning(self, request_id: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                from carrier_rfqs
+                where request_id = ? and status = 'responded'
+                order by responded_at
+                limit 1
+                """,
+                (request_id,),
+            ).fetchone()
+        return _carrier_rfq_from_sqlite_row(row) if row else None
+
+
+class SQLiteCarrierWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_carrier(
+        self,
+        *,
+        display_name: str,
+        modes: tuple[str, ...],
+        aliases: tuple[str, ...] = (),
+        email: str | None = None,
+        lane_score: float = 50.0,
+        max_weight_kg: float | None = None,
+        performance_score: float | None = None,
+        preferred: bool = False,
+    ) -> CarrierRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into carriers
+                  (id, display_name, aliases, modes, lane_score, max_weight_kg,
+                   performance_score, preferred, sample_size, email)
+                values (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                returning id, display_name, aliases, modes, lane_score, max_weight_kg,
+                  performance_score, preferred, sample_size, email
+                """,
+                (
+                    str(uuid4()),
+                    display_name,
+                    ",".join(aliases),
+                    ",".join(modes),
+                    lane_score,
+                    max_weight_kg,
+                    performance_score,
+                    1 if preferred else 0,
+                    email,
+                ),
+            ).fetchone()
+        return CarrierRecord(
+            id=row["id"],
+            display_name=row["display_name"],
+            aliases=_split_csv(row["aliases"]),
+            modes=_split_csv(row["modes"]),
+            lane_score=row["lane_score"],
+            max_weight_kg=row["max_weight_kg"],
+            performance_score=row["performance_score"],
+            preferred=bool(row["preferred"]),
+            sample_size=row["sample_size"],
+            email=row["email"],
+        )
+
 
 def _carrier_rfq_from_sqlite_row(row: sqlite3.Row) -> CarrierRfqRecord:
     return CarrierRfqRecord(

@@ -374,6 +374,17 @@ class CarrierListItem(BaseModel):
     preferred: bool
 
 
+class CarrierCreateRequest(BaseModel):
+    display_name: str = Field(min_length=1)
+    modes: list[str] = Field(min_length=1, description="e.g. ['ftl', 'ltl']")
+    aliases: list[str] = Field(default_factory=list)
+    email: EmailStr | None = None
+    lane_score: float = 50.0
+    max_weight_kg: float | None = None
+    performance_score: float | None = None
+    preferred: bool = False
+
+
 class ContactListItem(BaseModel):
     id: str
     public_id: str

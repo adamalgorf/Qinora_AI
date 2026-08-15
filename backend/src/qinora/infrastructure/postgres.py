@@ -2002,6 +2002,77 @@ class PostgresCarrierRfqRepository:
                 (self._database.tenant_id, list(rfq_ids)),
             )
 
+    async def find_winning(self, request_id: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                from public.carrier_rfqs
+                where tenant_id = %s and request_id = %s and status = 'responded'
+                order by responded_at
+                limit 1
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_from_postgres_row(row) if row else None
+
+
+class PostgresCarrierWriteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_carrier(
+        self,
+        *,
+        display_name: str,
+        modes: tuple[str, ...],
+        aliases: tuple[str, ...] = (),
+        email: str | None = None,
+        lane_score: float = 50.0,
+        max_weight_kg: float | None = None,
+        performance_score: float | None = None,
+        preferred: bool = False,
+    ) -> CarrierRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            public_id = _next_public_id(cursor, "public.carriers", "CAR", self._database.tenant_id)
+            cursor.execute(
+                """
+                insert into public.carriers
+                  (tenant_id, public_id, name, aliases, modes, lane_score, max_weight_kg,
+                   performance_score, is_preferred, sample_size, email)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0, %s)
+                returning id
+                """,
+                (
+                    self._database.tenant_id,
+                    public_id,
+                    display_name,
+                    list(aliases),
+                    list(modes),
+                    lane_score,
+                    max_weight_kg,
+                    performance_score,
+                    preferred,
+                    email,
+                ),
+            )
+            carrier_id = str(cursor.fetchone()["id"])
+
+        return CarrierRecord(
+            id=carrier_id,
+            display_name=display_name,
+            aliases=aliases,
+            modes=modes,
+            lane_score=lane_score,
+            max_weight_kg=max_weight_kg,
+            performance_score=performance_score,
+            preferred=preferred,
+            sample_size=0,
+            email=email,
+        )
+
 
 def _carrier_rfq_from_postgres_row(row: dict[str, Any]) -> CarrierRfqRecord:
     return CarrierRfqRecord(

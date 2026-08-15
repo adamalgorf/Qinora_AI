@@ -165,7 +165,9 @@ class EmailIntakeOrchestrator:
                 if status in ACTIVE_QUOTE_STATUSES:
                     intent = interpret_quote_reply(email.body_text)
                     if intent is QuoteReplyIntent.ACCEPTED:
-                        await self._book_accepted_quote(quote_id, quote_detail.quote.request_id)
+                        await self._book_accepted_quote(
+                            quote_id, quote_detail.quote.request_id, recipient_email=email.sender
+                        )
                         await self._email_threads.link_thread(
                             email_id, request_id=request_id, quote_id=quote_id
                         )
@@ -268,7 +270,9 @@ class EmailIntakeOrchestrator:
         await self._email_threads.link_thread(email_id, request_id=rfq.request_id, quote_id=None)
         return await self._finish(email_id, "carrier_offer")
 
-    async def _book_accepted_quote(self, quote_id: str, request_id: str | None) -> None:
+    async def _book_accepted_quote(
+        self, quote_id: str, request_id: str | None, *, recipient_email: str
+    ) -> None:
         mode = "ltl"
         total_weight_kg = 0.0
         if request_id:
@@ -282,6 +286,7 @@ class EmailIntakeOrchestrator:
                 quote_id=quote_id,
                 mode=mode,
                 total_weight_kg=total_weight_kg,
+                recipient_email=recipient_email,
             )
         )
 

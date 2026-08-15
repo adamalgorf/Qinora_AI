@@ -73,10 +73,11 @@ class QuoteWorkflow:
         outbound_reply = await self._outbound_repository.enqueue_quote(
             quote_id=sent_quote.id,
             recipient=command.recipient,
-            subject=f"QiNora quote {sent_quote.id}",
+            subject=f"Din offert - {sent_quote.id}",
             body_text=(
-                "Your transport quote is ready: "
-                f"{sent_quote.customer_price:.2f} {sent_quote.currency}."
+                f"Din offert är klar: {sent_quote.customer_price:.2f} {sent_quote.currency}.\n\n"
+                "Svara på detta mail för att godkänna.\n\n"
+                "Med vänlig hälsning,\nSandahls"
             ),
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)

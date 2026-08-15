@@ -416,6 +416,9 @@ class FakeCarrierRfqRepository:
     async def mark_superseded(self, rfq_ids):
         raise NotImplementedError
 
+    async def find_winning(self, request_id):
+        return None
+
 
 @dataclass
 class FakeCarrierOfferParsingLLM:
@@ -552,7 +555,14 @@ def _build_orchestrator(
     quote_repository = FakeQuoteWriteRepository(quotes=dict(seed_quotes or {}))
     outbound_repository = FakeOutboundReplyRepository()
     shipment_repository = FakeShipmentWriteRepository()
-    booking_workflow = BookingWorkflow(quote_repository, shipment_repository, operational_queries)
+    carrier_rfqs = carrier_rfq_repository or FakeCarrierRfqRepository()
+    booking_workflow = BookingWorkflow(
+        quote_repository,
+        shipment_repository,
+        operational_queries,
+        carrier_rfqs,
+        outbound_repository,
+    )
 
     task_repository = FakeOperationalTaskWriteRepository()
 
@@ -580,7 +590,6 @@ def _build_orchestrator(
     )
 
     quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
-    carrier_rfqs = carrier_rfq_repository or FakeCarrierRfqRepository()
     pricing_engine = PricingEngine(
         FakeRateProfileRepository(rate_profile),
         quote_workflow,

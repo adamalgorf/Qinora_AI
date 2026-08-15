@@ -181,6 +181,6 @@ def _build_rfq_email(rfq: CarrierRfqRecord, command: PriceAndQuoteCommand) -> tu
         f"Weight: {command.total_weight_kg:g} kg\n\n"
         "Please reply to this email with your price and transit time - keep this subject "
         "line intact (including the RFQ number) so your reply is matched automatically.\n\n"
-        "Thanks,\nQiNora"
+        "Med vänlig hälsning,\nSandahls"
     )
     return subject, body_text

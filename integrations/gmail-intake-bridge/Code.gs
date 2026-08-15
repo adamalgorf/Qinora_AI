@@ -153,7 +153,7 @@ function sendQueuedReplies() {
 
   items.forEach(function (item) {
     try {
-      GmailApp.sendEmail(item.recipient, item.subject, item.body_text);
+      GmailApp.sendEmail(item.recipient, item.subject, item.body_text, { name: "Sandahls" });
       ackOutboundItem_(baseUrl, secret, item, "ack", null);
       sent += 1;
     } catch (error) {

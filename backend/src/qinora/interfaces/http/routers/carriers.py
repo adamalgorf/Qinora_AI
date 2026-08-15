@@ -5,6 +5,7 @@ from qinora.interfaces.http.auth import require_roles
 from qinora.interfaces.http.container import AppContainer
 from qinora.interfaces.http.dependencies import AUTH_CONTEXT, CONTAINER
 from qinora.interfaces.http.schemas import (
+    CarrierCreateRequest,
     CarrierIntelligenceRequest,
     CarrierIntelligenceResponse,
     CarrierListItem,
@@ -26,6 +27,33 @@ async def list_carriers(container: AppContainer = CONTAINER) -> list[CarrierList
         )
         for item in await container.operational_queries.list_carriers()
     ]
+
+
+@router.post("/carriers", response_model=CarrierListItem)
+async def create_carrier(
+    payload: CarrierCreateRequest,
+    container: AppContainer = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> CarrierListItem:
+    require_roles(context, Role.TOWER, Role.ADMIN, Role.SUPERADMIN)
+    carrier = await container.carrier_write_repository.create_carrier(
+        display_name=payload.display_name,
+        modes=tuple(payload.modes),
+        aliases=tuple(payload.aliases),
+        email=payload.email,
+        lane_score=payload.lane_score,
+        max_weight_kg=payload.max_weight_kg,
+        performance_score=payload.performance_score,
+        preferred=payload.preferred,
+    )
+    return CarrierListItem(
+        id=carrier.id,
+        display_name=carrier.display_name,
+        modes=list(carrier.modes),
+        lane_score=carrier.lane_score,
+        performance_score=carrier.performance_score,
+        preferred=carrier.preferred,
+    )
 
 
 @router.post("/carriers/intelligence", response_model=CarrierIntelligenceResponse)
