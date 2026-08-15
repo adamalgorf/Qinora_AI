@@ -62,10 +62,10 @@ function installTrigger() {
       ScriptApp.deleteTrigger(trigger);
     }
   });
-  ScriptApp.newTrigger("forwardNewMail").timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger("forwardNewMail").timeBased().everyMinutes(1).create();
   ScriptApp.newTrigger("sendQueuedReplies").timeBased().everyMinutes(5).create();
   Logger.log(
-    "Triggers installed - forwardNewMail and sendQueuedReplies will each run every 5 minutes."
+    "Triggers installed - forwardNewMail runs every minute, sendQueuedReplies every 5 minutes."
   );
 }
 
