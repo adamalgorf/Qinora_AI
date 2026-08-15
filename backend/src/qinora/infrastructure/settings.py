@@ -27,6 +27,7 @@ class Settings:
     llm_provider: LLMProvider
     openai_api_key: str | None
     openai_model: str
+    default_markup_percent: float
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -49,4 +50,5 @@ class Settings:
             llm_provider=LLMProvider(os.getenv("LLM_PROVIDER", "stub")),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            default_markup_percent=float(os.getenv("QINORA_DEFAULT_MARKUP_PERCENT", "10")),
         )

@@ -5,7 +5,15 @@ from qinora.application.ports import OutboundReplyRepository, QuoteWriteReposito
 from qinora.application.read_models import OutboundReplyRecord, QuoteRecord, RequestRecord
 from qinora.domain import can_send_quote
 
-QUOTABLE_REQUEST_STATUSES = {"parsed", "quoted"}
+QUOTABLE_REQUEST_STATUSES = {
+    "parsed",
+    "quoted",
+    # A request sitting in an open carrier RFQ batch (see
+    # application/pricing_engine.py's carrier-sourcing branch) is still
+    # quotable once application/carrier_rfq_collector.py picks a winning
+    # offer - it just hasn't been priced yet.
+    "sourcing",
+}
 
 
 @dataclass(frozen=True)
@@ -65,10 +73,11 @@ class QuoteWorkflow:
         outbound_reply = await self._outbound_repository.enqueue_quote(
             quote_id=sent_quote.id,
             recipient=command.recipient,
-            subject=f"QiNora quote {sent_quote.id}",
+            subject=f"Din offert - {sent_quote.id}",
             body_text=(
-                "Your transport quote is ready: "
-                f"{sent_quote.customer_price:.2f} {sent_quote.currency}."
+                f"Din offert är klar: {sent_quote.customer_price:.2f} {sent_quote.currency}.\n\n"
+                "Svara på detta mail för att godkänna.\n\n"
+                "Med vänlig hälsning,\nSandahls"
             ),
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)

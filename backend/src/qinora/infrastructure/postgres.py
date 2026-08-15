@@ -1,3 +1,4 @@
+import secrets
 from typing import Any
 
 import psycopg
@@ -10,7 +11,10 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierOfferRecord,
     CarrierRecord,
+    CarrierRfqOutboundRecord,
+    CarrierRfqRecord,
     ContactRecord,
+    InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
@@ -21,6 +25,7 @@ from qinora.application.read_models import (
     QuoteLineItemRecord,
     QuoteRecord,
     QuoteResponseEventRecord,
+    RateProfileRecord,
     RequestCargoLineRecord,
     RequestDetailRecord,
     RequestRecord,
@@ -117,16 +122,34 @@ class PostgresInboundEmailRepository:
         sender: str,
         subject: str,
         body_text: str,
+        recipient: str = "",
+        message_id: str | None = None,
+        in_reply_to: str | None = None,
+        references_header: str | None = None,
     ) -> str:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                     insert into public.email_inbound
-                      (tenant_id, idempotency_key, sender, subject, body_text, classification)
-                    values (%s, %s, %s, %s, %s, %s)
+                      (
+                        tenant_id, idempotency_key, sender, recipient, subject, body_text,
+                        classification, message_id, in_reply_to, references_header
+                      )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     returning id
                     """,
-                (self._database.tenant_id, idempotency_key, sender, subject, body_text, "pending"),
+                (
+                    self._database.tenant_id,
+                    idempotency_key,
+                    sender,
+                    recipient,
+                    subject,
+                    body_text,
+                    "pending",
+                    message_id,
+                    in_reply_to,
+                    references_header,
+                ),
             )
             return str(cursor.fetchone()["id"])
 
@@ -383,12 +406,13 @@ class PostgresOperationalReadRepository:
                 ),
                 preferred=bool(row["is_preferred"]),
                 sample_size=row["sample_size"],
+                email=row["email"],
             )
             for row in self._fetch_all(
                 """
                 select
                   id, name, aliases, modes, lane_score, max_weight_kg,
-                  performance_score, is_preferred, sample_size
+                  performance_score, is_preferred, sample_size, email
                 from public.carriers
                 where tenant_id = %s and is_active = true
                 order by name
@@ -794,6 +818,104 @@ class PostgresRequestWriteRepository:
             weight_kg=total_weight,
         )
 
+    async def update_transport_request(
+        self,
+        *,
+        request_id: str,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
+        origin, destination = _split_lane(lane)
+        total_weight = sum(line.weight_kg or 0 for line in request.cargo)
+
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select public_id
+                from public.transport_requests
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise LookupError(f"Transport request not found: {request_id}")
+            public_id = row["public_id"]
+
+            cursor.execute(
+                """
+                update public.transport_requests
+                set customer = %s, lane = %s, mode = %s, status = %s, origin = %s,
+                  destination = %s, review_reason = %s, weight_kg = %s
+                where tenant_id = %s and id = %s
+                """,
+                (
+                    customer,
+                    lane,
+                    request.mode.value,
+                    status,
+                    origin,
+                    destination,
+                    review_reason,
+                    total_weight,
+                    self._database.tenant_id,
+                    request_id,
+                ),
+            )
+            cursor.execute(
+                "delete from public.request_cargo where tenant_id = %s and request_id = %s",
+                (self._database.tenant_id, request_id),
+            )
+            cursor.executemany(
+                """
+                insert into public.request_cargo
+                  (
+                    tenant_id, request_id, description, quantity, weight_kg,
+                    length_cm, width_cm, height_cm, hazardous, un_number
+                  )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        self._database.tenant_id,
+                        request_id,
+                        line.description,
+                        line.quantity,
+                        line.weight_kg,
+                        line.length_cm,
+                        line.width_cm,
+                        line.height_cm,
+                        False,
+                        None,
+                    )
+                    for line in request.cargo
+                ],
+            )
+
+        return RequestRecord(
+            id=request_id,
+            public_id=public_id,
+            customer=customer,
+            lane=lane,
+            mode=request.mode.value,
+            status=status,
+            weight_kg=total_weight,
+        )
+
+    async def update_request_status(self, request_id: str, status: str) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.transport_requests
+                set status = %s
+                where tenant_id = %s and id = %s
+                """,
+                (status, self._database.tenant_id, request_id),
+            )
+
 
 class PostgresCarrierOfferWriteRepository:
     def __init__(self, database: PostgresDatabase) -> None:
@@ -809,16 +931,22 @@ class PostgresCarrierOfferWriteRepository:
         transit_days: int | None,
         notes: str | None,
         confidence: float,
+        carrier_rfq_id: str | None = None,
     ) -> CarrierOfferRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.carrier_offers
-                  (tenant_id, request_id, carrier_name, price, currency, transit_days,
-                    notes, confidence)
-                values (%s, %s, %s, %s, %s, %s, %s, %s)
+                  (
+                    tenant_id, request_id, carrier_name, price, currency, transit_days,
+                    notes, confidence, carrier_rfq_id
+                  )
+                values (
+                  %s, %s, %s, %s, %s, %s, %s, %s,
+                  case when %s ~ '^[0-9a-fA-F-]{36}$' then %s::uuid else null end
+                )
                 returning id, request_id, carrier_name, price, currency, transit_days,
-                  notes, confidence, created_at
+                  notes, confidence, created_at, carrier_rfq_id
                 """,
                 (
                     self._database.tenant_id,
@@ -829,6 +957,8 @@ class PostgresCarrierOfferWriteRepository:
                     transit_days,
                     notes,
                     confidence,
+                    carrier_rfq_id or "",
+                    carrier_rfq_id or "",
                 ),
             )
             row = cursor.fetchone()
@@ -839,7 +969,7 @@ class PostgresCarrierOfferWriteRepository:
             cursor.execute(
                 """
                 select id, request_id, carrier_name, price, currency, transit_days,
-                  notes, confidence, created_at
+                  notes, confidence, created_at, carrier_rfq_id
                 from public.carrier_offers
                 where tenant_id = %s and request_id = %s
                 order by created_at
@@ -861,6 +991,7 @@ def _carrier_offer_from_postgres_row(row: dict[str, Any]) -> CarrierOfferRecord:
         notes=row["notes"],
         confidence=float(row["confidence"]),
         created_at=row["created_at"].isoformat(),
+        carrier_rfq_id=str(row["carrier_rfq_id"]) if row["carrier_rfq_id"] else None,
     )
 
 
@@ -1487,6 +1618,606 @@ class PostgresOutboundReplyRepository:
         return _outbound_reply_record(row)
 
 
+_EMAIL_THREAD_COLUMNS = """
+    id, sender, recipient, subject, body_text, classification, message_id,
+    in_reply_to, references_header, request_id, quote_id, created_at
+"""
+
+
+class PostgresEmailThreadRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def get(self, email_id: str) -> InboundEmailRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, email_id),
+            )
+            row = cursor.fetchone()
+        return _inbound_email_from_postgres_row(row) if row else None
+
+    async def find_candidates_by_message_ids(
+        self, message_ids: tuple[str, ...]
+    ) -> list[InboundEmailRecord]:
+        if not message_ids:
+            return []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and message_id = any(%s)
+                order by created_at desc
+                """,
+                (self._database.tenant_id, list(message_ids)),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def find_candidates_by_sender(
+        self, sender: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and lower(sender) = %s
+                order by created_at desc
+                limit %s
+                """,
+                (self._database.tenant_id, sender.strip().lower(), limit),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def find_candidates_by_domain(
+        self, domain: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and lower(sender) like %s
+                order by created_at desc
+                limit %s
+                """,
+                (self._database.tenant_id, f"%@{domain.strip().lower()}", limit),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def list_thread_history(
+        self, *, request_id: str | None, quote_id: str | None
+    ) -> list[InboundEmailRecord]:
+        if not request_id and not quote_id:
+            return []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s
+                  and ((%s::text is not null and request_id = %s)
+                    or (%s::text is not null and quote_id = %s))
+                order by created_at asc
+                """,
+                (self._database.tenant_id, request_id, request_id, quote_id, quote_id),
+            )
+            rows = cursor.fetchall()
+        return [_inbound_email_from_postgres_row(row) for row in rows]
+
+    async def link_thread(
+        self, email_id: str, *, request_id: str | None, quote_id: str | None
+    ) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.email_inbound
+                set request_id = %s, quote_id = %s
+                where tenant_id = %s and id = %s
+                """,
+                (request_id, quote_id, self._database.tenant_id, email_id),
+            )
+
+    async def mark_classification(self, email_id: str, classification: str) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.email_inbound
+                set classification = %s
+                where tenant_id = %s and id = %s
+                """,
+                (classification, self._database.tenant_id, email_id),
+            )
+
+
+class PostgresRateProfileRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def find_matching(
+        self, *, mode: str, origin: str | None, destination: str | None
+    ) -> RateProfileRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, mode, origin, destination, base_price, price_per_kg, currency
+                from public.rate_profiles
+                where tenant_id = %s and mode = %s and origin is not distinct from %s
+                  and destination is not distinct from %s
+                """,
+                (self._database.tenant_id, mode, origin, destination),
+            )
+            row = cursor.fetchone()
+            if row is None and (origin is not None or destination is not None):
+                cursor.execute(
+                    """
+                    select id, mode, origin, destination, base_price, price_per_kg, currency
+                    from public.rate_profiles
+                    where tenant_id = %s and mode = %s
+                      and origin is null and destination is null
+                    """,
+                    (self._database.tenant_id, mode),
+                )
+                row = cursor.fetchone()
+        return _rate_profile_from_postgres_row(row) if row else None
+
+    async def list_all(self) -> list[RateProfileRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, mode, origin, destination, base_price, price_per_kg, currency
+                from public.rate_profiles
+                where tenant_id = %s
+                order by mode, origin, destination
+                """,
+                (self._database.tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return [_rate_profile_from_postgres_row(row) for row in rows]
+
+    async def create(
+        self,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.rate_profiles
+                  (tenant_id, mode, origin, destination, base_price, price_per_kg, currency)
+                values (%s, %s, %s, %s, %s, %s, %s)
+                returning id, mode, origin, destination, base_price, price_per_kg, currency
+                """,
+                (
+                    self._database.tenant_id,
+                    mode,
+                    origin,
+                    destination,
+                    base_price,
+                    price_per_kg,
+                    currency,
+                ),
+            )
+            row = cursor.fetchone()
+        return _rate_profile_from_postgres_row(row)
+
+    async def update(
+        self,
+        rate_profile_id: str,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.rate_profiles
+                set mode = %s, origin = %s, destination = %s, base_price = %s,
+                  price_per_kg = %s, currency = %s
+                where tenant_id = %s and id = %s
+                returning id, mode, origin, destination, base_price, price_per_kg, currency
+                """,
+                (
+                    mode,
+                    origin,
+                    destination,
+                    base_price,
+                    price_per_kg,
+                    currency,
+                    self._database.tenant_id,
+                    rate_profile_id,
+                ),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Rate profile not found: {rate_profile_id}")
+        return _rate_profile_from_postgres_row(row)
+
+
+class PostgresCarrierRfqRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_batch(
+        self,
+        *,
+        request_id: str,
+        carrier_ids: tuple[str, ...],
+        window_hours: int = 24,
+    ) -> list[CarrierRfqRecord]:
+        records: list[CarrierRfqRecord] = []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            for carrier_id in carrier_ids:
+                row = None
+                for _ in range(5):
+                    token = secrets.token_hex(4)
+                    cursor.execute(
+                        """
+                        insert into public.carrier_rfqs
+                          (tenant_id, request_id, carrier_id, correlation_token, status, expires_at)
+                        values (%s, %s, %s, %s, 'sent', now() + (%s || ' hours')::interval)
+                        on conflict (correlation_token) do nothing
+                        returning id, request_id, carrier_id, correlation_token, status,
+                          sent_at, responded_at, expires_at
+                        """,
+                        (
+                            self._database.tenant_id,
+                            request_id,
+                            carrier_id,
+                            token,
+                            str(window_hours),
+                        ),
+                    )
+                    row = cursor.fetchone()
+                    if row is not None:
+                        break
+                if row is None:
+                    raise RuntimeError("Could not generate a unique RFQ correlation token")
+                records.append(_carrier_rfq_from_postgres_row(row))
+        return records
+
+    async def find_by_token(self, token: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                from public.carrier_rfqs
+                where tenant_id = %s and correlation_token = %s
+                """,
+                (self._database.tenant_id, token),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_from_postgres_row(row) if row else None
+
+    async def find_by_carrier_email(self, sender_address: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select rfq.id, rfq.request_id, rfq.carrier_id, rfq.correlation_token,
+                  rfq.status, rfq.sent_at, rfq.responded_at, rfq.expires_at
+                from public.carrier_rfqs rfq
+                join public.carriers c on c.id = rfq.carrier_id
+                where rfq.tenant_id = %s and rfq.status = 'sent'
+                  and lower(c.email) = %s
+                order by rfq.sent_at desc
+                limit 1
+                """,
+                (self._database.tenant_id, sender_address.strip().lower()),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_from_postgres_row(row) if row else None
+
+    async def mark_responded(self, rfq_id: str, offer_id: str) -> CarrierRfqRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_offers
+                set carrier_rfq_id = %s
+                where tenant_id = %s and id = %s
+                """,
+                (rfq_id, self._database.tenant_id, offer_id),
+            )
+            cursor.execute(
+                """
+                update public.carrier_rfqs
+                set status = 'responded', responded_at = now()
+                where tenant_id = %s and id = %s
+                returning id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                """,
+                (self._database.tenant_id, rfq_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ not found: {rfq_id}")
+        return _carrier_rfq_from_postgres_row(row)
+
+    async def list_open_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        return await self._list_batch(request_id, status="sent")
+
+    async def list_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        return await self._list_batch(request_id, status=None)
+
+    async def _list_batch(self, request_id: str, status: str | None) -> list[CarrierRfqRecord]:
+        query = """
+            select id, request_id, carrier_id, correlation_token, status, sent_at,
+              responded_at, expires_at
+            from public.carrier_rfqs
+            where tenant_id = %s and request_id = %s
+        """
+        params: list[Any] = [self._database.tenant_id, request_id]
+        if status is not None:
+            query += " and status = %s"
+            params.append(status)
+        query += " order by sent_at"
+
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+        return [_carrier_rfq_from_postgres_row(row) for row in rows]
+
+    async def expire_stale(self, cutoff: str) -> list[CarrierRfqRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfqs
+                set status = 'expired'
+                where tenant_id = %s and status = 'sent' and sent_at <= %s::timestamptz
+                returning id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                """,
+                (self._database.tenant_id, cutoff),
+            )
+            rows = cursor.fetchall()
+        return [_carrier_rfq_from_postgres_row(row) for row in rows]
+
+    async def mark_superseded(self, rfq_ids: tuple[str, ...]) -> None:
+        if not rfq_ids:
+            return
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfqs
+                set status = 'superseded'
+                where tenant_id = %s and id = any(%s)
+                """,
+                (self._database.tenant_id, list(rfq_ids)),
+            )
+
+    async def find_winning(self, request_id: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                from public.carrier_rfqs
+                where tenant_id = %s and request_id = %s and status = 'responded'
+                order by responded_at
+                limit 1
+                """,
+                (self._database.tenant_id, request_id),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_from_postgres_row(row) if row else None
+
+
+class PostgresCarrierWriteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_carrier(
+        self,
+        *,
+        display_name: str,
+        modes: tuple[str, ...],
+        aliases: tuple[str, ...] = (),
+        email: str | None = None,
+        lane_score: float = 50.0,
+        max_weight_kg: float | None = None,
+        performance_score: float | None = None,
+        preferred: bool = False,
+    ) -> CarrierRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            public_id = _next_public_id(cursor, "public.carriers", "CAR", self._database.tenant_id)
+            cursor.execute(
+                """
+                insert into public.carriers
+                  (tenant_id, public_id, name, aliases, modes, lane_score, max_weight_kg,
+                   performance_score, is_preferred, sample_size, email)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0, %s)
+                returning id
+                """,
+                (
+                    self._database.tenant_id,
+                    public_id,
+                    display_name,
+                    list(aliases),
+                    list(modes),
+                    lane_score,
+                    max_weight_kg,
+                    performance_score,
+                    preferred,
+                    email,
+                ),
+            )
+            carrier_id = str(cursor.fetchone()["id"])
+
+        return CarrierRecord(
+            id=carrier_id,
+            display_name=display_name,
+            aliases=aliases,
+            modes=modes,
+            lane_score=lane_score,
+            max_weight_kg=max_weight_kg,
+            performance_score=performance_score,
+            preferred=preferred,
+            sample_size=0,
+            email=email,
+        )
+
+
+def _carrier_rfq_from_postgres_row(row: dict[str, Any]) -> CarrierRfqRecord:
+    return CarrierRfqRecord(
+        id=str(row["id"]),
+        request_id=str(row["request_id"]),
+        carrier_id=str(row["carrier_id"]),
+        correlation_token=row["correlation_token"],
+        status=row["status"],
+        sent_at=row["sent_at"].isoformat(),
+        responded_at=row["responded_at"].isoformat() if row["responded_at"] else None,
+        expires_at=row["expires_at"].isoformat(),
+    )
+
+
+class PostgresCarrierRfqOutboundRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        carrier_rfq_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.carrier_rfq_outbound
+                  (tenant_id, carrier_rfq_id, recipient, subject, body_text, status)
+                values (%s, %s, %s, %s, %s, %s)
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (
+                    self._database.tenant_id,
+                    carrier_rfq_id,
+                    recipient,
+                    subject,
+                    body_text,
+                    "queued",
+                ),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_outbound_from_postgres_row(row)
+
+    async def next_queued(self, limit: int) -> list[CarrierRfqOutboundRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from public.carrier_rfq_outbound
+                where tenant_id = %s and status = %s
+                order by created_at
+                limit %s
+                """,
+                (self._database.tenant_id, "queued", limit),
+            )
+            rows = cursor.fetchall()
+        return [_carrier_rfq_outbound_from_postgres_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfq_outbound
+                set status = %s, sent_at = now(), error_message = null
+                where tenant_id = %s and id = %s
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("sent", self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ outbound item not found: {item_id}")
+        return _carrier_rfq_outbound_from_postgres_row(row)
+
+    async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfq_outbound
+                set status = %s, error_message = %s
+                where tenant_id = %s and id = %s
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("failed", error_message, self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ outbound item not found: {item_id}")
+        return _carrier_rfq_outbound_from_postgres_row(row)
+
+
+def _carrier_rfq_outbound_from_postgres_row(row: dict[str, Any]) -> CarrierRfqOutboundRecord:
+    return CarrierRfqOutboundRecord(
+        id=str(row["id"]),
+        carrier_rfq_id=str(row["carrier_rfq_id"]),
+        recipient=row["recipient"],
+        subject=row["subject"],
+        body_text=row["body_text"],
+        status=row["status"],
+        created_at=row["created_at"].isoformat(),
+        sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+        error_message=row["error_message"],
+    )
+
+
+def _inbound_email_from_postgres_row(row: dict[str, Any]) -> InboundEmailRecord:
+    return InboundEmailRecord(
+        id=str(row["id"]),
+        sender=row["sender"],
+        recipient=row["recipient"] or "",
+        subject=row["subject"],
+        body_text=row["body_text"],
+        classification=row["classification"],
+        message_id=row["message_id"],
+        in_reply_to=row["in_reply_to"],
+        references_header=row["references_header"],
+        request_id=str(row["request_id"]) if row["request_id"] else None,
+        quote_id=str(row["quote_id"]) if row["quote_id"] else None,
+        created_at=row["created_at"].isoformat(),
+    )
+
+
+def _rate_profile_from_postgres_row(row: dict[str, Any]) -> RateProfileRecord:
+    return RateProfileRecord(
+        id=str(row["id"]),
+        mode=row["mode"],
+        origin=row["origin"],
+        destination=row["destination"],
+        base_price=float(row["base_price"]),
+        price_per_kg=float(row["price_per_kg"]),
+        currency=row["currency"],
+    )
+
+
 def _quote_record(row: dict[str, Any]) -> QuoteRecord:
     return QuoteRecord(
         id=str(row["id"]),
@@ -1521,6 +2252,7 @@ def _agent_config_from_postgres_row(row: dict[str, Any]) -> AgentConfigRecord:
         is_enabled=bool(row["is_enabled"]),
         auto_mode=str(config.get("auto_mode", "manual")),
         min_confidence=float(config.get("min_confidence", 0)),
+        config=dict(config),
     )
 
 

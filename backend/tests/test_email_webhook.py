@@ -1,4 +1,5 @@
 import hmac
+import json
 from hashlib import sha256
 
 import anyio
@@ -16,18 +17,51 @@ def client(monkeypatch, tmp_path) -> TestClient:
     return TestClient(create_app())
 
 
+def _post_email(client: TestClient, idempotency_key: str, **payload_fields) -> object:
+    """Signs and posts a webhook payload - defaults cover the required
+    fields (sender/recipient/subject/body_text), overridable via kwargs so
+    tests can add message_id/in_reply_to/references etc.
+    """
+    body = {
+        "sender": "shipper@example.com",
+        "recipient": "farah@qinora.org",
+        "subject": "Quote",
+        "body_text": "Need pickup",
+        **payload_fields,
+    }
+    payload = json.dumps(body).encode()
+    signature = hmac.new(b"secret", payload, sha256).hexdigest()
+    return client.post(
+        "/webhooks/email",
+        headers={
+            "content-type": "application/json",
+            "x-idempotency-key": idempotency_key,
+            "x-qinora-signature": f"sha256={signature}",
+        },
+        content=payload,
+    )
+
+
 def test_email_webhook_requires_valid_hmac(client: TestClient) -> None:
     response = client.post(
         "/webhooks/email",
         headers={"x-idempotency-key": "email-1", "x-qinora-signature": "bad"},
-        json={"sender": "shipper@example.com", "subject": "Quote", "body_text": "Need pickup"},
+        json={
+            "sender": "shipper@example.com",
+            "recipient": "farah@qinora.org",
+            "subject": "Quote",
+            "body_text": "Need pickup",
+        },
     )
 
     assert response.status_code == 401
 
 
 def test_email_webhook_is_idempotent(client: TestClient) -> None:
-    payload = b'{"sender":"shipper@example.com","subject":"Quote","body_text":"Need pickup"}'
+    payload = (
+        b'{"sender":"shipper@example.com","recipient":"farah@qinora.org",'
+        b'"subject":"Quote","body_text":"Need pickup"}'
+    )
     signature = hmac.new(b"secret", payload, sha256).hexdigest()
     headers = {
         "content-type": "application/json",
@@ -45,7 +79,10 @@ def test_email_webhook_is_idempotent(client: TestClient) -> None:
 
 
 def test_email_webhook_matches_sender_to_crm_contact(client: TestClient) -> None:
-    payload = b'{"sender":"logistics@volvo.example","subject":"Quote","body_text":"Need pickup"}'
+    payload = (
+        b'{"sender":"logistics@volvo.example","recipient":"farah@qinora.org",'
+        b'"subject":"Quote","body_text":"Need pickup"}'
+    )
     signature = hmac.new(b"secret", payload, sha256).hexdigest()
 
     response = client.post(
@@ -64,6 +101,94 @@ def test_email_webhook_matches_sender_to_crm_contact(client: TestClient) -> None
     assert match_log["agent_name"] == "Miles Match"
     assert match_log["entity_id"] == "CNT-0001"
     assert "Volvo Parts" in match_log["step"]
+
+
+def test_email_webhook_accepts_threading_headers(client: TestClient) -> None:
+    """Phase 1: the new recipient/message_id/in_reply_to/references fields
+    round-trip through the webhook without error, even though nothing in
+    this specific test relies on their downstream matching behaviour
+    (covered separately in test_thread_matching.py).
+    """
+    response = _post_email(
+        client,
+        "email-threaded-1",
+        message_id="<msg-1@mail.example>",
+        in_reply_to="<msg-0@mail.example>",
+        references="<msg-0@mail.example>",
+    )
+
+    assert response.status_code == 202
+    assert response.json()["accepted"] is True
+
+
+def test_email_webhook_with_default_stub_llm_always_escalates_instead_of_auto_creating(
+    client: TestClient,
+) -> None:
+    """The intake orchestrator (application/email_intake_orchestrator.py)
+    hands unmatched threads to Parsek (application/request_parsing_agent.py).
+    With LLM_PROVIDER unset, the deterministic StubRequestParsingLLM always
+    reports confidence 0.0 with every field missing, so the email is
+    flagged for human review rather than silently creating a transport
+    request - no matter how complete the actual email text looks.
+    """
+    before = client.get("/requests").json()
+
+    response = _post_email(
+        client,
+        "email-stub-escalate-1",
+        sender="ops@newcustomer.example",
+        subject="New FTL booking",
+        body_text=(
+            "Please book an FTL shipment of 900kg pallets from Stockholm to "
+            "Oslo, pickup 2026-09-01 10:00."
+        ),
+    )
+
+    assert response.status_code == 202
+    inbound_email_id = response.json()["inbound_email_id"]
+
+    after = client.get("/requests").json()
+    assert after == before  # nothing was auto-created
+
+    detail = client.get(f"/inbox/{inbound_email_id}").json()
+    assert detail["message"]["classification"] == "pending"
+
+
+def test_email_webhook_rejects_own_mail_as_a_loop(client: TestClient) -> None:
+    """Configure Parsek's own_addresses (application/email_routing.py) via
+    the agent-config repository directly - the Admin UI only exposes
+    auto_mode/min_confidence today (Phase 2 keeps the wider config editable
+    through the same jsonb column, not a new endpoint) - then confirm the
+    loop-guard drops the message before anything else runs.
+    """
+    container = client.app.state.container
+    with container.database.connect() as connection:
+        connection.execute(
+            "update agent_configs set config = ? where agent_key = ?",
+            (
+                json.dumps(
+                    {
+                        "auto_mode": "guarded_auto",
+                        "min_confidence": 0.74,
+                        "own_addresses": ["farah@qinora.org"],
+                    }
+                ),
+                "request_parsing_agent",
+            ),
+        )
+
+    response = _post_email(
+        client,
+        "email-loop-1",
+        sender="farah@qinora.org",
+        recipient="farah@qinora.org",
+    )
+
+    assert response.status_code == 202
+    inbound_email_id = response.json()["inbound_email_id"]
+
+    detail = client.get(f"/inbox/{inbound_email_id}").json()
+    assert detail["message"]["classification"] == "rejected"
 
 
 def test_dashboard_summary_returns_control_tower_data(client: TestClient) -> None:

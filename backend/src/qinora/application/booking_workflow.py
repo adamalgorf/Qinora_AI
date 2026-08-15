@@ -1,8 +1,15 @@
 from dataclasses import dataclass
 
 from qinora.application.operational_queries import CarrierIntelligenceCommand, OperationalQueries
-from qinora.application.ports import QuoteWriteRepository, ShipmentWriteRepository
+from qinora.application.ports import (
+    CarrierRfqRepository,
+    OutboundReplyRepository,
+    QuoteWriteRepository,
+    ShipmentWriteRepository,
+)
 from qinora.application.read_models import ShipmentRecord
+
+BOOKED_STATUS = "booked"
 
 
 @dataclass(frozen=True)
@@ -12,6 +19,12 @@ class BookQuoteCommand:
     total_weight_kg: float
     requested_carrier_name: str | None = None
     min_confidence: float = 0.65
+    # Who to notify with the shipment ID once booked - known by the caller
+    # when acceptance came from an inbound email (the sender), left unset
+    # for callers (e.g. the manual /quotes/{id}/reply endpoint) that don't
+    # have a recipient on hand. No recipient just means no confirmation
+    # email gets queued, booking itself is unaffected.
+    recipient_email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -28,36 +41,71 @@ class BookingWorkflow:
         quote_repository: QuoteWriteRepository,
         shipment_repository: ShipmentWriteRepository,
         operational_queries: OperationalQueries,
+        carrier_rfqs: CarrierRfqRepository,
+        outbound_repository: OutboundReplyRepository,
     ) -> None:
         self._quote_repository = quote_repository
         self._shipment_repository = shipment_repository
         self._operational_queries = operational_queries
+        self._carrier_rfqs = carrier_rfqs
+        self._outbound_repository = outbound_repository
 
     async def book_quote(self, command: BookQuoteCommand) -> BookingResult:
         quote = await self._quote_repository.mark_quote_accepted(command.quote_id)
         lane = await self._resolve_quote_lane(quote.request_id)
-        intelligence = await self._operational_queries.run_carrier_intelligence(
-            CarrierIntelligenceCommand(
-                mode=command.mode,
-                total_weight_kg=command.total_weight_kg,
-                requested_carrier_name=command.requested_carrier_name,
-                min_confidence=command.min_confidence,
-            )
+
+        # If this quote was priced from a carrier RFQ batch
+        # (application/carrier_rfq_collector.py), book the exact carrier
+        # that actually quoted it instead of re-running evaluate_carriers()
+        # from scratch, which knows nothing about that history and could
+        # easily rank a different (or no) carrier as "the" match.
+        winning_rfq = (
+            await self._carrier_rfqs.find_winning(quote.request_id) if quote.request_id else None
         )
-        status = "needs_review" if intelligence.requires_manual_review else "booked"
+
+        if winning_rfq is not None:
+            selected_carrier_id: str | None = winning_rfq.carrier_id
+            requires_manual_review = False
+            overall_confidence = 1.0
+        else:
+            intelligence = await self._operational_queries.run_carrier_intelligence(
+                CarrierIntelligenceCommand(
+                    mode=command.mode,
+                    total_weight_kg=command.total_weight_kg,
+                    requested_carrier_name=command.requested_carrier_name,
+                    min_confidence=command.min_confidence,
+                )
+            )
+            selected_carrier_id = intelligence.selected_carrier_id
+            requires_manual_review = intelligence.requires_manual_review
+            overall_confidence = intelligence.overall_confidence
+
+        status = "needs_review" if requires_manual_review else BOOKED_STATUS
         shipment = await self._shipment_repository.create_shipment(
             quote_id=quote.id,
-            carrier_id=intelligence.selected_carrier_id,
+            carrier_id=selected_carrier_id,
             lane=lane,
             status=status,
             eta="Väntar",
         )
 
+        if status == BOOKED_STATUS and command.recipient_email:
+            await self._outbound_repository.enqueue_quote(
+                quote_id=quote.id,
+                recipient=command.recipient_email,
+                subject=f"Din bokning är bekräftad - {shipment.public_id}",
+                body_text=(
+                    f"Din frakt är bokad. Frakt-ID: {shipment.public_id}.\n\n"
+                    "Vi återkommer med spårningsuppdateringar löpande.\n\n"
+                    "Med vänlig hälsning,\nSandahls"
+                ),
+            )
+
         return BookingResult(
             shipment=shipment,
-            selected_carrier_id=intelligence.selected_carrier_id,
-            requires_manual_review=intelligence.requires_manual_review,
-            overall_confidence=intelligence.overall_confidence,
+            selected_carrier_id=selected_carrier_id,
+            requires_manual_review=requires_manual_review,
+            overall_confidence=overall_confidence,
         )
 
     async def _resolve_quote_lane(self, request_id: str | None) -> str:

@@ -139,9 +139,42 @@ def interpret_quote_reply(body_text: str) -> QuoteReplyIntent:
     implementation (see infrastructure/llm/quote_reply_interpretation.py).
     """
     normalized = body_text.casefold()
-    accepted_keywords = ("accept", "accepted", "ok", "approved", "go ahead")
-    revise_keywords = ("revise", "revision", "change", "lower price", "update")
-    rejected_keywords = ("reject", "rejected", "decline", "no thanks")
+    # QiNora's own quote email is Swedish (see QuoteWorkflow.send_quote) - the
+    # keyword lists need both languages since replies come in whichever
+    # language the customer writes back in.
+    accepted_keywords = (
+        "accept",
+        "accepted",
+        "ok",
+        "approved",
+        "go ahead",
+        "godkänn",
+        "godkänner",
+        "godkänd",
+        "ja tack",
+        "tackar ja",
+    )
+    revise_keywords = (
+        "revise",
+        "revision",
+        "change",
+        "lower price",
+        "update",
+        "ändra",
+        "revidera",
+        "justera",
+        "lägre pris",
+    )
+    rejected_keywords = (
+        "reject",
+        "rejected",
+        "decline",
+        "no thanks",
+        "avböjer",
+        "avböjs",
+        "nej tack",
+        "refuserar",
+    )
 
     if any(keyword in normalized for keyword in accepted_keywords):
         return QuoteReplyIntent.ACCEPTED

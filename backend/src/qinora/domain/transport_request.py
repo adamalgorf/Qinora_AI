@@ -53,20 +53,29 @@ class RequestValidationResult:
 MODES_REQUIRING_DIMENSIONS = {TransportMode.FTL, TransportMode.LTL, TransportMode.AIR}
 UN_NUMBER_PATTERN = re.compile(r"\bUN\s?(\d{4})\b", re.IGNORECASE)
 
+# The 3 checks validate_transport_request has always run, now individually
+# toggleable per tenant via Parsek's own agent_configs.config["required_fields"]
+# (see application/request_parsing_agent.py). This default preserves today's
+# hardcoded behaviour exactly for every tenant that hasn't customized it.
+DEFAULT_REQUIRED_FIELDS: frozenset[str] = frozenset({"weight", "dimensions", "times"})
 
-def validate_transport_request(request: TransportRequestInput) -> RequestValidationResult:
+
+def validate_transport_request(
+    request: TransportRequestInput,
+    required_fields: frozenset[str] = DEFAULT_REQUIRED_FIELDS,
+) -> RequestValidationResult:
     issues: list[RequestValidationIssue] = []
 
     if not request.cargo:
         issues.append(RequestValidationIssue("cargo", "At least one cargo line is required"))
 
     for index, cargo in enumerate(request.cargo):
-        if not _is_positive(cargo.weight_kg):
+        if "weight" in required_fields and not _is_positive(cargo.weight_kg):
             issues.append(
                 RequestValidationIssue(f"cargo.{index}.weight_kg", "weight_kg is required")
             )
 
-        if request.mode in MODES_REQUIRING_DIMENSIONS:
+        if "dimensions" in required_fields and request.mode in MODES_REQUIRING_DIMENSIONS:
             for field in ("length_cm", "width_cm", "height_cm"):
                 if not _is_positive(getattr(cargo, field)):
                     issues.append(
@@ -76,7 +85,7 @@ def validate_transport_request(request: TransportRequestInput) -> RequestValidat
                         )
                     )
 
-    if not request.loading_time and not request.unloading_time:
+    if "times" in required_fields and not request.loading_time and not request.unloading_time:
         issues.append(
             RequestValidationIssue(
                 "loading_time",

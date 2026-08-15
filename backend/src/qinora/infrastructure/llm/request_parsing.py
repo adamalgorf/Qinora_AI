@@ -9,6 +9,7 @@ unparsed text. OpenAIRequestParsingLLM is the real thing.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,13 +18,32 @@ from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, requ
 from qinora.infrastructure.settings import Settings
 
 SYSTEM_PROMPT = """You are Parsek, a transport-request parsing assistant for the \
-Qinora logistics platform. Extract a structured transport request from the \
-free text the user provides (typically an RFQ or booking email from a customer).
+Qinora logistics platform. You read the full text of an email thread (which may \
+be a single message, or a customer's original request plus one or more follow-up \
+replies, oldest first) and extract a structured transport request.
 
-Rules:
+First, classify the thread with the "action" field:
+- "create": the thread describes a new transport request that hasn't been \
+captured yet.
+- "update": the thread is a follow-up on a request QiNora already has on file \
+(e.g. correcting a weight, adding a pickup time, changing the destination) - \
+extract the full, current state of the request after applying the update, not \
+just the delta.
+- "not_relevant": the thread is not a transport request at all (e.g. an invoice, \
+a general question, spam, an out-of-office reply) - in this case the other \
+fields may be left empty/default.
+
+Then extract the structured request:
 - mode must be exactly one of: ftl, ltl, ocean, air, rail, intermodal.
 - Only extract facts explicitly present or unambiguously implied by the text. \
 Never invent weights, dimensions, dates, or addresses.
+- If a weight or dimensions is only ever given for the shipment as a whole (not \
+per cargo line), put that figure on the single cargo line it belongs to rather \
+than leaving the line blank - weight/dimensions that only exist "loose" at the \
+top of the email should roll up onto the cargo line(s) they describe.
+- If the text lists multiple packages/pallets/cargo lines, extract each as its \
+own cargo line with its own weight; do not silently sum them into one line \
+yourself - the exact per-line weights are summed deterministically afterwards.
 - List every field you could not determine with confidence in missing_fields, \
 using the exact field names: mode, origin, destination, cargo, loading_time, \
 unloading_time, cargo.weight_kg, cargo.dimensions.
@@ -44,6 +64,10 @@ class _CargoLineSchema(BaseModel):
 
 
 class _TransportRequestSchema(BaseModel):
+    action: Literal["create", "update", "not_relevant"] = Field(
+        description="Whether this thread is a new request, an update to an existing "
+        "one, or not a transport request at all"
+    )
     mode: str = Field(description="One of: ftl, ltl, ocean, air, rail, intermodal")
     origin: str
     destination: str
@@ -112,6 +136,7 @@ def _to_draft(schema: _TransportRequestSchema) -> ParsedTransportRequestDraft:
         unloading_time=_parse_datetime(schema.unloading_time),
         confidence=schema.confidence,
         missing_fields=tuple(schema.missing_fields),
+        action=schema.action,
     )
 
 

@@ -5,7 +5,10 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierOfferRecord,
     CarrierRecord,
+    CarrierRfqOutboundRecord,
+    CarrierRfqRecord,
     ContactRecord,
+    InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
@@ -17,6 +20,7 @@ from qinora.application.read_models import (
     QuoteRecord,
     QuoteReplyInterpretation,
     QuoteResponseEventRecord,
+    RateProfileRecord,
     RequestDetailRecord,
     RequestRecord,
     ShipmentEventRecord,
@@ -42,7 +46,50 @@ class InboundEmailRepository(Protocol):
         sender: str,
         subject: str,
         body_text: str,
+        recipient: str = "",
+        message_id: str | None = None,
+        in_reply_to: str | None = None,
+        references_header: str | None = None,
     ) -> str:
+        pass
+
+
+class EmailThreadRepository(Protocol):
+    """Threading lookups over email_inbound, plus the write-back methods the
+    intake orchestrator uses to record its gating decision and link a
+    message to the request/quote it resolved to (see
+    application/thread_matching.py and application/email_intake_orchestrator.py).
+    """
+
+    async def get(self, email_id: str) -> InboundEmailRecord | None:
+        pass
+
+    async def find_candidates_by_message_ids(
+        self, message_ids: tuple[str, ...]
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def find_candidates_by_sender(
+        self, sender: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def find_candidates_by_domain(
+        self, domain: str, limit: int = 200
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def list_thread_history(
+        self, *, request_id: str | None, quote_id: str | None
+    ) -> list[InboundEmailRecord]:
+        pass
+
+    async def link_thread(
+        self, email_id: str, *, request_id: str | None, quote_id: str | None
+    ) -> None:
+        pass
+
+    async def mark_classification(self, email_id: str, classification: str) -> None:
         pass
 
 
@@ -124,6 +171,7 @@ class CarrierOfferWriteRepository(Protocol):
         transit_days: int | None,
         notes: str | None,
         confidence: float,
+        carrier_rfq_id: str | None = None,
     ) -> CarrierOfferRecord:
         pass
 
@@ -175,6 +223,22 @@ class OperationalReadRepository(Protocol):
         pass
 
 
+class CarrierWriteRepository(Protocol):
+    async def create_carrier(
+        self,
+        *,
+        display_name: str,
+        modes: tuple[str, ...],
+        aliases: tuple[str, ...] = (),
+        email: str | None = None,
+        lane_score: float = 50.0,
+        max_weight_kg: float | None = None,
+        performance_score: float | None = None,
+        preferred: bool = False,
+    ) -> CarrierRecord:
+        pass
+
+
 class RequestWriteRepository(Protocol):
     async def create_transport_request(
         self,
@@ -185,6 +249,29 @@ class RequestWriteRepository(Protocol):
         status: str,
         review_reason: str | None,
     ) -> RequestRecord:
+        pass
+
+    async def update_transport_request(
+        self,
+        *,
+        request_id: str,
+        customer: str,
+        lane: str,
+        request: TransportRequestInput,
+        status: str,
+        review_reason: str | None,
+    ) -> RequestRecord:
+        pass
+
+    async def update_request_status(self, request_id: str, status: str) -> None:
+        """A lightweight status-only transition (mirrors
+        ShipmentWriteRepository.update_status) - unlike update_transport_request,
+        this never re-runs validate_transport_request, so it's the safe way
+        for application/pricing_engine.py and
+        application/carrier_rfq_collector.py to flip a request in/out of
+        'sourcing' without risking a stale/incomplete reconstructed
+        TransportRequestInput flipping it back to needs_clarification.
+        """
         pass
 
 
@@ -322,4 +409,112 @@ class OutboundReplyRepository(Protocol):
 
 class OutboundMailer(Protocol):
     async def send(self, reply: OutboundReplyRecord) -> None:
+        pass
+
+
+class RateProfileRepository(Protocol):
+    async def find_matching(
+        self, *, mode: str, origin: str | None, destination: str | None
+    ) -> RateProfileRecord | None:
+        pass
+
+    async def list_all(self) -> list[RateProfileRecord]:
+        pass
+
+    async def create(
+        self,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        pass
+
+    async def update(
+        self,
+        rate_profile_id: str,
+        *,
+        mode: str,
+        origin: str | None,
+        destination: str | None,
+        base_price: float,
+        price_per_kg: float,
+        currency: str,
+    ) -> RateProfileRecord:
+        pass
+
+
+class CarrierRfqRepository(Protocol):
+    """See application/carrier_rfq_collector.py and
+    application/email_intake_orchestrator.py for the two places that read a
+    batch back (the periodic sweep and the immediate on-reply trigger).
+    """
+
+    async def create_batch(
+        self,
+        *,
+        request_id: str,
+        carrier_ids: tuple[str, ...],
+        window_hours: int = 24,
+    ) -> list[CarrierRfqRecord]:
+        pass
+
+    async def find_by_token(self, token: str) -> CarrierRfqRecord | None:
+        pass
+
+    async def find_by_carrier_email(self, sender_address: str) -> CarrierRfqRecord | None:
+        pass
+
+    async def mark_responded(self, rfq_id: str, offer_id: str) -> CarrierRfqRecord:
+        pass
+
+    async def list_open_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        pass
+
+    async def list_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        pass
+
+    async def expire_stale(self, cutoff: str) -> list[CarrierRfqRecord]:
+        pass
+
+    async def mark_superseded(self, rfq_ids: tuple[str, ...]) -> None:
+        pass
+
+    async def find_winning(self, request_id: str) -> CarrierRfqRecord | None:
+        """The RFQ (if any) whose offer actually got booked - status
+        'responded' and not among the ones mark_superseded() later closed
+        out. BookingWorkflow uses this to book the same carrier the
+        customer was actually quoted against, instead of re-running
+        evaluate_carriers() from scratch and possibly picking someone else.
+        """
+        pass
+
+
+class CarrierRfqOutboundRepository(Protocol):
+    """Mirrors OutboundReplyRepository, but for the carrier_rfq_outbound
+    table (see migrations/0006_carrier_rfq.sql) - a separate queue rather
+    than reusing outbound_reply_queue, so its (required) quote_id column
+    never needs to become nullable.
+    """
+
+    async def enqueue(
+        self,
+        *,
+        carrier_rfq_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> CarrierRfqOutboundRecord:
+        pass
+
+    async def next_queued(self, limit: int) -> list[CarrierRfqOutboundRecord]:
+        pass
+
+    async def mark_sent(self, item_id: str) -> CarrierRfqOutboundRecord:
+        pass
+
+    async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
         pass

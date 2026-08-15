@@ -32,6 +32,7 @@ def test_postgres_container_requires_database_url(tmp_path: Path) -> None:
         llm_provider=LLMProvider.STUB,
         openai_api_key=None,
         openai_model="gpt-4o-mini",
+        default_markup_percent=15.0,
     )
 
     with pytest.raises(RuntimeError, match="DATABASE_URL is required"):

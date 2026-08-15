@@ -8,8 +8,12 @@ from pydantic import BaseModel, EmailStr, Field
 
 class EmailWebhookPayload(BaseModel):
     sender: EmailStr
+    recipient: EmailStr
     subject: str = Field(min_length=1, max_length=500)
     body_text: str = Field(min_length=1)
+    message_id: str | None = None
+    in_reply_to: str | None = None
+    references: str | None = None
 
 
 class EmailWebhookResponse(BaseModel):
@@ -370,6 +374,17 @@ class CarrierListItem(BaseModel):
     preferred: bool
 
 
+class CarrierCreateRequest(BaseModel):
+    display_name: str = Field(min_length=1)
+    modes: list[str] = Field(min_length=1, description="e.g. ['ftl', 'ltl']")
+    aliases: list[str] = Field(default_factory=list)
+    email: EmailStr | None = None
+    lane_score: float = 50.0
+    max_weight_kg: float | None = None
+    performance_score: float | None = None
+    preferred: bool = False
+
+
 class ContactListItem(BaseModel):
     id: str
     public_id: str
@@ -455,3 +470,47 @@ class CarrierIntelligenceResponse(BaseModel):
     requires_manual_review: bool
     overall_confidence: float
     evaluations: list[CarrierEvaluationItem]
+
+
+class RateProfileItem(BaseModel):
+    id: str
+    mode: str
+    origin: str | None
+    destination: str | None
+    base_price: float
+    price_per_kg: float
+    currency: str
+
+
+class RateProfilePayload(BaseModel):
+    mode: Literal["ftl", "ltl", "ocean", "air", "rail", "intermodal"]
+    origin: str | None = None
+    destination: str | None = None
+    base_price: float = Field(ge=0)
+    price_per_kg: float = Field(ge=0)
+    currency: str = "SEK"
+
+
+class OutboundQueueItem(BaseModel):
+    """One row from either outbound_reply_queue or carrier_rfq_outbound,
+    normalized to a common shape - see interfaces/http/routers/outbound.py.
+    """
+
+    queue: Literal["quote", "carrier_rfq"]
+    id: str
+    recipient: str
+    subject: str
+    body_text: str
+
+
+class OutboundAckResponse(BaseModel):
+    ok: bool = True
+
+
+class OutboundFailPayload(BaseModel):
+    error_message: str = Field(min_length=1, max_length=2000)
+
+
+class CollectCarrierRfqsResponse(BaseModel):
+    finalized: int
+    escalated: int

@@ -35,6 +35,10 @@ async def email_webhook_route(
             sender=str(payload.sender),
             subject=payload.subject,
             body_text=payload.body_text,
+            recipient=str(payload.recipient),
+            message_id=payload.message_id,
+            in_reply_to=payload.in_reply_to,
+            references=payload.references,
         )
     )
 

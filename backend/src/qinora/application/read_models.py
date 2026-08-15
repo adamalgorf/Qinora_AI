@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -30,6 +30,7 @@ class ParsedTransportRequestDraft:
     unloading_time: datetime | None
     confidence: float
     missing_fields: tuple[str, ...]
+    action: str = "create"
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,10 @@ class CarrierOfferRecord:
     notes: str | None
     confidence: float
     created_at: str
+    # Links this offer to the carrier_rfqs row it was collected for (see
+    # application/carrier_rfq_collector.py) - None for offers that arrived
+    # outside the automatic RFQ flow (e.g. a manual booking-time reply).
+    carrier_rfq_id: str | None = None
 
 
 class QuoteReplyIntent(StrEnum):
@@ -198,6 +203,10 @@ class CarrierRecord:
     performance_score: float | None
     preferred: bool
     sample_size: int
+    # Carriers without an email are simply never picked as an automatic RFQ
+    # target (application/carrier_rfq.py) - manual booking-time selection
+    # (domain/carrier_intelligence.py's evaluate_carriers) is unaffected.
+    email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -228,6 +237,7 @@ class AgentConfigRecord:
     is_enabled: bool
     auto_mode: str
     min_confidence: float
+    config: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -286,3 +296,73 @@ class QuoteResponseEventRecord:
     intent: str
     body_text: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class InboundEmailRecord:
+    """A single email_inbound row, including the threading columns added
+    for the email intake orchestrator (see application/thread_matching.py
+    and application/email_intake_orchestrator.py). Doubles as both the
+    "fetch one email" read shape and a thread-matching candidate row.
+    """
+
+    id: str
+    sender: str
+    recipient: str
+    subject: str
+    body_text: str
+    classification: str | None
+    message_id: str | None
+    in_reply_to: str | None
+    references_header: str | None
+    request_id: str | None
+    quote_id: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
+class RateProfileRecord:
+    id: str
+    mode: str
+    origin: str | None
+    destination: str | None
+    base_price: float
+    price_per_kg: float
+    currency: str
+
+
+@dataclass(frozen=True)
+class CarrierRfqRecord:
+    """One carrier's leg of an automatic RFQ batch (application/pricing_engine.py's
+    carrier-sourcing branch + application/carrier_rfq_collector.py). status is
+    one of 'sent' (awaiting reply), 'responded' (offer parsed and linked),
+    'expired' (sourcing window elapsed with no reply) or 'superseded' (a
+    cheaper reply in the same batch won instead).
+    """
+
+    id: str
+    request_id: str
+    carrier_id: str
+    correlation_token: str
+    status: str
+    sent_at: str
+    responded_at: str | None
+    expires_at: str
+
+
+@dataclass(frozen=True)
+class CarrierRfqOutboundRecord:
+    """Mirrors OutboundReplyRecord's shape but keyed to a carrier_rfq instead
+    of a quote - kept as a separate queue/table so the already-shipped
+    customer-quote outbound path never needs to tolerate a null quote_id.
+    """
+
+    id: str
+    carrier_rfq_id: str
+    recipient: str
+    subject: str
+    body_text: str
+    status: str
+    created_at: str
+    sent_at: str | None = None
+    error_message: str | None = None
