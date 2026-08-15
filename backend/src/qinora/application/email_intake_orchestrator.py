@@ -3,13 +3,19 @@ EmailWebhookUseCase) through the full automated intake pipeline:
 
   1. Loop-guard - drop our own mail bouncing back to us.
   2. Tenant resolution - a safety/quality gate, see application/email_routing.py.
-  3. Contact matching - who is this, if anyone we know (ContactMatchingUseCase).
-  4. Thread matching - which prior request/quote (if any) this continues.
-  5. Acceptance shortcut - a deterministic "accept" reply on an open quote
+  3. Carrier RFQ reply routing - a reply carrying a live RFQ correlation
+     token (or from a carrier's registered email with an open RFQ) is a
+     carrier's rate quote, not a customer email - handed to Remy Rates
+     (application/carrier_offer_agent.py) and never reaches the steps below.
+     See application/pricing_engine.py / application/carrier_rfq_collector.py
+     for where the RFQ itself came from.
+  4. Contact matching - who is this, if anyone we know (ContactMatchingUseCase).
+  5. Thread matching - which prior request/quote (if any) this continues.
+  6. Acceptance shortcut - a deterministic "accept" reply on an open quote
      books the shipment directly, no LLM call.
-  6. Closed-thread gate - a reply on an already-closed quote/request/shipment
+  7. Closed-thread gate - a reply on an already-closed quote/request/shipment
      is never auto-processed, only escalated for a human to handle.
-  7. Otherwise, hand the full thread history to Parsek (extended with a
+  8. Otherwise, hand the full thread history to Parsek (extended with a
      classify + create/update/not_relevant step - see
      application/request_parsing_agent.py) and, for a complete request,
      price it and queue the quote (application/pricing_engine.py).
@@ -20,17 +26,32 @@ infrastructure/email_dispatch.py for the adapter that invokes `handle()`.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from qinora.application.agent_config import AgentConfigService
 from qinora.application.booking_workflow import BookingWorkflow, BookQuoteCommand
+from qinora.application.carrier_offer_agent import (
+    CarrierOfferParsingAgent,
+    ParseCarrierOfferCommand,
+)
+from qinora.application.carrier_rfq_collector import CarrierRfqCollector
 from qinora.application.contact_matching import ContactMatchingUseCase, MatchContactCommand
 from qinora.application.email_routing import is_loop, resolve_tenant
 from qinora.application.operational_queries import OperationalQueries
-from qinora.application.ports import EmailThreadRepository, OperationalTaskWriteRepository
+from qinora.application.ports import (
+    CarrierRfqRepository,
+    EmailThreadRepository,
+    OperationalTaskWriteRepository,
+)
 from qinora.application.pricing_engine import PriceAndQuoteCommand, PricingEngine
 from qinora.application.quote_response_workflow import interpret_quote_reply
-from qinora.application.read_models import InboundEmailRecord, QuoteReplyIntent, ShipmentRecord
+from qinora.application.read_models import (
+    CarrierRfqRecord,
+    InboundEmailRecord,
+    QuoteReplyIntent,
+    ShipmentRecord,
+)
 from qinora.application.request_parsing_agent import (
     ParseFreeTextRequestCommand,
     RequestParsingAgent,
@@ -41,6 +62,16 @@ from qinora.domain.shipment_status import ShipmentStatus
 PARSEK_AGENT_KEY = "request_parsing_agent"
 
 MANUAL_REVIEW_REASON = "granska och svara manuellt"
+
+# Matches the subject line application/pricing_engine.py's _build_rfq_email
+# generates, e.g. "QiNora RFQ #A1B2C3D4 - Stockholm -> Hamburg, ltl" - also
+# matches "Re: QiNora RFQ #A1B2C3D4 ..." since it only anchors on the token
+# itself, not the start of the string.
+RFQ_TOKEN_RE = re.compile(r"QiNora RFQ #([0-9a-fA-F]{8})", re.IGNORECASE)
+
+# An RFQ is still awaiting a reply in this status - see
+# application/ports.py's CarrierRfqRepository and migrations/0006_carrier_rfq.sql.
+OPEN_RFQ_STATUS = "sent"
 
 # Quote statuses a customer can still meaningfully reply to (accept/revise/reject).
 ACTIVE_QUOTE_STATUSES = frozenset({"sent", "viewed"})
@@ -75,6 +106,9 @@ class EmailIntakeOrchestrator:
         task_repository: OperationalTaskWriteRepository,
         request_parsing_agent: RequestParsingAgent,
         pricing_engine: PricingEngine,
+        carrier_rfqs: CarrierRfqRepository,
+        carrier_offer_agent: CarrierOfferParsingAgent,
+        carrier_rfq_collector: CarrierRfqCollector,
     ) -> None:
         self._agent_config = agent_config
         self._contact_matching = contact_matching
@@ -85,6 +119,9 @@ class EmailIntakeOrchestrator:
         self._task_repository = task_repository
         self._request_parsing_agent = request_parsing_agent
         self._pricing_engine = pricing_engine
+        self._carrier_rfqs = carrier_rfqs
+        self._carrier_offer_agent = carrier_offer_agent
+        self._carrier_rfq_collector = carrier_rfq_collector
 
     async def handle(self, email_id: str) -> HandleInboundEmailResult:
         email = await self._email_threads.get(email_id)
@@ -101,6 +138,10 @@ class EmailIntakeOrchestrator:
         )
         if tenant_id is None:
             return await self._finish(email_id, "rejected")
+
+        carrier_rfq_match = await self._match_carrier_rfq(email)
+        if carrier_rfq_match is not None:
+            return await self._handle_carrier_reply(email_id, email, carrier_rfq_match)
 
         match_result = await self._contact_matching.execute(
             MatchContactCommand(sender=email.sender, inbound_email_id=email_id)
@@ -203,6 +244,29 @@ class EmailIntakeOrchestrator:
             )
         )
         return await self._finish(email_id, "transport_request")
+
+    async def _match_carrier_rfq(self, email: InboundEmailRecord) -> CarrierRfqRecord | None:
+        token_match = RFQ_TOKEN_RE.search(email.subject)
+        if token_match:
+            rfq = await self._carrier_rfqs.find_by_token(token_match.group(1))
+            if rfq is not None and rfq.status == OPEN_RFQ_STATUS:
+                return rfq
+        return await self._carrier_rfqs.find_by_carrier_email(email.sender)
+
+    async def _handle_carrier_reply(
+        self, email_id: str, email: InboundEmailRecord, rfq: CarrierRfqRecord
+    ) -> HandleInboundEmailResult:
+        result = await self._carrier_offer_agent.execute(
+            ParseCarrierOfferCommand(request_id=rfq.request_id, raw_text=email.body_text)
+        )
+        if result.offer is not None:
+            await self._carrier_rfqs.mark_responded(rfq.id, result.offer.id)
+            still_open = await self._carrier_rfqs.list_open_batch(rfq.request_id)
+            if not still_open:
+                await self._carrier_rfq_collector.finalize_batch(rfq.request_id)
+
+        await self._email_threads.link_thread(email_id, request_id=rfq.request_id, quote_id=None)
+        return await self._finish(email_id, "carrier_offer")
 
     async def _book_accepted_quote(self, quote_id: str, request_id: str | None) -> None:
         mode = "ltl"

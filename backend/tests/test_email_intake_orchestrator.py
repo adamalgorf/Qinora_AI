@@ -5,6 +5,12 @@ import anyio
 
 from qinora.application.agent_config import AgentConfigService
 from qinora.application.booking_workflow import BookingWorkflow
+from qinora.application.carrier_offer_agent import (
+    AGENT_KEY as CARRIER_OFFER_AGENT_KEY,
+)
+from qinora.application.carrier_offer_agent import (
+    CarrierOfferParsingAgent,
+)
 from qinora.application.contact_matching import ContactMatchingUseCase
 from qinora.application.email_intake_orchestrator import EmailIntakeOrchestrator
 from qinora.application.operational_queries import OperationalQueries
@@ -13,10 +19,13 @@ from qinora.application.quote_workflow import QuoteWorkflow
 from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
+    CarrierOfferRecord,
+    CarrierRfqRecord,
     ContactRecord,
     InboundEmailRecord,
     OutboundReplyRecord,
     ParsedCargoLine,
+    ParsedCarrierOfferDraft,
     ParsedTransportRequestDraft,
     QuoteDetailRecord,
     QuoteRecord,
@@ -282,6 +291,7 @@ class FakeRequestParsingLLM:
 @dataclass
 class FakeRequestWriteRepository:
     created: list = field(default_factory=list)
+    status_updates: list = field(default_factory=list)
 
     async def create_transport_request(self, *, customer, lane, request, status, review_reason):
         record = RequestRecord(
@@ -299,6 +309,9 @@ class FakeRequestWriteRepository:
     async def update_transport_request(self, **kwargs):
         raise NotImplementedError
 
+    async def update_request_status(self, request_id, status):
+        self.status_updates.append((request_id, status))
+
 
 @dataclass
 class FakeRateProfileRepository:
@@ -315,6 +328,145 @@ class FakeRateProfileRepository:
 
     async def update(self, rate_profile_id, **kwargs):
         raise NotImplementedError
+
+
+@dataclass
+class FakeCarrierRfqTargeting:
+    targets: list = field(default_factory=list)
+
+    async def select_targets(self, command):
+        return self.targets
+
+
+@dataclass
+class FakeCarrierRfqOutboundRepository:
+    enqueued: list = field(default_factory=list)
+
+    async def enqueue(self, *, carrier_rfq_id, recipient, subject, body_text):
+        self.enqueued.append(
+            {
+                "carrier_rfq_id": carrier_rfq_id,
+                "recipient": recipient,
+                "subject": subject,
+                "body_text": body_text,
+            }
+        )
+        return None
+
+    async def next_queued(self, limit):
+        raise NotImplementedError
+
+    async def mark_sent(self, item_id):
+        raise NotImplementedError
+
+    async def mark_failed(self, item_id, error_message):
+        raise NotImplementedError
+
+
+@dataclass
+class FakeCarrierRfqRepository:
+    """Backs both PricingEngine's carrier sourcing branch and the
+    orchestrator's own carrier-reply matching - the same instance is wired
+    to both in _build_orchestrator, mirroring how they share one real
+    CarrierRfqRepository in interfaces/http/container.py.
+    """
+
+    by_token: dict = field(default_factory=dict)
+    by_email: dict = field(default_factory=dict)
+    open_batch: dict = field(default_factory=dict)
+    responded: list = field(default_factory=list)
+    created_batches: list = field(default_factory=list)
+
+    async def create_batch(self, *, request_id, carrier_ids, window_hours=24):
+        records = [
+            CarrierRfqRecord(
+                id=f"rfq-{request_id}-{carrier_id}",
+                request_id=request_id,
+                carrier_id=carrier_id,
+                correlation_token=f"tok-{carrier_id}",
+                status="sent",
+                sent_at="2026-01-01T00:00:00",
+                responded_at=None,
+                expires_at="2026-01-02T00:00:00",
+            )
+            for carrier_id in carrier_ids
+        ]
+        self.created_batches.append({"request_id": request_id, "carrier_ids": carrier_ids})
+        return records
+
+    async def find_by_token(self, token):
+        return self.by_token.get(token)
+
+    async def find_by_carrier_email(self, sender_address):
+        return self.by_email.get(sender_address.strip().lower())
+
+    async def mark_responded(self, rfq_id, offer_id):
+        self.responded.append((rfq_id, offer_id))
+        return None
+
+    async def list_open_batch(self, request_id):
+        return self.open_batch.get(request_id, [])
+
+    async def list_batch(self, request_id):
+        raise NotImplementedError
+
+    async def expire_stale(self, cutoff):
+        raise NotImplementedError
+
+    async def mark_superseded(self, rfq_ids):
+        raise NotImplementedError
+
+
+@dataclass
+class FakeCarrierOfferParsingLLM:
+    draft: ParsedCarrierOfferDraft
+
+    async def parse(self, *, raw_text: str):
+        return self.draft
+
+
+@dataclass
+class FakeCarrierOfferWriteRepository:
+    created: list = field(default_factory=list)
+
+    async def create_offer(
+        self,
+        *,
+        request_id,
+        carrier_name,
+        price,
+        currency,
+        transit_days,
+        notes,
+        confidence,
+        carrier_rfq_id=None,
+    ):
+        record = CarrierOfferRecord(
+            id=f"carrier-offer-{len(self.created) + 1}",
+            request_id=request_id,
+            carrier_name=carrier_name,
+            price=price,
+            currency=currency,
+            transit_days=transit_days,
+            notes=notes,
+            confidence=confidence,
+            created_at="2026-01-01T00:00:00",
+            carrier_rfq_id=carrier_rfq_id,
+        )
+        self.created.append(record)
+        return record
+
+    async def list_offers_for_request(self, request_id):
+        return [item for item in self.created if item.request_id == request_id]
+
+
+@dataclass
+class FakeCarrierRfqCollector:
+    finalized: list = field(default_factory=list)
+
+    async def finalize_batch(self, request_id):
+        self.finalized.append(request_id)
+        return None
 
 
 def _email(
@@ -352,6 +504,17 @@ def _parsek_config(config: dict | None = None) -> AgentConfigRecord:
     )
 
 
+def _carrier_offer_config(config: dict | None = None) -> AgentConfigRecord:
+    return AgentConfigRecord(
+        agent_key=CARRIER_OFFER_AGENT_KEY,
+        agent_name="Remy Rates",
+        is_enabled=True,
+        auto_mode="guarded_auto",
+        min_confidence=0.7,
+        config=config or {},
+    )
+
+
 def _build_orchestrator(
     *,
     email: InboundEmailRecord,
@@ -365,11 +528,18 @@ def _build_orchestrator(
     contact: ContactRecord | None = None,
     requests: list | None = None,
     seed_quotes: dict | None = None,
+    carrier_rfq_repository: FakeCarrierRfqRepository | None = None,
+    carrier_offer_draft: ParsedCarrierOfferDraft | None = None,
+    carrier_offer_agent_config: AgentConfigRecord | None = None,
 ):
     email_threads = FakeEmailThreadRepository(emails={email.id: email})
     contacts = FakeContactReadRepository(contact=contact)
     contact_matching = ContactMatchingUseCase(contacts, FakeAgentLogWriteRepository())
-    agent_config = AgentConfigService(FakeAgentConfigRepository(configs=[parsek_config]))
+    agent_config = AgentConfigService(
+        FakeAgentConfigRepository(
+            configs=[parsek_config, carrier_offer_agent_config or _carrier_offer_config()]
+        )
+    )
 
     operational_repo = FakeOperationalReadRepository(
         quote_details=quote_details or {},
@@ -410,12 +580,37 @@ def _build_orchestrator(
     )
 
     quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
+    carrier_rfqs = carrier_rfq_repository or FakeCarrierRfqRepository()
     pricing_engine = PricingEngine(
         FakeRateProfileRepository(rate_profile),
         quote_workflow,
         task_repository,
         default_markup_percent=15,
+        carrier_rfq_targeting=FakeCarrierRfqTargeting(),
+        carrier_rfqs=carrier_rfqs,
+        carrier_rfq_outbound=FakeCarrierRfqOutboundRepository(),
+        request_repository=request_repository,
     )
+
+    carrier_offer_repository = FakeCarrierOfferWriteRepository()
+    carrier_offer_agent = CarrierOfferParsingAgent(
+        FakeCarrierOfferParsingLLM(
+            draft=carrier_offer_draft
+            or ParsedCarrierOfferDraft(
+                carrier_name="Nordic Freight",
+                price=8500.0,
+                currency="SEK",
+                transit_days=2,
+                notes=None,
+                confidence=0.9,
+                missing_fields=(),
+            )
+        ),
+        carrier_offer_repository,
+        FakeAgentLogWriteRepository(),
+        agent_config,
+    )
+    carrier_rfq_collector = FakeCarrierRfqCollector()
 
     orchestrator = EmailIntakeOrchestrator(
         agent_config,
@@ -427,6 +622,9 @@ def _build_orchestrator(
         task_repository,
         request_parsing_agent,
         pricing_engine,
+        carrier_rfqs,
+        carrier_offer_agent,
+        carrier_rfq_collector,
     )
     return (
         orchestrator,
@@ -437,6 +635,9 @@ def _build_orchestrator(
         quote_repository,
         llm,
         request_repository,
+        carrier_rfqs,
+        carrier_offer_repository,
+        carrier_rfq_collector,
     )
 
 
@@ -503,6 +704,7 @@ def test_acceptance_shortcut_books_shipment_without_calling_llm() -> None:
         quote_repository,
         llm,
         _request_repository,
+        *_,
     ) = _build_orchestrator(
         email=email,
         parsek_config=parsek_config,
@@ -558,6 +760,7 @@ def test_closed_thread_escalates_instead_of_auto_processing() -> None:
         _quote_repository,
         llm,
         request_repository,
+        *_,
     ) = _build_orchestrator(
         email=email,
         parsek_config=parsek_config,
@@ -629,6 +832,7 @@ def test_new_thread_creates_request_and_prices_it() -> None:
         quote_repository,
         llm,
         request_repository,
+        *_,
     ) = _build_orchestrator(
         email=email,
         parsek_config=parsek_config,
@@ -650,3 +854,147 @@ def test_new_thread_creates_request_and_prices_it() -> None:
     assert quote.customer_price == 1265.0
     assert quote.status == "sent"
     assert task_repository.created == []
+
+
+def test_carrier_reply_matched_by_token_routes_to_remy_rates_not_parsek() -> None:
+    email = _email(
+        "mail-5",
+        sender="rates@nordic.example",
+        subject="Re: QiNora RFQ #A1B2C3D4 - Gothenburg -> Malmo, ltl",
+        body_text="We can do 8500 SEK, 2 days transit.",
+    )
+    parsek_config = _parsek_config()
+    open_rfq = CarrierRfqRecord(
+        id="rfq-1",
+        request_id="req-1",
+        carrier_id="car-1",
+        correlation_token="A1B2C3D4",
+        status="sent",
+        sent_at="2026-01-01T00:00:00",
+        responded_at=None,
+        expires_at="2026-01-02T00:00:00",
+    )
+    carrier_rfqs = FakeCarrierRfqRepository(
+        by_token={"A1B2C3D4": open_rfq},
+        # Still one other open RFQ in the batch, so this reply alone
+        # shouldn't finalize it yet.
+        open_batch={"req-1": [open_rfq]},
+    )
+
+    (
+        orchestrator,
+        email_threads,
+        _contacts,
+        task_repository,
+        *_,
+        carrier_rfq_repository,
+        carrier_offer_repository,
+        carrier_rfq_collector,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        carrier_rfq_repository=carrier_rfqs,
+    )
+
+    result = anyio.run(lambda: orchestrator.handle("mail-5"))
+
+    assert result.classification == "carrier_offer"
+    assert email_threads.classifications["mail-5"] == "carrier_offer"
+    assert ("mail-5", "req-1", None) in email_threads.linked
+    # Remy Rates (carrier_offer_agent) parsed and saved the offer...
+    assert len(carrier_offer_repository.created) == 1
+    assert carrier_offer_repository.created[0].request_id == "req-1"
+    # ...and the RFQ got linked to it via mark_responded, not Parsek.
+    assert carrier_rfq_repository.responded == [
+        ("rfq-1", carrier_offer_repository.created[0].id)
+    ]
+    assert task_repository.created == []
+    # The batch still has another open RFQ (per open_batch above), so this
+    # reply alone doesn't trigger Phase E finalization yet.
+    assert carrier_rfq_collector.finalized == []
+
+
+def test_carrier_reply_completing_batch_triggers_immediate_finalization() -> None:
+    email = _email(
+        "mail-6",
+        sender="rates@nordic.example",
+        subject="Re: QiNora RFQ #DEADBEEF - Gothenburg -> Malmo, ltl",
+        body_text="We can do 8500 SEK, 2 days transit.",
+    )
+    parsek_config = _parsek_config()
+    open_rfq = CarrierRfqRecord(
+        id="rfq-2",
+        request_id="req-2",
+        carrier_id="car-1",
+        correlation_token="DEADBEEF",
+        status="sent",
+        sent_at="2026-01-01T00:00:00",
+        responded_at=None,
+        expires_at="2026-01-02T00:00:00",
+    )
+    # No other open RFQs left once this one responds - list_open_batch
+    # returns empty, which should trigger the collector's finalize_batch.
+    carrier_rfqs = FakeCarrierRfqRepository(
+        by_token={"DEADBEEF": open_rfq},
+        open_batch={"req-2": []},
+    )
+
+    (
+        orchestrator,
+        *_,
+        carrier_rfq_collector,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        carrier_rfq_repository=carrier_rfqs,
+    )
+
+    result = anyio.run(lambda: orchestrator.handle("mail-6"))
+
+    assert result.classification == "carrier_offer"
+    assert carrier_rfq_collector.finalized == ["req-2"]
+
+
+def test_carrier_reply_matched_by_sender_email_fallback() -> None:
+    email = _email(
+        "mail-7",
+        sender="rates@nordic.example",
+        subject="Nordic Freight rate quote",  # no correlation token in subject
+        body_text="8500 SEK, 2 days.",
+    )
+    parsek_config = _parsek_config()
+    open_rfq = CarrierRfqRecord(
+        id="rfq-3",
+        request_id="req-3",
+        carrier_id="car-1",
+        correlation_token="FEEDFACE",
+        status="sent",
+        sent_at="2026-01-01T00:00:00",
+        responded_at=None,
+        expires_at="2026-01-02T00:00:00",
+    )
+    carrier_rfqs = FakeCarrierRfqRepository(
+        by_email={"rates@nordic.example": open_rfq},
+        open_batch={"req-3": [open_rfq]},
+    )
+
+    (
+        orchestrator,
+        email_threads,
+        *_,
+        carrier_rfq_repository,
+        carrier_offer_repository,
+        _carrier_rfq_collector,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        carrier_rfq_repository=carrier_rfqs,
+    )
+
+    result = anyio.run(lambda: orchestrator.handle("mail-7"))
+
+    assert result.classification == "carrier_offer"
+    assert ("mail-7", "req-3", None) in email_threads.linked
+    assert carrier_rfq_repository.responded == [
+        ("rfq-3", carrier_offer_repository.created[0].id)
+    ]

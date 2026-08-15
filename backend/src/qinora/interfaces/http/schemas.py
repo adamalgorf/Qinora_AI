@@ -478,3 +478,28 @@ class RateProfilePayload(BaseModel):
     base_price: float = Field(ge=0)
     price_per_kg: float = Field(ge=0)
     currency: str = "SEK"
+
+
+class OutboundQueueItem(BaseModel):
+    """One row from either outbound_reply_queue or carrier_rfq_outbound,
+    normalized to a common shape - see interfaces/http/routers/outbound.py.
+    """
+
+    queue: Literal["quote", "carrier_rfq"]
+    id: str
+    recipient: str
+    subject: str
+    body_text: str
+
+
+class OutboundAckResponse(BaseModel):
+    ok: bool = True
+
+
+class OutboundFailPayload(BaseModel):
+    error_message: str = Field(min_length=1, max_length=2000)
+
+
+class CollectCarrierRfqsResponse(BaseModel):
+    finalized: int
+    escalated: int

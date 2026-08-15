@@ -50,5 +50,5 @@ class Settings:
             llm_provider=LLMProvider(os.getenv("LLM_PROVIDER", "stub")),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            default_markup_percent=float(os.getenv("QINORA_DEFAULT_MARKUP_PERCENT", "15")),
+            default_markup_percent=float(os.getenv("QINORA_DEFAULT_MARKUP_PERCENT", "10")),
         )

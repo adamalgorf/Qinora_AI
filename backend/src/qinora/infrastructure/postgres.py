@@ -1,3 +1,4 @@
+import secrets
 from typing import Any
 
 import psycopg
@@ -10,6 +11,8 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierOfferRecord,
     CarrierRecord,
+    CarrierRfqOutboundRecord,
+    CarrierRfqRecord,
     ContactRecord,
     InboundEmailRecord,
     InboxDetailRecord,
@@ -403,12 +406,13 @@ class PostgresOperationalReadRepository:
                 ),
                 preferred=bool(row["is_preferred"]),
                 sample_size=row["sample_size"],
+                email=row["email"],
             )
             for row in self._fetch_all(
                 """
                 select
                   id, name, aliases, modes, lane_score, max_weight_kg,
-                  performance_score, is_preferred, sample_size
+                  performance_score, is_preferred, sample_size, email
                 from public.carriers
                 where tenant_id = %s and is_active = true
                 order by name
@@ -901,6 +905,17 @@ class PostgresRequestWriteRepository:
             weight_kg=total_weight,
         )
 
+    async def update_request_status(self, request_id: str, status: str) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.transport_requests
+                set status = %s
+                where tenant_id = %s and id = %s
+                """,
+                (status, self._database.tenant_id, request_id),
+            )
+
 
 class PostgresCarrierOfferWriteRepository:
     def __init__(self, database: PostgresDatabase) -> None:
@@ -916,16 +931,22 @@ class PostgresCarrierOfferWriteRepository:
         transit_days: int | None,
         notes: str | None,
         confidence: float,
+        carrier_rfq_id: str | None = None,
     ) -> CarrierOfferRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.carrier_offers
-                  (tenant_id, request_id, carrier_name, price, currency, transit_days,
-                    notes, confidence)
-                values (%s, %s, %s, %s, %s, %s, %s, %s)
+                  (
+                    tenant_id, request_id, carrier_name, price, currency, transit_days,
+                    notes, confidence, carrier_rfq_id
+                  )
+                values (
+                  %s, %s, %s, %s, %s, %s, %s, %s,
+                  case when %s ~ '^[0-9a-fA-F-]{36}$' then %s::uuid else null end
+                )
                 returning id, request_id, carrier_name, price, currency, transit_days,
-                  notes, confidence, created_at
+                  notes, confidence, created_at, carrier_rfq_id
                 """,
                 (
                     self._database.tenant_id,
@@ -936,6 +957,8 @@ class PostgresCarrierOfferWriteRepository:
                     transit_days,
                     notes,
                     confidence,
+                    carrier_rfq_id or "",
+                    carrier_rfq_id or "",
                 ),
             )
             row = cursor.fetchone()
@@ -946,7 +969,7 @@ class PostgresCarrierOfferWriteRepository:
             cursor.execute(
                 """
                 select id, request_id, carrier_name, price, currency, transit_days,
-                  notes, confidence, created_at
+                  notes, confidence, created_at, carrier_rfq_id
                 from public.carrier_offers
                 where tenant_id = %s and request_id = %s
                 order by created_at
@@ -968,6 +991,7 @@ def _carrier_offer_from_postgres_row(row: dict[str, Any]) -> CarrierOfferRecord:
         notes=row["notes"],
         confidence=float(row["confidence"]),
         created_at=row["created_at"].isoformat(),
+        carrier_rfq_id=str(row["carrier_rfq_id"]) if row["carrier_rfq_id"] else None,
     )
 
 
@@ -1825,6 +1849,273 @@ class PostgresRateProfileRepository:
         if row is None:
             raise LookupError(f"Rate profile not found: {rate_profile_id}")
         return _rate_profile_from_postgres_row(row)
+
+
+class PostgresCarrierRfqRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_batch(
+        self,
+        *,
+        request_id: str,
+        carrier_ids: tuple[str, ...],
+        window_hours: int = 24,
+    ) -> list[CarrierRfqRecord]:
+        records: list[CarrierRfqRecord] = []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            for carrier_id in carrier_ids:
+                row = None
+                for _ in range(5):
+                    token = secrets.token_hex(4)
+                    cursor.execute(
+                        """
+                        insert into public.carrier_rfqs
+                          (tenant_id, request_id, carrier_id, correlation_token, status, expires_at)
+                        values (%s, %s, %s, %s, 'sent', now() + (%s || ' hours')::interval)
+                        on conflict (correlation_token) do nothing
+                        returning id, request_id, carrier_id, correlation_token, status,
+                          sent_at, responded_at, expires_at
+                        """,
+                        (
+                            self._database.tenant_id,
+                            request_id,
+                            carrier_id,
+                            token,
+                            str(window_hours),
+                        ),
+                    )
+                    row = cursor.fetchone()
+                    if row is not None:
+                        break
+                if row is None:
+                    raise RuntimeError("Could not generate a unique RFQ correlation token")
+                records.append(_carrier_rfq_from_postgres_row(row))
+        return records
+
+    async def find_by_token(self, token: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                from public.carrier_rfqs
+                where tenant_id = %s and correlation_token = %s
+                """,
+                (self._database.tenant_id, token),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_from_postgres_row(row) if row else None
+
+    async def find_by_carrier_email(self, sender_address: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select rfq.id, rfq.request_id, rfq.carrier_id, rfq.correlation_token,
+                  rfq.status, rfq.sent_at, rfq.responded_at, rfq.expires_at
+                from public.carrier_rfqs rfq
+                join public.carriers c on c.id = rfq.carrier_id
+                where rfq.tenant_id = %s and rfq.status = 'sent'
+                  and lower(c.email) = %s
+                order by rfq.sent_at desc
+                limit 1
+                """,
+                (self._database.tenant_id, sender_address.strip().lower()),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_from_postgres_row(row) if row else None
+
+    async def mark_responded(self, rfq_id: str, offer_id: str) -> CarrierRfqRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_offers
+                set carrier_rfq_id = %s
+                where tenant_id = %s and id = %s
+                """,
+                (rfq_id, self._database.tenant_id, offer_id),
+            )
+            cursor.execute(
+                """
+                update public.carrier_rfqs
+                set status = 'responded', responded_at = now()
+                where tenant_id = %s and id = %s
+                returning id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                """,
+                (self._database.tenant_id, rfq_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ not found: {rfq_id}")
+        return _carrier_rfq_from_postgres_row(row)
+
+    async def list_open_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        return await self._list_batch(request_id, status="sent")
+
+    async def list_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        return await self._list_batch(request_id, status=None)
+
+    async def _list_batch(self, request_id: str, status: str | None) -> list[CarrierRfqRecord]:
+        query = """
+            select id, request_id, carrier_id, correlation_token, status, sent_at,
+              responded_at, expires_at
+            from public.carrier_rfqs
+            where tenant_id = %s and request_id = %s
+        """
+        params: list[Any] = [self._database.tenant_id, request_id]
+        if status is not None:
+            query += " and status = %s"
+            params.append(status)
+        query += " order by sent_at"
+
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+        return [_carrier_rfq_from_postgres_row(row) for row in rows]
+
+    async def expire_stale(self, cutoff: str) -> list[CarrierRfqRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfqs
+                set status = 'expired'
+                where tenant_id = %s and status = 'sent' and sent_at <= %s::timestamptz
+                returning id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                """,
+                (self._database.tenant_id, cutoff),
+            )
+            rows = cursor.fetchall()
+        return [_carrier_rfq_from_postgres_row(row) for row in rows]
+
+    async def mark_superseded(self, rfq_ids: tuple[str, ...]) -> None:
+        if not rfq_ids:
+            return
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfqs
+                set status = 'superseded'
+                where tenant_id = %s and id = any(%s)
+                """,
+                (self._database.tenant_id, list(rfq_ids)),
+            )
+
+
+def _carrier_rfq_from_postgres_row(row: dict[str, Any]) -> CarrierRfqRecord:
+    return CarrierRfqRecord(
+        id=str(row["id"]),
+        request_id=str(row["request_id"]),
+        carrier_id=str(row["carrier_id"]),
+        correlation_token=row["correlation_token"],
+        status=row["status"],
+        sent_at=row["sent_at"].isoformat(),
+        responded_at=row["responded_at"].isoformat() if row["responded_at"] else None,
+        expires_at=row["expires_at"].isoformat(),
+    )
+
+
+class PostgresCarrierRfqOutboundRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        carrier_rfq_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.carrier_rfq_outbound
+                  (tenant_id, carrier_rfq_id, recipient, subject, body_text, status)
+                values (%s, %s, %s, %s, %s, %s)
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (
+                    self._database.tenant_id,
+                    carrier_rfq_id,
+                    recipient,
+                    subject,
+                    body_text,
+                    "queued",
+                ),
+            )
+            row = cursor.fetchone()
+        return _carrier_rfq_outbound_from_postgres_row(row)
+
+    async def next_queued(self, limit: int) -> list[CarrierRfqOutboundRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from public.carrier_rfq_outbound
+                where tenant_id = %s and status = %s
+                order by created_at
+                limit %s
+                """,
+                (self._database.tenant_id, "queued", limit),
+            )
+            rows = cursor.fetchall()
+        return [_carrier_rfq_outbound_from_postgres_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfq_outbound
+                set status = %s, sent_at = now(), error_message = null
+                where tenant_id = %s and id = %s
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("sent", self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ outbound item not found: {item_id}")
+        return _carrier_rfq_outbound_from_postgres_row(row)
+
+    async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_rfq_outbound
+                set status = %s, error_message = %s
+                where tenant_id = %s and id = %s
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("failed", error_message, self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ outbound item not found: {item_id}")
+        return _carrier_rfq_outbound_from_postgres_row(row)
+
+
+def _carrier_rfq_outbound_from_postgres_row(row: dict[str, Any]) -> CarrierRfqOutboundRecord:
+    return CarrierRfqOutboundRecord(
+        id=str(row["id"]),
+        carrier_rfq_id=str(row["carrier_rfq_id"]),
+        recipient=row["recipient"],
+        subject=row["subject"],
+        body_text=row["body_text"],
+        status=row["status"],
+        created_at=row["created_at"].isoformat(),
+        sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+        error_message=row["error_message"],
+    )
 
 
 def _inbound_email_from_postgres_row(row: dict[str, Any]) -> InboundEmailRecord:

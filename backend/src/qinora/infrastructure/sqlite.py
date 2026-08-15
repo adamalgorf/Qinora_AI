@@ -1,4 +1,5 @@
 import json
+import secrets
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierOfferRecord,
     CarrierRecord,
+    CarrierRfqOutboundRecord,
+    CarrierRfqRecord,
     ContactRecord,
     InboundEmailRecord,
     InboxDetailRecord,
@@ -142,7 +145,8 @@ class SQLiteDatabase:
                   max_weight_kg real,
                   performance_score real,
                   preferred integer not null,
-                  sample_size integer not null
+                  sample_size integer not null,
+                  email text
                 );
 
                 create table if not exists contacts (
@@ -237,7 +241,8 @@ class SQLiteDatabase:
                   transit_days integer,
                   notes text,
                   confidence real not null,
-                  created_at text not null default current_timestamp
+                  created_at text not null default current_timestamp,
+                  carrier_rfq_id text
                 );
 
                 create table if not exists rate_profiles (
@@ -249,6 +254,29 @@ class SQLiteDatabase:
                   price_per_kg real not null default 0,
                   currency text not null default 'SEK',
                   created_at text not null default current_timestamp
+                );
+
+                create table if not exists carrier_rfqs (
+                  id text primary key,
+                  request_id text not null,
+                  carrier_id text not null,
+                  correlation_token text not null unique,
+                  status text not null default 'sent',
+                  sent_at text not null default current_timestamp,
+                  responded_at text,
+                  expires_at text not null
+                );
+
+                create table if not exists carrier_rfq_outbound (
+                  id text primary key,
+                  carrier_rfq_id text not null,
+                  recipient text not null,
+                  subject text not null,
+                  body_text text not null,
+                  status text not null default 'queued',
+                  created_at text not null default current_timestamp,
+                  sent_at text,
+                  error_message text
                 );
                 """
             )
@@ -301,6 +329,8 @@ class SQLiteDatabase:
             _add_column_if_missing(connection, "email_inbound", "references_header", "text")
             _add_column_if_missing(connection, "email_inbound", "request_id", "text")
             _add_column_if_missing(connection, "email_inbound", "quote_id", "text")
+            _add_column_if_missing(connection, "carriers", "email", "text")
+            _add_column_if_missing(connection, "carrier_offers", "carrier_rfq_id", "text")
             self._seed(connection)
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
@@ -402,14 +432,47 @@ class SQLiteDatabase:
             insert into carriers
               (
                 id, display_name, aliases, modes, lane_score, max_weight_kg,
-                performance_score, preferred, sample_size
+                performance_score, preferred, sample_size, email
               )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                ("car-001", "Nordic Freight", "Nordic,NF", "ftl,ltl", 91, 24000, 94, 1, 112),
-                ("car-002", "Baltic Logistics", "Baltic", "ftl,rail", 76, 28000, 82, 0, 48),
-                ("car-003", "SkyBridge Cargo", "SkyBridge", "air", 88, 3200, 89, 0, 36),
+                (
+                    "car-001",
+                    "Nordic Freight",
+                    "Nordic,NF",
+                    "ftl,ltl",
+                    91,
+                    24000,
+                    94,
+                    1,
+                    112,
+                    "rates@nordicfreight.example",
+                ),
+                (
+                    "car-002",
+                    "Baltic Logistics",
+                    "Baltic",
+                    "ftl,rail",
+                    76,
+                    28000,
+                    82,
+                    0,
+                    48,
+                    "rates@balticlogistics.example",
+                ),
+                (
+                    "car-003",
+                    "SkyBridge Cargo",
+                    "SkyBridge",
+                    "air",
+                    88,
+                    3200,
+                    89,
+                    0,
+                    36,
+                    "rates@skybridgecargo.example",
+                ),
             ],
         )
         connection.executemany(
@@ -855,7 +918,7 @@ class SQLiteOperationalReadRepository:
             """
             select
               id, display_name, aliases, modes, lane_score, max_weight_kg,
-              performance_score, preferred, sample_size
+              performance_score, preferred, sample_size, email
             from carriers
             order by display_name
             """
@@ -872,6 +935,7 @@ class SQLiteOperationalReadRepository:
                 performance_score=row["performance_score"],
                 preferred=bool(row["preferred"]),
                 sample_size=row["sample_size"],
+                email=row["email"],
             )
             for row in rows
         ]
@@ -1265,6 +1329,13 @@ class SQLiteRequestWriteRepository:
             weight_kg=total_weight,
         )
 
+    async def update_request_status(self, request_id: str, status: str) -> None:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update transport_requests set status = ? where id = ?",
+                (status, request_id),
+            )
+
 
 class SQLiteCarrierOfferWriteRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
@@ -1280,16 +1351,20 @@ class SQLiteCarrierOfferWriteRepository:
         transit_days: int | None,
         notes: str | None,
         confidence: float,
+        carrier_rfq_id: str | None = None,
     ) -> CarrierOfferRecord:
         offer_id = str(uuid4())
         with self._database.connect() as connection:
             row = connection.execute(
                 """
                 insert into carrier_offers
-                  (id, request_id, carrier_name, price, currency, transit_days, notes, confidence)
-                values (?, ?, ?, ?, ?, ?, ?, ?)
+                  (
+                    id, request_id, carrier_name, price, currency, transit_days, notes,
+                    confidence, carrier_rfq_id
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 returning id, request_id, carrier_name, price, currency, transit_days, notes,
-                  confidence, created_at
+                  confidence, created_at, carrier_rfq_id
                 """,
                 (
                     offer_id,
@@ -1300,6 +1375,7 @@ class SQLiteCarrierOfferWriteRepository:
                     transit_days,
                     notes,
                     confidence,
+                    carrier_rfq_id,
                 ),
             ).fetchone()
         return _carrier_offer_from_sqlite_row(row)
@@ -1309,7 +1385,7 @@ class SQLiteCarrierOfferWriteRepository:
             rows = connection.execute(
                 """
                 select id, request_id, carrier_name, price, currency, transit_days, notes,
-                  confidence, created_at
+                  confidence, created_at, carrier_rfq_id
                 from carrier_offers
                 where request_id = ?
                 order by created_at
@@ -1330,6 +1406,7 @@ def _carrier_offer_from_sqlite_row(row: sqlite3.Row) -> CarrierOfferRecord:
         notes=row["notes"],
         confidence=row["confidence"],
         created_at=row["created_at"],
+        carrier_rfq_id=row["carrier_rfq_id"],
     )
 
 
@@ -2074,6 +2151,244 @@ class SQLiteRateProfileRepository:
         if row is None:
             raise LookupError(f"Rate profile not found: {rate_profile_id}")
         return RateProfileRecord(**dict(row))
+
+
+class SQLiteCarrierRfqRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_batch(
+        self,
+        *,
+        request_id: str,
+        carrier_ids: tuple[str, ...],
+        window_hours: int = 24,
+    ) -> list[CarrierRfqRecord]:
+        records: list[CarrierRfqRecord] = []
+        with self._database.connect() as connection:
+            for carrier_id in carrier_ids:
+                row = None
+                for _ in range(5):
+                    token = secrets.token_hex(4)
+                    try:
+                        row = connection.execute(
+                            """
+                            insert into carrier_rfqs
+                              (id, request_id, carrier_id, correlation_token, status, expires_at)
+                            values (?, ?, ?, ?, 'sent', datetime('now', ?))
+                            returning id, request_id, carrier_id, correlation_token, status,
+                              sent_at, responded_at, expires_at
+                            """,
+                            (
+                                str(uuid4()),
+                                request_id,
+                                carrier_id,
+                                token,
+                                f"+{window_hours} hours",
+                            ),
+                        ).fetchone()
+                    except sqlite3.IntegrityError:
+                        continue
+                    else:
+                        break
+                if row is None:
+                    raise RuntimeError("Could not generate a unique RFQ correlation token")
+                records.append(_carrier_rfq_from_sqlite_row(row))
+        return records
+
+    async def find_by_token(self, token: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                from carrier_rfqs
+                where correlation_token = ?
+                """,
+                (token,),
+            ).fetchone()
+        return _carrier_rfq_from_sqlite_row(row) if row else None
+
+    async def find_by_carrier_email(self, sender_address: str) -> CarrierRfqRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select rfq.id, rfq.request_id, rfq.carrier_id, rfq.correlation_token,
+                  rfq.status, rfq.sent_at, rfq.responded_at, rfq.expires_at
+                from carrier_rfqs rfq
+                join carriers c on c.id = rfq.carrier_id
+                where rfq.status = 'sent' and lower(c.email) = ?
+                order by rfq.sent_at desc
+                limit 1
+                """,
+                (sender_address.strip().lower(),),
+            ).fetchone()
+        return _carrier_rfq_from_sqlite_row(row) if row else None
+
+    async def mark_responded(self, rfq_id: str, offer_id: str) -> CarrierRfqRecord:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update carrier_offers set carrier_rfq_id = ? where id = ?",
+                (rfq_id, offer_id),
+            )
+            row = connection.execute(
+                """
+                update carrier_rfqs
+                set status = 'responded', responded_at = current_timestamp
+                where id = ?
+                returning id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                """,
+                (rfq_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ not found: {rfq_id}")
+        return _carrier_rfq_from_sqlite_row(row)
+
+    async def list_open_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        return await self._list_batch(request_id, status="sent")
+
+    async def list_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        return await self._list_batch(request_id, status=None)
+
+    async def _list_batch(
+        self, request_id: str, status: str | None
+    ) -> list[CarrierRfqRecord]:
+        query = """
+            select id, request_id, carrier_id, correlation_token, status, sent_at,
+              responded_at, expires_at
+            from carrier_rfqs
+            where request_id = ?
+        """
+        params: tuple[Any, ...] = (request_id,)
+        if status is not None:
+            query += " and status = ?"
+            params += (status,)
+        query += " order by sent_at"
+
+        with self._database.connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [_carrier_rfq_from_sqlite_row(row) for row in rows]
+
+    async def expire_stale(self, cutoff: str) -> list[CarrierRfqRecord]:
+        cutoff_value = cutoff.replace("T", " ").replace("+00:00", "")
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                update carrier_rfqs
+                set status = 'expired'
+                where status = 'sent' and sent_at <= ?
+                returning id, request_id, carrier_id, correlation_token, status, sent_at,
+                  responded_at, expires_at
+                """,
+                (cutoff_value,),
+            ).fetchall()
+        return [_carrier_rfq_from_sqlite_row(row) for row in rows]
+
+    async def mark_superseded(self, rfq_ids: tuple[str, ...]) -> None:
+        if not rfq_ids:
+            return
+        placeholders = ",".join("?" * len(rfq_ids))
+        with self._database.connect() as connection:
+            connection.execute(
+                f"update carrier_rfqs set status = 'superseded' where id in ({placeholders})",
+                rfq_ids,
+            )
+
+
+def _carrier_rfq_from_sqlite_row(row: sqlite3.Row) -> CarrierRfqRecord:
+    return CarrierRfqRecord(
+        id=row["id"],
+        request_id=row["request_id"],
+        carrier_id=row["carrier_id"],
+        correlation_token=row["correlation_token"],
+        status=row["status"],
+        sent_at=row["sent_at"],
+        responded_at=row["responded_at"],
+        expires_at=row["expires_at"],
+    )
+
+
+class SQLiteCarrierRfqOutboundRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        carrier_rfq_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> CarrierRfqOutboundRecord:
+        item_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into carrier_rfq_outbound
+                  (id, carrier_rfq_id, recipient, subject, body_text, status)
+                values (?, ?, ?, ?, ?, 'queued')
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (item_id, carrier_rfq_id, recipient, subject, body_text),
+            ).fetchone()
+        return _carrier_rfq_outbound_from_sqlite_row(row)
+
+    async def next_queued(self, limit: int) -> list[CarrierRfqOutboundRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from carrier_rfq_outbound
+                where status = 'queued'
+                order by created_at
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [_carrier_rfq_outbound_from_sqlite_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update carrier_rfq_outbound
+                set status = 'sent', sent_at = current_timestamp, error_message = null
+                where id = ?
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (item_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ outbound item not found: {item_id}")
+        return _carrier_rfq_outbound_from_sqlite_row(row)
+
+    async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update carrier_rfq_outbound
+                set status = 'failed', error_message = ?
+                where id = ?
+                returning
+                  id, carrier_rfq_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (error_message, item_id),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Carrier RFQ outbound item not found: {item_id}")
+        return _carrier_rfq_outbound_from_sqlite_row(row)
+
+
+def _carrier_rfq_outbound_from_sqlite_row(row: sqlite3.Row) -> CarrierRfqOutboundRecord:
+    return CarrierRfqOutboundRecord(**dict(row))
 
 
 def _inbound_email_from_sqlite_row(row: sqlite3.Row) -> InboundEmailRecord:

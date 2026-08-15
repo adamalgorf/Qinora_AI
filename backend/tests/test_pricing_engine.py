@@ -3,9 +3,16 @@ from dataclasses import dataclass, field, replace
 import anyio
 
 from qinora.application.operational_queries import OperationalQueries
-from qinora.application.pricing_engine import PriceAndQuoteCommand, PricingEngine
+from qinora.application.pricing_engine import (
+    NO_CARRIERS_REASON,
+    PriceAndQuoteCommand,
+    PricingEngine,
+)
 from qinora.application.quote_workflow import QuoteWorkflow
 from qinora.application.read_models import (
+    CarrierRecord,
+    CarrierRfqOutboundRecord,
+    CarrierRfqRecord,
     ContactRecord,
     OutboundReplyRecord,
     RateProfileRecord,
@@ -168,6 +175,103 @@ class FakeOperationalTaskWriteRepository:
         return None
 
 
+@dataclass
+class FakeCarrierRfqTargeting:
+    targets: list = field(default_factory=list)
+    calls: list = field(default_factory=list)
+
+    async def select_targets(self, command):
+        self.calls.append(command)
+        return self.targets
+
+
+@dataclass
+class FakeCarrierRfqRepository:
+    created_batches: list = field(default_factory=list)
+    _next_id: int = 1
+
+    async def create_batch(self, *, request_id, carrier_ids, window_hours=24):
+        records = []
+        for carrier_id in carrier_ids:
+            records.append(
+                CarrierRfqRecord(
+                    id=f"rfq-{self._next_id}",
+                    request_id=request_id,
+                    carrier_id=carrier_id,
+                    correlation_token=f"token{self._next_id}",
+                    status="sent",
+                    sent_at="2026-01-01T00:00:00",
+                    responded_at=None,
+                    expires_at="2026-01-02T00:00:00",
+                )
+            )
+            self._next_id += 1
+        self.created_batches.append({"request_id": request_id, "carrier_ids": carrier_ids})
+        return records
+
+    async def find_by_token(self, token):
+        raise NotImplementedError
+
+    async def find_by_carrier_email(self, sender_address):
+        raise NotImplementedError
+
+    async def mark_responded(self, rfq_id, offer_id):
+        raise NotImplementedError
+
+    async def list_open_batch(self, request_id):
+        raise NotImplementedError
+
+    async def list_batch(self, request_id):
+        raise NotImplementedError
+
+    async def expire_stale(self, cutoff):
+        raise NotImplementedError
+
+    async def mark_superseded(self, rfq_ids):
+        raise NotImplementedError
+
+
+@dataclass
+class FakeCarrierRfqOutboundRepository:
+    enqueued: list = field(default_factory=list)
+
+    async def enqueue(self, *, carrier_rfq_id, recipient, subject, body_text):
+        record = CarrierRfqOutboundRecord(
+            id=f"cro-{len(self.enqueued) + 1}",
+            carrier_rfq_id=carrier_rfq_id,
+            recipient=recipient,
+            subject=subject,
+            body_text=body_text,
+            status="queued",
+            created_at="2026-01-01T00:00:00",
+        )
+        self.enqueued.append(record)
+        return record
+
+    async def next_queued(self, limit):
+        raise NotImplementedError
+
+    async def mark_sent(self, item_id):
+        raise NotImplementedError
+
+    async def mark_failed(self, item_id, error_message):
+        raise NotImplementedError
+
+
+@dataclass
+class FakeRequestWriteRepository:
+    status_updates: list = field(default_factory=list)
+
+    async def create_transport_request(self, **kwargs):
+        raise NotImplementedError
+
+    async def update_transport_request(self, **kwargs):
+        raise NotImplementedError
+
+    async def update_request_status(self, request_id, status):
+        self.status_updates.append((request_id, status))
+
+
 def _quote_workflow(
     request: RequestRecord,
 ) -> tuple[QuoteWorkflow, FakeQuoteWriteRepository, FakeOutboundReplyRepository]:
@@ -207,6 +311,10 @@ def test_matching_rate_profile_uses_default_markup_when_no_contact() -> None:
         quote_workflow,
         task_repository,
         default_markup_percent=15,
+        carrier_rfq_targeting=FakeCarrierRfqTargeting(),
+        carrier_rfqs=FakeCarrierRfqRepository(),
+        carrier_rfq_outbound=FakeCarrierRfqOutboundRepository(),
+        request_repository=FakeRequestWriteRepository(),
     )
 
     async def run():
@@ -258,6 +366,10 @@ def test_matching_rate_profile_prefers_contact_markup() -> None:
         quote_workflow,
         FakeOperationalTaskWriteRepository(),
         default_markup_percent=15,
+        carrier_rfq_targeting=FakeCarrierRfqTargeting(),
+        carrier_rfqs=FakeCarrierRfqRepository(),
+        carrier_rfq_outbound=FakeCarrierRfqOutboundRepository(),
+        request_repository=FakeRequestWriteRepository(),
     )
     contact = ContactRecord(
         id="cnt-1",
@@ -289,7 +401,7 @@ def test_matching_rate_profile_prefers_contact_markup() -> None:
     assert result.quote.customer_price == 1320.0
 
 
-def test_missing_rate_profile_creates_task_and_no_quote() -> None:
+def test_missing_rate_profile_and_no_carriers_escalates_to_task() -> None:
     request = RequestRecord(
         id="req-1",
         public_id="REQ-0001",
@@ -301,11 +413,19 @@ def test_missing_rate_profile_creates_task_and_no_quote() -> None:
     )
     quote_workflow, quote_repository, outbound_repository = _quote_workflow(request)
     task_repository = FakeOperationalTaskWriteRepository()
+    carrier_rfqs = FakeCarrierRfqRepository()
+    carrier_rfq_outbound = FakeCarrierRfqOutboundRepository()
+    request_repository = FakeRequestWriteRepository()
     engine = PricingEngine(
         FakeRateProfileRepository(None),
         quote_workflow,
         task_repository,
         default_markup_percent=15,
+        # No eligible/emailed carriers to RFQ - the last-resort human escalation.
+        carrier_rfq_targeting=FakeCarrierRfqTargeting(targets=[]),
+        carrier_rfqs=carrier_rfqs,
+        carrier_rfq_outbound=carrier_rfq_outbound,
+        request_repository=request_repository,
     )
 
     async def run():
@@ -325,8 +445,100 @@ def test_missing_rate_profile_creates_task_and_no_quote() -> None:
 
     assert result.priced is False
     assert result.quote is None
+    assert result.rfq_batch == ()
     assert quote_repository.quotes == {}
     assert outbound_repository.enqueued == []
+    assert carrier_rfqs.created_batches == []
+    assert carrier_rfq_outbound.enqueued == []
+    assert request_repository.status_updates == []
     assert task_repository.created == [
-        {"entity_type": "transport_request", "entity_id": "req-1", "reason": "needs pricing"}
+        {"entity_type": "transport_request", "entity_id": "req-1", "reason": NO_CARRIERS_REASON}
     ]
+
+
+def test_missing_rate_profile_with_carriers_starts_rfq_sourcing() -> None:
+    request = RequestRecord(
+        id="req-1",
+        public_id="REQ-0001",
+        customer="Acme",
+        lane="Gothenburg -> Malmo",
+        mode="ltl",
+        status="parsed",
+        weight_kg=500,
+    )
+    quote_workflow, quote_repository, outbound_repository = _quote_workflow(request)
+    task_repository = FakeOperationalTaskWriteRepository()
+    carrier_rfqs = FakeCarrierRfqRepository()
+    carrier_rfq_outbound = FakeCarrierRfqOutboundRepository()
+    request_repository = FakeRequestWriteRepository()
+    carrier_a = CarrierRecord(
+        id="car-1",
+        display_name="Nordic Freight",
+        aliases=(),
+        modes=("ltl",),
+        lane_score=90,
+        max_weight_kg=None,
+        performance_score=None,
+        preferred=False,
+        sample_size=0,
+        email="rates@nordic.example",
+    )
+    carrier_b = CarrierRecord(
+        id="car-2",
+        display_name="Baltic Logistics",
+        aliases=(),
+        modes=("ltl",),
+        lane_score=80,
+        max_weight_kg=None,
+        performance_score=None,
+        preferred=False,
+        sample_size=0,
+        email="rates@baltic.example",
+    )
+    engine = PricingEngine(
+        FakeRateProfileRepository(None),
+        quote_workflow,
+        task_repository,
+        default_markup_percent=15,
+        carrier_rfq_targeting=FakeCarrierRfqTargeting(targets=[carrier_a, carrier_b]),
+        carrier_rfqs=carrier_rfqs,
+        carrier_rfq_outbound=carrier_rfq_outbound,
+        request_repository=request_repository,
+    )
+
+    async def run():
+        return await engine.price_and_quote(
+            PriceAndQuoteCommand(
+                request_id="req-1",
+                mode="ltl",
+                origin="Gothenburg",
+                destination="Malmo",
+                total_weight_kg=500,
+                contact=None,
+                recipient_email="customer@example.com",
+            )
+        )
+
+    result = anyio.run(run)
+
+    # No quote yet - carriers were RFQ'd instead of pricing off a rate_profile.
+    assert result.priced is False
+    assert result.quote is None
+    assert len(result.rfq_batch) == 2
+    assert quote_repository.quotes == {}
+    assert outbound_repository.enqueued == []
+    assert task_repository.created == []
+
+    assert carrier_rfqs.created_batches == [
+        {"request_id": "req-1", "carrier_ids": ("car-1", "car-2")}
+    ]
+    assert {item.recipient for item in carrier_rfq_outbound.enqueued} == {
+        "rates@nordic.example",
+        "rates@baltic.example",
+    }
+    for item in carrier_rfq_outbound.enqueued:
+        assert "QiNora RFQ #" in item.subject
+        assert "Gothenburg" in item.subject
+        assert "Malmo" in item.subject
+
+    assert request_repository.status_updates == [("req-1", "sourcing")]

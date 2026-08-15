@@ -5,6 +5,8 @@ from qinora.application.read_models import (
     AgentLogRecord,
     CarrierOfferRecord,
     CarrierRecord,
+    CarrierRfqOutboundRecord,
+    CarrierRfqRecord,
     ContactRecord,
     InboundEmailRecord,
     InboxDetailRecord,
@@ -169,6 +171,7 @@ class CarrierOfferWriteRepository(Protocol):
         transit_days: int | None,
         notes: str | None,
         confidence: float,
+        carrier_rfq_id: str | None = None,
     ) -> CarrierOfferRecord:
         pass
 
@@ -242,6 +245,17 @@ class RequestWriteRepository(Protocol):
         status: str,
         review_reason: str | None,
     ) -> RequestRecord:
+        pass
+
+    async def update_request_status(self, request_id: str, status: str) -> None:
+        """A lightweight status-only transition (mirrors
+        ShipmentWriteRepository.update_status) - unlike update_transport_request,
+        this never re-runs validate_transport_request, so it's the safe way
+        for application/pricing_engine.py and
+        application/carrier_rfq_collector.py to flip a request in/out of
+        'sourcing' without risking a stale/incomplete reconstructed
+        TransportRequestInput flipping it back to needs_clarification.
+        """
         pass
 
 
@@ -414,4 +428,68 @@ class RateProfileRepository(Protocol):
         price_per_kg: float,
         currency: str,
     ) -> RateProfileRecord:
+        pass
+
+
+class CarrierRfqRepository(Protocol):
+    """See application/carrier_rfq_collector.py and
+    application/email_intake_orchestrator.py for the two places that read a
+    batch back (the periodic sweep and the immediate on-reply trigger).
+    """
+
+    async def create_batch(
+        self,
+        *,
+        request_id: str,
+        carrier_ids: tuple[str, ...],
+        window_hours: int = 24,
+    ) -> list[CarrierRfqRecord]:
+        pass
+
+    async def find_by_token(self, token: str) -> CarrierRfqRecord | None:
+        pass
+
+    async def find_by_carrier_email(self, sender_address: str) -> CarrierRfqRecord | None:
+        pass
+
+    async def mark_responded(self, rfq_id: str, offer_id: str) -> CarrierRfqRecord:
+        pass
+
+    async def list_open_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        pass
+
+    async def list_batch(self, request_id: str) -> list[CarrierRfqRecord]:
+        pass
+
+    async def expire_stale(self, cutoff: str) -> list[CarrierRfqRecord]:
+        pass
+
+    async def mark_superseded(self, rfq_ids: tuple[str, ...]) -> None:
+        pass
+
+
+class CarrierRfqOutboundRepository(Protocol):
+    """Mirrors OutboundReplyRepository, but for the carrier_rfq_outbound
+    table (see migrations/0006_carrier_rfq.sql) - a separate queue rather
+    than reusing outbound_reply_queue, so its (required) quote_id column
+    never needs to become nullable.
+    """
+
+    async def enqueue(
+        self,
+        *,
+        carrier_rfq_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> CarrierRfqOutboundRecord:
+        pass
+
+    async def next_queued(self, limit: int) -> list[CarrierRfqOutboundRecord]:
+        pass
+
+    async def mark_sent(self, item_id: str) -> CarrierRfqOutboundRecord:
+        pass
+
+    async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
         pass

@@ -5,7 +5,15 @@ from qinora.application.ports import OutboundReplyRepository, QuoteWriteReposito
 from qinora.application.read_models import OutboundReplyRecord, QuoteRecord, RequestRecord
 from qinora.domain import can_send_quote
 
-QUOTABLE_REQUEST_STATUSES = {"parsed", "quoted"}
+QUOTABLE_REQUEST_STATUSES = {
+    "parsed",
+    "quoted",
+    # A request sitting in an open carrier RFQ batch (see
+    # application/pricing_engine.py's carrier-sourcing branch) is still
+    # quotable once application/carrier_rfq_collector.py picks a winning
+    # offer - it just hasn't been priced yet.
+    "sourcing",
+}
 
 
 @dataclass(frozen=True)

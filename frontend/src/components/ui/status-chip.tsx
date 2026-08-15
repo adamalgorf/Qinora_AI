@@ -24,6 +24,10 @@ const STATUS_TONE: Record<string, StatusTone> = {
   sent: "neutral",
   viewed: "neutral",
   parsing: "neutral",
+  // a request currently out for automatic carrier RFQs (no rate_profile
+  // matched, so QiNora is sourcing a price from carriers before it can
+  // quote the customer - see application/pricing_engine.py)
+  sourcing: "neutral",
   quote_sent: "neutral",
   booked: "neutral",
   in_transit: "neutral",

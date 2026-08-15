@@ -12,6 +12,13 @@ from qinora.application.carrier_offer_agent import (
     ParseCarrierOfferCommand,
     ParseCarrierOfferResult,
 )
+from qinora.application.carrier_rfq import CarrierRfqTargeting, SelectRfqTargetsCommand
+from qinora.application.carrier_rfq_collector import (
+    CarrierRfqCollector,
+    CollectCarrierRfqsCommand,
+    CollectCarrierRfqsResult,
+    FinalizedBatch,
+)
 from qinora.application.contact_matching import (
     ContactMatchingUseCase,
     MatchContactCommand,
@@ -91,9 +98,15 @@ __all__ = [
     "BookingResult",
     "BookingWorkflow",
     "CarrierOfferParsingAgent",
+    "CarrierRfqCollector",
+    "CarrierRfqTargeting",
+    "CollectCarrierRfqsCommand",
+    "CollectCarrierRfqsResult",
+    "FinalizedBatch",
     "ParseCarrierOfferCommand",
     "ParseCarrierOfferResult",
     "ParseFreeTextRequestCommand",
+    "SelectRfqTargetsCommand",
     "ParseFreeTextRequestResult",
     "RequestParsingAgent",
     "should_auto_act",

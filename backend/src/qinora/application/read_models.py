@@ -59,6 +59,10 @@ class CarrierOfferRecord:
     notes: str | None
     confidence: float
     created_at: str
+    # Links this offer to the carrier_rfqs row it was collected for (see
+    # application/carrier_rfq_collector.py) - None for offers that arrived
+    # outside the automatic RFQ flow (e.g. a manual booking-time reply).
+    carrier_rfq_id: str | None = None
 
 
 class QuoteReplyIntent(StrEnum):
@@ -199,6 +203,10 @@ class CarrierRecord:
     performance_score: float | None
     preferred: bool
     sample_size: int
+    # Carriers without an email are simply never picked as an automatic RFQ
+    # target (application/carrier_rfq.py) - manual booking-time selection
+    # (domain/carrier_intelligence.py's evaluate_carriers) is unaffected.
+    email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -321,3 +329,40 @@ class RateProfileRecord:
     base_price: float
     price_per_kg: float
     currency: str
+
+
+@dataclass(frozen=True)
+class CarrierRfqRecord:
+    """One carrier's leg of an automatic RFQ batch (application/pricing_engine.py's
+    carrier-sourcing branch + application/carrier_rfq_collector.py). status is
+    one of 'sent' (awaiting reply), 'responded' (offer parsed and linked),
+    'expired' (sourcing window elapsed with no reply) or 'superseded' (a
+    cheaper reply in the same batch won instead).
+    """
+
+    id: str
+    request_id: str
+    carrier_id: str
+    correlation_token: str
+    status: str
+    sent_at: str
+    responded_at: str | None
+    expires_at: str
+
+
+@dataclass(frozen=True)
+class CarrierRfqOutboundRecord:
+    """Mirrors OutboundReplyRecord's shape but keyed to a carrier_rfq instead
+    of a quote - kept as a separate queue/table so the already-shipped
+    customer-quote outbound path never needs to tolerate a null quote_id.
+    """
+
+    id: str
+    carrier_rfq_id: str
+    recipient: str
+    subject: str
+    body_text: str
+    status: str
+    created_at: str
+    sent_at: str | None = None
+    error_message: str | None = None
