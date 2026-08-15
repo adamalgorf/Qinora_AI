@@ -18,7 +18,13 @@ from qinora.application.read_models import (
     ShipmentEventRecord,
     ShipmentRecord,
 )
-from qinora.domain import CarrierCandidate, CarrierEvaluationInput, TransportMode, evaluate_carriers
+from qinora.domain import (
+    CarrierCandidate,
+    CarrierEvaluationInput,
+    TransportMode,
+    evaluate_carriers,
+    parse_transport_modes,
+)
 
 
 @dataclass(frozen=True)
@@ -230,7 +236,7 @@ def _to_candidate(carrier: CarrierRecord) -> CarrierCandidate:
         id=carrier.id,
         display_name=carrier.display_name,
         aliases=carrier.aliases,
-        modes=tuple(TransportMode(mode) for mode in carrier.modes),
+        modes=parse_transport_modes(carrier.modes),
         lane_score=carrier.lane_score,
         max_weight_kg=carrier.max_weight_kg,
         performance_score=carrier.performance_score,

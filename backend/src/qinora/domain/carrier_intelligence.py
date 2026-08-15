@@ -192,3 +192,13 @@ def _matches_alias(requested_name: str | None, candidate: CarrierCandidate) -> b
 
 def _clamp01(value: float) -> float:
     return max(0, min(1, value))
+
+
+def parse_transport_modes(modes: tuple[str, ...]) -> tuple[TransportMode, ...]:
+    """Silently drops any mode string that isn't a real TransportMode value,
+    rather than letting one bad entry (e.g. a typo from manual carrier
+    entry) throw and take down carrier scoring for every carrier in the
+    same request.
+    """
+    valid = {mode.value for mode in TransportMode}
+    return tuple(TransportMode(mode) for mode in modes if mode in valid)
