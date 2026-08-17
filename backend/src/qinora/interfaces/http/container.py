@@ -30,6 +30,7 @@ from qinora.application.ports import (
     CarrierRfqOutboundRepository,
     CarrierRfqRepository,
     CarrierWriteRepository,
+    ClarificationOutboundRepository,
     OutboundReplyRepository,
     QuoteReplyInterpretationLLM,
     RateProfileRepository,
@@ -57,6 +58,7 @@ from qinora.infrastructure.postgres import (
     PostgresCarrierRfqOutboundRepository,
     PostgresCarrierRfqRepository,
     PostgresCarrierWriteRepository,
+    PostgresClarificationOutboundRepository,
     PostgresContactReadRepository,
     PostgresDatabase,
     PostgresEmailThreadRepository,
@@ -82,6 +84,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteCarrierRfqOutboundRepository,
     SQLiteCarrierRfqRepository,
     SQLiteCarrierWriteRepository,
+    SQLiteClarificationOutboundRepository,
     SQLiteContactReadRepository,
     SQLiteDatabase,
     SQLiteEmailThreadRepository,
@@ -149,6 +152,7 @@ class AppContainer:
     carrier_rfq_targeting: CarrierRfqTargeting
     carrier_rfq_repository: CarrierRfqRepository
     carrier_rfq_outbound_repository: CarrierRfqOutboundRepository
+    clarification_outbound_repository: ClarificationOutboundRepository
     carrier_write_repository: CarrierWriteRepository
     carrier_rfq_collector: CarrierRfqCollector
     email_intake_orchestrator: EmailIntakeOrchestrator
@@ -203,6 +207,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     rate_profile_repository = SQLiteRateProfileRepository(database)
     carrier_offer_repository = SQLiteCarrierOfferWriteRepository(database)
     carrier_rfq_outbound_repository = SQLiteCarrierRfqOutboundRepository(database)
+    clarification_outbound_repository = SQLiteClarificationOutboundRepository(database)
     carrier_rfq_targeting = CarrierRfqTargeting(operational_queries)
     pricing_engine = PricingEngine(
         rate_profile_repository,
@@ -222,6 +227,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         agent_config_service,
         update_request=update_request,
         task_repository=task_repository,
+        clarification_outbound=clarification_outbound_repository,
     )
     carrier_offer_agent = CarrierOfferParsingAgent(
         build_carrier_offer_parsing_llm(settings),
@@ -311,6 +317,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_targeting=carrier_rfq_targeting,
         carrier_rfq_repository=carrier_rfq_repository,
         carrier_rfq_outbound_repository=carrier_rfq_outbound_repository,
+        clarification_outbound_repository=clarification_outbound_repository,
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
@@ -364,6 +371,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     rate_profile_repository = PostgresRateProfileRepository(database)
     carrier_offer_repository = PostgresCarrierOfferWriteRepository(database)
     carrier_rfq_outbound_repository = PostgresCarrierRfqOutboundRepository(database)
+    clarification_outbound_repository = PostgresClarificationOutboundRepository(database)
     carrier_rfq_targeting = CarrierRfqTargeting(operational_queries)
     pricing_engine = PricingEngine(
         rate_profile_repository,
@@ -383,6 +391,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         agent_config_service,
         update_request=update_request,
         task_repository=task_repository,
+        clarification_outbound=clarification_outbound_repository,
     )
     carrier_offer_agent = CarrierOfferParsingAgent(
         build_carrier_offer_parsing_llm(settings),
@@ -472,6 +481,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_targeting=carrier_rfq_targeting,
         carrier_rfq_repository=carrier_rfq_repository,
         carrier_rfq_outbound_repository=carrier_rfq_outbound_repository,
+        clarification_outbound_repository=clarification_outbound_repository,
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,

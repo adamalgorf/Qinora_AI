@@ -215,6 +215,8 @@ class EmailIntakeOrchestrator:
                 raw_text=combined_text,
                 matched_request_id=request_id,
                 inbound_email_id=email_id,
+                sender_email=email.sender,
+                subject=email.subject,
             )
         )
 

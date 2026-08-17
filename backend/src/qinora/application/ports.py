@@ -7,6 +7,7 @@ from qinora.application.read_models import (
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
+    ClarificationOutboundRecord,
     ContactRecord,
     InboundEmailRecord,
     InboxDetailRecord,
@@ -517,4 +518,33 @@ class CarrierRfqOutboundRepository(Protocol):
         pass
 
     async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
+        pass
+
+
+class ClarificationOutboundRepository(Protocol):
+    """Mirrors CarrierRfqOutboundRepository, but for the
+    clarification_outbound table - queues the "please send the missing
+    details" email Parsek asks for when it can't auto-create a request
+    (see application/request_parsing_agent.py). Keyed to the inbound email
+    rather than a quote/carrier_rfq, so it too gets its own table instead of
+    outbound_reply_queue's required quote_id.
+    """
+
+    async def enqueue(
+        self,
+        *,
+        inbound_email_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> ClarificationOutboundRecord:
+        pass
+
+    async def next_queued(self, limit: int) -> list[ClarificationOutboundRecord]:
+        pass
+
+    async def mark_sent(self, item_id: str) -> ClarificationOutboundRecord:
+        pass
+
+    async def mark_failed(self, item_id: str, error_message: str) -> ClarificationOutboundRecord:
         pass

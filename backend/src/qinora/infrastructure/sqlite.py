@@ -13,6 +13,7 @@ from qinora.application.read_models import (
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
+    ClarificationOutboundRecord,
     ContactRecord,
     InboundEmailRecord,
     InboxDetailRecord,
@@ -270,6 +271,18 @@ class SQLiteDatabase:
                 create table if not exists carrier_rfq_outbound (
                   id text primary key,
                   carrier_rfq_id text not null,
+                  recipient text not null,
+                  subject text not null,
+                  body_text text not null,
+                  status text not null default 'queued',
+                  created_at text not null default current_timestamp,
+                  sent_at text,
+                  error_message text
+                );
+
+                create table if not exists clarification_outbound (
+                  id text primary key,
+                  inbound_email_id text not null,
                   recipient text not null,
                   subject text not null,
                   body_text text not null,
@@ -2456,6 +2469,88 @@ class SQLiteCarrierRfqOutboundRepository:
 
 def _carrier_rfq_outbound_from_sqlite_row(row: sqlite3.Row) -> CarrierRfqOutboundRecord:
     return CarrierRfqOutboundRecord(**dict(row))
+
+
+class SQLiteClarificationOutboundRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        inbound_email_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> ClarificationOutboundRecord:
+        item_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into clarification_outbound
+                  (id, inbound_email_id, recipient, subject, body_text, status)
+                values (?, ?, ?, ?, ?, 'queued')
+                returning
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (item_id, inbound_email_id, recipient, subject, body_text),
+            ).fetchone()
+        return _clarification_outbound_from_sqlite_row(row)
+
+    async def next_queued(self, limit: int) -> list[ClarificationOutboundRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from clarification_outbound
+                where status = 'queued'
+                order by created_at
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [_clarification_outbound_from_sqlite_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> ClarificationOutboundRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update clarification_outbound
+                set status = 'sent', sent_at = current_timestamp, error_message = null
+                where id = ?
+                returning
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (item_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Clarification outbound item not found: {item_id}")
+        return _clarification_outbound_from_sqlite_row(row)
+
+    async def mark_failed(self, item_id: str, error_message: str) -> ClarificationOutboundRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update clarification_outbound
+                set status = 'failed', error_message = ?
+                where id = ?
+                returning
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (error_message, item_id),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Clarification outbound item not found: {item_id}")
+        return _clarification_outbound_from_sqlite_row(row)
+
+
+def _clarification_outbound_from_sqlite_row(row: sqlite3.Row) -> ClarificationOutboundRecord:
+    return ClarificationOutboundRecord(**dict(row))
 
 
 def _inbound_email_from_sqlite_row(row: sqlite3.Row) -> InboundEmailRecord:

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from qinora.application.agent_config import AgentConfigService, should_auto_act
 from qinora.application.ports import (
     AgentLogWriteRepository,
+    ClarificationOutboundRepository,
     OperationalTaskWriteRepository,
     RequestParsingLLM,
 )
@@ -25,6 +26,21 @@ from qinora.domain.transport_request import DEFAULT_REQUIRED_FIELDS
 AGENT_KEY = "request_parsing_agent"
 AGENT_NAME = "Parsek"
 
+# Swedish labels for the exact field names Parsek's own missing_fields list
+# uses (see infrastructure/llm/request_parsing.py's SYSTEM_PROMPT) - shown to
+# the customer in the auto-clarification email, so these stay in Swedish
+# rather than surfacing the raw field name.
+MISSING_FIELD_LABELS_SV = {
+    "mode": "transportsätt (väg, sjö, flyg, järnväg)",
+    "origin": "avsändningsort",
+    "destination": "mottagningsort",
+    "cargo": "godsuppgifter (antal kolli och beskrivning)",
+    "loading_time": "önskad lastningstid",
+    "unloading_time": "önskad lossningstid",
+    "cargo.weight_kg": "vikt (kg)",
+    "cargo.dimensions": "mått (längd x bredd x höjd)",
+}
+
 
 @dataclass(frozen=True)
 class ParseFreeTextRequestCommand:
@@ -32,6 +48,8 @@ class ParseFreeTextRequestCommand:
     raw_text: str
     matched_request_id: str | None = None
     inbound_email_id: str | None = None
+    sender_email: str = ""
+    subject: str = ""
 
 
 @dataclass(frozen=True)
@@ -72,6 +90,7 @@ class RequestParsingAgent:
         agent_config: AgentConfigService,
         update_request: UpdateRequestUseCase | None = None,
         task_repository: OperationalTaskWriteRepository | None = None,
+        clarification_outbound: ClarificationOutboundRepository | None = None,
     ) -> None:
         self._llm = llm
         self._create_request = create_request
@@ -79,6 +98,7 @@ class RequestParsingAgent:
         self._agent_config = agent_config
         self._update_request = update_request
         self._task_repository = task_repository
+        self._clarification_outbound = clarification_outbound
 
     async def execute(self, command: ParseFreeTextRequestCommand) -> ParseFreeTextRequestResult:
         draft = await self._llm.parse(raw_text=command.raw_text)
@@ -165,12 +185,55 @@ class RequestParsingAgent:
             confidence=draft.confidence,
         )
 
+        # A genuine "text was too vague/incomplete" outcome (as opposed to
+        # not_relevant, or the update-with-no-matching-request case, which
+        # has already been escalated as a task above) - ask the customer
+        # for exactly what's missing instead of leaving the thread to go
+        # stale until someone reviews the Inbox by hand.
+        if (
+            request_result is None
+            and not not_relevant
+            and draft.missing_fields
+            and self._clarification_outbound is not None
+            and command.inbound_email_id
+            and command.sender_email
+        ):
+            await self._send_clarification_request(command, draft)
+
         return ParseFreeTextRequestResult(
             draft=draft,
             request_result=request_result,
             agent_log=agent_log,
             needs_human_review=needs_review,
             not_relevant=not_relevant,
+        )
+
+    async def _send_clarification_request(
+        self, command: ParseFreeTextRequestCommand, draft: ParsedTransportRequestDraft
+    ) -> None:
+        labels = [MISSING_FIELD_LABELS_SV.get(field, field) for field in draft.missing_fields]
+        bullet_list = "\n".join(f"- {label}" for label in labels)
+
+        subject = command.subject or "Din fraktförfrågan"
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+
+        body_text = (
+            "Hej,\n\n"
+            "Tack för din förfrågan! För att kunna ta fram en offert behöver vi "
+            "lite mer information:\n\n"
+            f"{bullet_list}\n\n"
+            "Svara gärna på detta mail med uppgifterna, så återkommer vi med en offert.\n\n"
+            "Med vänlig hälsning,\nSandahls"
+        )
+
+        assert self._clarification_outbound is not None
+        assert command.inbound_email_id is not None
+        await self._clarification_outbound.enqueue(
+            inbound_email_id=command.inbound_email_id,
+            recipient=command.sender_email,
+            subject=subject,
+            body_text=body_text,
         )
 
 

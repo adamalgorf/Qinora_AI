@@ -42,6 +42,7 @@ router = APIRouter()
 
 QUEUE_QUOTE = "quote"
 QUEUE_CARRIER_RFQ = "carrier_rfq"
+QUEUE_CLARIFICATION = "clarification"
 
 
 def _require_signature(container: AppContainer, body: bytes, signature: str | None) -> None:
@@ -59,6 +60,7 @@ async def next_queued(
 
     quote_items = await container.outbound_reply_repository.next_queued(limit)
     carrier_items = await container.carrier_rfq_outbound_repository.next_queued(limit)
+    clarification_items = await container.clarification_outbound_repository.next_queued(limit)
 
     return [
         OutboundQueueItem(
@@ -78,6 +80,15 @@ async def next_queued(
             body_text=item.body_text,
         )
         for item in carrier_items
+    ] + [
+        OutboundQueueItem(
+            queue=QUEUE_CLARIFICATION,
+            id=item.id,
+            recipient=item.recipient,
+            subject=item.subject,
+            body_text=item.body_text,
+        )
+        for item in clarification_items
     ]
 
 
@@ -96,6 +107,8 @@ async def ack_outbound(
         await container.outbound_reply_repository.mark_sent(item_id)
     elif queue == QUEUE_CARRIER_RFQ:
         await container.carrier_rfq_outbound_repository.mark_sent(item_id)
+    elif queue == QUEUE_CLARIFICATION:
+        await container.clarification_outbound_repository.mark_sent(item_id)
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown queue")
 
@@ -118,6 +131,10 @@ async def fail_outbound(
         await container.outbound_reply_repository.mark_failed(item_id, payload.error_message)
     elif queue == QUEUE_CARRIER_RFQ:
         await container.carrier_rfq_outbound_repository.mark_failed(
+            item_id, payload.error_message
+        )
+    elif queue == QUEUE_CLARIFICATION:
+        await container.clarification_outbound_repository.mark_failed(
             item_id, payload.error_message
         )
     else:

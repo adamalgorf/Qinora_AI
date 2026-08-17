@@ -69,6 +69,30 @@ class FakeAgentLogWriteRepository:
 
 
 @dataclass
+class FakeClarificationOutboundRepository:
+    enqueued: list[dict] = field(default_factory=list)
+
+    async def enqueue(self, *, inbound_email_id, recipient, subject, body_text):
+        item = {
+            "inbound_email_id": inbound_email_id,
+            "recipient": recipient,
+            "subject": subject,
+            "body_text": body_text,
+        }
+        self.enqueued.append(item)
+        return item
+
+    async def next_queued(self, limit):
+        return []
+
+    async def mark_sent(self, item_id):
+        raise NotImplementedError
+
+    async def mark_failed(self, item_id, error_message):
+        raise NotImplementedError
+
+
+@dataclass
 class FakeAgentConfigRepository:
     configs: list[AgentConfigRecord]
 
@@ -205,6 +229,119 @@ def test_manual_mode_always_requires_review_regardless_of_confidence() -> None:
 
     assert result.needs_human_review is True
     assert result.request_result is None
+
+
+def test_missing_fields_queues_clarification_email_to_sender() -> None:
+    draft = ParsedTransportRequestDraft(
+        mode="ftl",
+        origin="Gothenburg",
+        destination="Malmo",
+        cargo=(ParsedCargoLine("Pallets", 4, 800.0, 120, 100, 150),),
+        loading_time=None,
+        unloading_time=None,
+        confidence=0.95,
+        missing_fields=("loading_time",),
+    )
+    request_repo = FakeRequestWriteRepository()
+    create_request = CreateRequestUseCase(request_repo, FakeOperationalTaskWriteRepository())
+    agent_logs = FakeAgentLogWriteRepository()
+    agent_config = AgentConfigService(
+        FakeAgentConfigRepository(
+            configs=[
+                AgentConfigRecord(
+                    agent_key=AGENT_KEY,
+                    agent_name="Parsek",
+                    is_enabled=True,
+                    auto_mode=AgentAutoMode.GUARDED_AUTO.value,
+                    min_confidence=0.74,
+                )
+            ]
+        )
+    )
+    clarifications = FakeClarificationOutboundRepository()
+    agent = RequestParsingAgent(
+        FakeRequestParsingLLM(draft),
+        create_request,
+        agent_logs,
+        agent_config,
+        clarification_outbound=clarifications,
+    )
+
+    async def run():
+        return await agent.execute(
+            ParseFreeTextRequestCommand(
+                customer="Acme AB",
+                raw_text="partial info",
+                inbound_email_id="email-1",
+                sender_email="customer@example.com",
+                subject="Fraktforfraga",
+            )
+        )
+
+    result = anyio.run(run)
+
+    assert result.request_result is None
+    assert len(clarifications.enqueued) == 1
+    item = clarifications.enqueued[0]
+    assert item["inbound_email_id"] == "email-1"
+    assert item["recipient"] == "customer@example.com"
+    assert item["subject"] == "Re: Fraktforfraga"
+    assert "lastningstid" in item["body_text"].lower()
+
+
+def test_not_relevant_email_does_not_queue_clarification() -> None:
+    draft = ParsedTransportRequestDraft(
+        mode="ftl",
+        origin="",
+        destination="",
+        cargo=(),
+        loading_time=None,
+        unloading_time=None,
+        confidence=0.9,
+        missing_fields=(),
+        action="not_relevant",
+    )
+    request_repo = FakeRequestWriteRepository()
+    create_request = CreateRequestUseCase(request_repo, FakeOperationalTaskWriteRepository())
+    agent_logs = FakeAgentLogWriteRepository()
+    agent_config = AgentConfigService(
+        FakeAgentConfigRepository(
+            configs=[
+                AgentConfigRecord(
+                    agent_key=AGENT_KEY,
+                    agent_name="Parsek",
+                    is_enabled=True,
+                    auto_mode=AgentAutoMode.GUARDED_AUTO.value,
+                    min_confidence=0.74,
+                )
+            ]
+        )
+    )
+    clarifications = FakeClarificationOutboundRepository()
+    agent = RequestParsingAgent(
+        FakeRequestParsingLLM(draft),
+        create_request,
+        agent_logs,
+        agent_config,
+        task_repository=FakeOperationalTaskWriteRepository(),
+        clarification_outbound=clarifications,
+    )
+
+    async def run():
+        return await agent.execute(
+            ParseFreeTextRequestCommand(
+                customer="Acme AB",
+                raw_text="unsubscribe please",
+                inbound_email_id="email-2",
+                sender_email="customer@example.com",
+                subject="Re: newsletter",
+            )
+        )
+
+    result = anyio.run(run)
+
+    assert result.not_relevant is True
+    assert clarifications.enqueued == []
 
 
 def test_disabled_agent_always_requires_review() -> None:

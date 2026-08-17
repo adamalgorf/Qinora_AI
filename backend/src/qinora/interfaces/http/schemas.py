@@ -492,11 +492,12 @@ class RateProfilePayload(BaseModel):
 
 
 class OutboundQueueItem(BaseModel):
-    """One row from either outbound_reply_queue or carrier_rfq_outbound,
-    normalized to a common shape - see interfaces/http/routers/outbound.py.
+    """One row from outbound_reply_queue, carrier_rfq_outbound, or
+    clarification_outbound, normalized to a common shape - see
+    interfaces/http/routers/outbound.py.
     """
 
-    queue: Literal["quote", "carrier_rfq"]
+    queue: Literal["quote", "carrier_rfq", "clarification"]
     id: str
     recipient: str
     subject: str

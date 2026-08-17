@@ -13,6 +13,7 @@ from qinora.application.read_models import (
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
+    ClarificationOutboundRecord,
     ContactRecord,
     InboundEmailRecord,
     InboxDetailRecord,
@@ -2179,6 +2180,108 @@ def _carrier_rfq_outbound_from_postgres_row(row: dict[str, Any]) -> CarrierRfqOu
     return CarrierRfqOutboundRecord(
         id=str(row["id"]),
         carrier_rfq_id=str(row["carrier_rfq_id"]),
+        recipient=row["recipient"],
+        subject=row["subject"],
+        body_text=row["body_text"],
+        status=row["status"],
+        created_at=row["created_at"].isoformat(),
+        sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+        error_message=row["error_message"],
+    )
+
+
+class PostgresClarificationOutboundRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        inbound_email_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+    ) -> ClarificationOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.clarification_outbound
+                  (tenant_id, inbound_email_id, recipient, subject, body_text, status)
+                values (%s, %s, %s, %s, %s, %s)
+                returning
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                (
+                    self._database.tenant_id,
+                    inbound_email_id,
+                    recipient,
+                    subject,
+                    body_text,
+                    "queued",
+                ),
+            )
+            row = cursor.fetchone()
+        return _clarification_outbound_from_postgres_row(row)
+
+    async def next_queued(self, limit: int) -> list[ClarificationOutboundRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from public.clarification_outbound
+                where tenant_id = %s and status = %s
+                order by created_at
+                limit %s
+                """,
+                (self._database.tenant_id, "queued", limit),
+            )
+            rows = cursor.fetchall()
+        return [_clarification_outbound_from_postgres_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> ClarificationOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.clarification_outbound
+                set status = %s, sent_at = now(), error_message = null
+                where tenant_id = %s and id = %s
+                returning
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("sent", self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Clarification outbound item not found: {item_id}")
+        return _clarification_outbound_from_postgres_row(row)
+
+    async def mark_failed(self, item_id: str, error_message: str) -> ClarificationOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.clarification_outbound
+                set status = %s, error_message = %s
+                where tenant_id = %s and id = %s
+                returning
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                """,
+                ("failed", error_message, self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Clarification outbound item not found: {item_id}")
+        return _clarification_outbound_from_postgres_row(row)
+
+
+def _clarification_outbound_from_postgres_row(row: dict[str, Any]) -> ClarificationOutboundRecord:
+    return ClarificationOutboundRecord(
+        id=str(row["id"]),
+        inbound_email_id=str(row["inbound_email_id"]),
         recipient=row["recipient"],
         subject=row["subject"],
         body_text=row["body_text"],

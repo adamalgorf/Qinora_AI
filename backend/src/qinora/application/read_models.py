@@ -366,3 +366,22 @@ class CarrierRfqOutboundRecord:
     created_at: str
     sent_at: str | None = None
     error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class ClarificationOutboundRecord:
+    """Mirrors CarrierRfqOutboundRecord's shape but keyed to the inbound
+    email that Parsek couldn't act on unassisted (missing required fields) -
+    a separate queue/table for the same reason carrier_rfq_outbound is: it
+    isn't tied to a quote, so it can't reuse outbound_reply_queue.
+    """
+
+    id: str
+    inbound_email_id: str
+    recipient: str
+    subject: str
+    body_text: str
+    status: str
+    created_at: str
+    sent_at: str | None = None
+    error_message: str | None = None
