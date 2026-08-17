@@ -97,11 +97,7 @@ class BookingWorkflow:
                 quote_id=quote.id,
                 recipient=command.recipient_email,
                 subject=f"Din bokning är bekräftad - {shipment.public_id}",
-                body_text=(
-                    f"Din frakt är bokad. Frakt-ID: {shipment.public_id}.\n\n"
-                    "Vi återkommer med spårningsuppdateringar löpande.\n\n"
-                    "Med vänlig hälsning,\nSandahls"
-                ),
+                body_text=_format_booking_confirmation(quote, command, lane, shipment),
                 in_reply_to_message_id=await self._latest_thread_message_id(quote),
             )
 
@@ -130,3 +126,21 @@ class BookingWorkflow:
                 return request.lane
 
         return "Väntar på sträckbekräftelse"
+
+
+def _format_booking_confirmation(
+    quote: QuoteRecord, command: BookQuoteCommand, lane: str, shipment: ShipmentRecord
+) -> str:
+    # Matches the Route/Mode/Weight/Price recap + tracking-notice convention
+    # already established in this mailbox's booking-confirmation history,
+    # rather than inventing a new, less complete format from scratch.
+    return (
+        "Tack för din bekräftelse! Din frakt är nu bokad.\n\n"
+        f"Rutt: {lane}\n"
+        f"Transportläge: {command.mode.upper()}\n"
+        f"Vikt: {command.total_weight_kg:g} kg\n"
+        f"Pris: {quote.customer_price:.2f} {quote.currency}\n"
+        f"Frakt-ID: {shipment.public_id}\n\n"
+        "Vi skickar spårningsinformation när frakten hämtas.\n\n"
+        "Med vänlig hälsning,\nSandahls"
+    )

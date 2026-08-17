@@ -215,16 +215,21 @@ class RequestParsingAgent:
         labels = [MISSING_FIELD_LABELS_SV.get(field, field) for field in draft.missing_fields]
         bullet_list = "\n".join(f"- {label}" for label in labels)
 
-        subject = command.subject or "Din fraktförfrågan"
+        original_subject = command.subject or "din förfrågan"
+        subject = original_subject
         if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
 
+        # Matches the "Tack för din transportförfrågan angående ... Vi
+        # behöver kompletterande information ..." convention already
+        # established in this mailbox's prior clarification emails, rather
+        # than inventing new phrasing from scratch.
         body_text = (
-            "Hej,\n\n"
-            "Tack för din förfrågan! För att kunna ta fram en offert behöver vi "
-            "lite mer information:\n\n"
+            f'Tack för din transportförfrågan angående "{original_subject}". '
+            "Vi behöver kompletterande information för att kunna ge dig en offert:\n\n"
             f"{bullet_list}\n\n"
-            "Svara gärna på detta mail med uppgifterna, så återkommer vi med en offert.\n\n"
+            "Vänligen svara på detta mejl med den saknade informationen så "
+            "återkommer vi med en offert.\n\n"
             "Med vänlig hälsning,\nSandahls"
         )
 

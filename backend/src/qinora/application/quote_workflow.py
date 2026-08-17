@@ -76,15 +76,14 @@ class QuoteWorkflow:
             raise PricingGateError(reason or "Quote cannot be sent")
 
         sent_quote = await self._repository.mark_quote_sent(command.quote_id)
+        request = (
+            await self._find_request(sent_quote.request_id) if sent_quote.request_id else None
+        )
         outbound_reply = await self._outbound_repository.enqueue_quote(
             quote_id=sent_quote.id,
             recipient=command.recipient,
             subject=f"Din offert - {sent_quote.id}",
-            body_text=(
-                f"Din offert är klar: {sent_quote.customer_price:.2f} {sent_quote.currency}.\n\n"
-                "Svara på detta mail för att godkänna.\n\n"
-                "Med vänlig hälsning,\nSandahls"
-            ),
+            body_text=_format_quote_body(sent_quote, request),
             in_reply_to_message_id=await self._latest_thread_message_id(sent_quote),
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)
@@ -107,6 +106,28 @@ class QuoteWorkflow:
             if request.id == request_id:
                 return request
         return None
+
+
+def _format_quote_body(quote: QuoteRecord, request: RequestRecord | None) -> str:
+    # Matches the Rutt/Transportläge/Vikt/Pris + "Ska vi boka?" convention
+    # already established in this mailbox's quote history (real quotes sent
+    # before this pass, e.g. "Rutt, Ludvika -> Rotterdam. Transportläge,
+    # FTL. Pris, 137500.00 SEK. Offerten galler i 7 dagar. Ska vi boka?"),
+    # rather than inventing a new, less complete format from scratch.
+    lines = ["Tack för din transportförfrågan. Här är vår offert:", ""]
+    if request is not None:
+        lines.append(f"Rutt: {request.lane}")
+        lines.append(f"Transportläge: {request.mode.upper()}")
+        if request.weight_kg:
+            lines.append(f"Vikt: {request.weight_kg:g} kg")
+    lines.append(f"Pris: {quote.customer_price:.2f} {quote.currency}")
+    lines.append("")
+    lines.append("Offerten gäller i 7 dagar.")
+    lines.append("")
+    lines.append("Ska vi boka? Svara på detta mail för att godkänna.")
+    lines.append("")
+    lines.append("Med vänlig hälsning,\nSandahls")
+    return "\n".join(lines)
 
 
 class QuoteNotFoundError(LookupError):
