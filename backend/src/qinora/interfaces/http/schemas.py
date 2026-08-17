@@ -502,6 +502,7 @@ class OutboundQueueItem(BaseModel):
     recipient: str
     subject: str
     body_text: str
+    in_reply_to_message_id: str | None = None
 
 
 class OutboundAckResponse(BaseModel):

@@ -3,11 +3,12 @@ from dataclasses import dataclass
 from qinora.application.operational_queries import CarrierIntelligenceCommand, OperationalQueries
 from qinora.application.ports import (
     CarrierRfqRepository,
+    EmailThreadRepository,
     OutboundReplyRepository,
     QuoteWriteRepository,
     ShipmentWriteRepository,
 )
-from qinora.application.read_models import ShipmentRecord
+from qinora.application.read_models import QuoteRecord, ShipmentRecord
 
 BOOKED_STATUS = "booked"
 
@@ -43,12 +44,14 @@ class BookingWorkflow:
         operational_queries: OperationalQueries,
         carrier_rfqs: CarrierRfqRepository,
         outbound_repository: OutboundReplyRepository,
+        email_threads: EmailThreadRepository | None = None,
     ) -> None:
         self._quote_repository = quote_repository
         self._shipment_repository = shipment_repository
         self._operational_queries = operational_queries
         self._carrier_rfqs = carrier_rfqs
         self._outbound_repository = outbound_repository
+        self._email_threads = email_threads
 
     async def book_quote(self, command: BookQuoteCommand) -> BookingResult:
         quote = await self._quote_repository.mark_quote_accepted(command.quote_id)
@@ -99,6 +102,7 @@ class BookingWorkflow:
                     "Vi återkommer med spårningsuppdateringar löpande.\n\n"
                     "Med vänlig hälsning,\nSandahls"
                 ),
+                in_reply_to_message_id=await self._latest_thread_message_id(quote),
             )
 
         return BookingResult(
@@ -107,6 +111,14 @@ class BookingWorkflow:
             requires_manual_review=requires_manual_review,
             overall_confidence=overall_confidence,
         )
+
+    async def _latest_thread_message_id(self, quote: QuoteRecord) -> str | None:
+        if self._email_threads is None:
+            return None
+        history = await self._email_threads.list_thread_history(
+            request_id=quote.request_id, quote_id=quote.id
+        )
+        return history[-1].message_id if history else None
 
     async def _resolve_quote_lane(self, request_id: str | None) -> str:
         if request_id is None:

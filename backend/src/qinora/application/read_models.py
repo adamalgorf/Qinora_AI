@@ -287,6 +287,11 @@ class OutboundReplyRecord:
     created_at: str
     sent_at: str | None = None
     error_message: str | None = None
+    # RFC822 Message-ID of the inbound email this is a reply to, if any - so
+    # the Gmail bridge can send it as an actual in-thread reply
+    # (GmailThread.reply()) instead of a new top-level email. See
+    # integrations/gmail-intake-bridge/Code.gs's sendQueuedReplies().
+    in_reply_to_message_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -385,3 +390,4 @@ class ClarificationOutboundRecord:
     created_at: str
     sent_at: str | None = None
     error_message: str | None = None
+    in_reply_to_message_id: str | None = None

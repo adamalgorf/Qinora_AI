@@ -313,7 +313,9 @@ class FakeQuoteWriteRepository:
 class FakeOutboundReplyRepository:
     enqueued: list = field(default_factory=list)
 
-    async def enqueue_quote(self, *, quote_id, recipient, subject, body_text):
+    async def enqueue_quote(
+        self, *, quote_id, recipient, subject, body_text, in_reply_to_message_id=None
+    ):
         record = OutboundReplyRecord(
             id="reply-1",
             quote_id=quote_id,
@@ -322,6 +324,7 @@ class FakeOutboundReplyRepository:
             body_text=body_text,
             status="queued",
             created_at="2026-01-01T00:00:00",
+            in_reply_to_message_id=in_reply_to_message_id,
         )
         self.enqueued.append(record)
         return record

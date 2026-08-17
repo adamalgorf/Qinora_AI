@@ -395,6 +395,7 @@ class OutboundReplyRepository(Protocol):
         recipient: str,
         subject: str,
         body_text: str,
+        in_reply_to_message_id: str | None = None,
     ) -> OutboundReplyRecord:
         pass
 
@@ -537,6 +538,7 @@ class ClarificationOutboundRepository(Protocol):
         recipient: str,
         subject: str,
         body_text: str,
+        in_reply_to_message_id: str | None = None,
     ) -> ClarificationOutboundRecord:
         pass
 

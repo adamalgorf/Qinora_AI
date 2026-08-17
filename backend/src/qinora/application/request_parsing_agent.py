@@ -50,6 +50,7 @@ class ParseFreeTextRequestCommand:
     inbound_email_id: str | None = None
     sender_email: str = ""
     subject: str = ""
+    message_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -234,6 +235,7 @@ class RequestParsingAgent:
             recipient=command.sender_email,
             subject=subject,
             body_text=body_text,
+            in_reply_to_message_id=command.message_id,
         )
 
 

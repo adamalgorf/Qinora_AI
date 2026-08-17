@@ -187,6 +187,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
 
     carrier_rfq_repository = SQLiteCarrierRfqRepository(database)
     carrier_write_repository = SQLiteCarrierWriteRepository(database)
+    email_thread_repository = SQLiteEmailThreadRepository(database)
 
     booking_workflow = BookingWorkflow(
         quote_repository,
@@ -194,16 +195,18 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         operational_queries,
         carrier_rfq_repository,
         outbound_repository,
+        email_thread_repository,
     )
 
     request_repository = SQLiteRequestWriteRepository(database)
     create_request = CreateRequestUseCase(request_repository, task_repository)
     update_request = UpdateRequestUseCase(request_repository, task_repository)
-    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
+    quote_workflow = QuoteWorkflow(
+        quote_repository, outbound_repository, operational_queries, email_thread_repository
+    )
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
     agent_log_repository = SQLiteAgentLogWriteRepository(database)
 
-    email_thread_repository = SQLiteEmailThreadRepository(database)
     rate_profile_repository = SQLiteRateProfileRepository(database)
     carrier_offer_repository = SQLiteCarrierOfferWriteRepository(database)
     carrier_rfq_outbound_repository = SQLiteCarrierRfqOutboundRepository(database)
@@ -351,6 +354,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
 
     carrier_rfq_repository = PostgresCarrierRfqRepository(database)
     carrier_write_repository = PostgresCarrierWriteRepository(database)
+    email_thread_repository = PostgresEmailThreadRepository(database)
 
     booking_workflow = BookingWorkflow(
         quote_repository,
@@ -358,16 +362,18 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         operational_queries,
         carrier_rfq_repository,
         outbound_repository,
+        email_thread_repository,
     )
 
     request_repository = PostgresRequestWriteRepository(database)
     create_request = CreateRequestUseCase(request_repository, task_repository)
     update_request = UpdateRequestUseCase(request_repository, task_repository)
-    quote_workflow = QuoteWorkflow(quote_repository, outbound_repository, operational_queries)
+    quote_workflow = QuoteWorkflow(
+        quote_repository, outbound_repository, operational_queries, email_thread_repository
+    )
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
     agent_log_repository = PostgresAgentLogWriteRepository(database)
 
-    email_thread_repository = PostgresEmailThreadRepository(database)
     rate_profile_repository = PostgresRateProfileRepository(database)
     carrier_offer_repository = PostgresCarrierOfferWriteRepository(database)
     carrier_rfq_outbound_repository = PostgresCarrierRfqOutboundRepository(database)

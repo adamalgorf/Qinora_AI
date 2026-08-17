@@ -344,6 +344,12 @@ class SQLiteDatabase:
             _add_column_if_missing(connection, "email_inbound", "quote_id", "text")
             _add_column_if_missing(connection, "carriers", "email", "text")
             _add_column_if_missing(connection, "carrier_offers", "carrier_rfq_id", "text")
+            _add_column_if_missing(
+                connection, "outbound_reply_queue", "in_reply_to_message_id", "text"
+            )
+            _add_column_if_missing(
+                connection, "clarification_outbound", "in_reply_to_message_id", "text"
+            )
             self._seed(connection)
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
@@ -1897,19 +1903,28 @@ class SQLiteOutboundReplyRepository:
         recipient: str,
         subject: str,
         body_text: str,
+        in_reply_to_message_id: str | None = None,
     ) -> OutboundReplyRecord:
         reply_id = str(uuid4())
         with self._database.connect() as connection:
             row = connection.execute(
                 """
                 insert into outbound_reply_queue
-                  (id, quote_id, recipient, subject, body_text, status)
-                values (?, ?, ?, ?, ?, ?)
+                  (id, quote_id, recipient, subject, body_text, status, in_reply_to_message_id)
+                values (?, ?, ?, ?, ?, ?, ?)
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
-                (reply_id, quote_id, recipient, subject, body_text, "queued"),
+                (
+                    reply_id,
+                    quote_id,
+                    recipient,
+                    subject,
+                    body_text,
+                    "queued",
+                    in_reply_to_message_id,
+                ),
             ).fetchone()
 
         return OutboundReplyRecord(**dict(row))
@@ -1920,7 +1935,7 @@ class SQLiteOutboundReplyRepository:
                 """
                 select
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 from outbound_reply_queue
                 where status = ?
                 order by created_at
@@ -1940,7 +1955,7 @@ class SQLiteOutboundReplyRepository:
                 where id = ?
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 ("sent", reply_id),
             ).fetchone()
@@ -1958,7 +1973,7 @@ class SQLiteOutboundReplyRepository:
                 where id = ?
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 ("failed", error_message, reply_id),
             ).fetchone()
@@ -2482,19 +2497,21 @@ class SQLiteClarificationOutboundRepository:
         recipient: str,
         subject: str,
         body_text: str,
+        in_reply_to_message_id: str | None = None,
     ) -> ClarificationOutboundRecord:
         item_id = str(uuid4())
         with self._database.connect() as connection:
             row = connection.execute(
                 """
                 insert into clarification_outbound
-                  (id, inbound_email_id, recipient, subject, body_text, status)
-                values (?, ?, ?, ?, ?, 'queued')
+                  (id, inbound_email_id, recipient, subject, body_text, status,
+                   in_reply_to_message_id)
+                values (?, ?, ?, ?, ?, 'queued', ?)
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
-                (item_id, inbound_email_id, recipient, subject, body_text),
+                (item_id, inbound_email_id, recipient, subject, body_text, in_reply_to_message_id),
             ).fetchone()
         return _clarification_outbound_from_sqlite_row(row)
 
@@ -2504,7 +2521,7 @@ class SQLiteClarificationOutboundRepository:
                 """
                 select
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 from clarification_outbound
                 where status = 'queued'
                 order by created_at
@@ -2523,7 +2540,7 @@ class SQLiteClarificationOutboundRepository:
                 where id = ?
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 (item_id,),
             ).fetchone()
@@ -2540,7 +2557,7 @@ class SQLiteClarificationOutboundRepository:
                 where id = ?
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 (error_message, item_id),
             ).fetchone()

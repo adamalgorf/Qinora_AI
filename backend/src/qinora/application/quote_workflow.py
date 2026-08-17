@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 
 from qinora.application.operational_queries import OperationalQueries
-from qinora.application.ports import OutboundReplyRepository, QuoteWriteRepository
+from qinora.application.ports import (
+    EmailThreadRepository,
+    OutboundReplyRepository,
+    QuoteWriteRepository,
+)
 from qinora.application.read_models import OutboundReplyRecord, QuoteRecord, RequestRecord
 from qinora.domain import can_send_quote
 
@@ -41,10 +45,12 @@ class QuoteWorkflow:
         repository: QuoteWriteRepository,
         outbound_repository: OutboundReplyRepository,
         operational_queries: OperationalQueries,
+        email_threads: EmailThreadRepository | None = None,
     ) -> None:
         self._repository = repository
         self._outbound_repository = outbound_repository
         self._operational_queries = operational_queries
+        self._email_threads = email_threads
 
     async def create_quote(self, command: CreateQuoteCommand) -> QuoteRecord:
         request = await self._find_request(command.request_id)
@@ -79,8 +85,22 @@ class QuoteWorkflow:
                 "Svara på detta mail för att godkänna.\n\n"
                 "Med vänlig hälsning,\nSandahls"
             ),
+            in_reply_to_message_id=await self._latest_thread_message_id(sent_quote),
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)
+
+    async def _latest_thread_message_id(self, quote: QuoteRecord) -> str | None:
+        # Sends the quote as an actual reply on the customer's own thread
+        # (see integrations/gmail-intake-bridge/Code.gs's sendQueuedReplies())
+        # rather than a disconnected new email - replies onto whichever
+        # inbound message in the thread is most recent, matching how a
+        # human would hit "Reply".
+        if self._email_threads is None:
+            return None
+        history = await self._email_threads.list_thread_history(
+            request_id=quote.request_id, quote_id=quote.id
+        )
+        return history[-1].message_id if history else None
 
     async def _find_request(self, request_id: str) -> RequestRecord | None:
         for request in await self._operational_queries.list_requests():

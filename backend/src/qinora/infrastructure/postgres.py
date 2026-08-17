@@ -1535,32 +1535,32 @@ class PostgresOutboundReplyRepository:
         recipient: str,
         subject: str,
         body_text: str,
+        in_reply_to_message_id: str | None = None,
     ) -> OutboundReplyRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.outbound_reply_queue
-                  (tenant_id, quote_id, recipient, subject, body_text, status)
-                values (%s, %s, %s, %s, %s, %s)
+                  (tenant_id, quote_id, recipient, subject, body_text, status,
+                   in_reply_to_message_id)
+                values (%s, %s, %s, %s, %s, %s, %s)
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
-                (self._database.tenant_id, quote_id, recipient, subject, body_text, "queued"),
+                (
+                    self._database.tenant_id,
+                    quote_id,
+                    recipient,
+                    subject,
+                    body_text,
+                    "queued",
+                    in_reply_to_message_id,
+                ),
             )
             row = cursor.fetchone()
 
-        return OutboundReplyRecord(
-            id=str(row["id"]),
-            quote_id=str(row["quote_id"]) if row["quote_id"] else "",
-            recipient=row["recipient"],
-            subject=row["subject"],
-            body_text=row["body_text"],
-            status=row["status"],
-            created_at=row["created_at"].isoformat(),
-            sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
-            error_message=row["error_message"],
-        )
+        return _outbound_reply_record(row)
 
     async def next_queued(self, limit: int) -> list[OutboundReplyRecord]:
         with self._database.connect() as connection, connection.cursor() as cursor:
@@ -1568,7 +1568,7 @@ class PostgresOutboundReplyRepository:
                 """
                 select
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 from public.outbound_reply_queue
                 where tenant_id = %s and status = %s
                 order by created_at
@@ -1589,7 +1589,7 @@ class PostgresOutboundReplyRepository:
                 where tenant_id = %s and id = %s
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 ("sent", self._database.tenant_id, reply_id),
             )
@@ -1608,7 +1608,7 @@ class PostgresOutboundReplyRepository:
                 where tenant_id = %s and id = %s
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 ("failed", error_message, self._database.tenant_id, reply_id),
             )
@@ -2201,16 +2201,18 @@ class PostgresClarificationOutboundRepository:
         recipient: str,
         subject: str,
         body_text: str,
+        in_reply_to_message_id: str | None = None,
     ) -> ClarificationOutboundRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.clarification_outbound
-                  (tenant_id, inbound_email_id, recipient, subject, body_text, status)
-                values (%s, %s, %s, %s, %s, %s)
+                  (tenant_id, inbound_email_id, recipient, subject, body_text, status,
+                   in_reply_to_message_id)
+                values (%s, %s, %s, %s, %s, %s, %s)
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 (
                     self._database.tenant_id,
@@ -2219,6 +2221,7 @@ class PostgresClarificationOutboundRepository:
                     subject,
                     body_text,
                     "queued",
+                    in_reply_to_message_id,
                 ),
             )
             row = cursor.fetchone()
@@ -2230,7 +2233,7 @@ class PostgresClarificationOutboundRepository:
                 """
                 select
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 from public.clarification_outbound
                 where tenant_id = %s and status = %s
                 order by created_at
@@ -2250,7 +2253,7 @@ class PostgresClarificationOutboundRepository:
                 where tenant_id = %s and id = %s
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 ("sent", self._database.tenant_id, item_id),
             )
@@ -2268,7 +2271,7 @@ class PostgresClarificationOutboundRepository:
                 where tenant_id = %s and id = %s
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, in_reply_to_message_id
                 """,
                 ("failed", error_message, self._database.tenant_id, item_id),
             )
@@ -2289,6 +2292,7 @@ def _clarification_outbound_from_postgres_row(row: dict[str, Any]) -> Clarificat
         created_at=row["created_at"].isoformat(),
         sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
         error_message=row["error_message"],
+        in_reply_to_message_id=row.get("in_reply_to_message_id"),
     )
 
 
@@ -2344,6 +2348,7 @@ def _outbound_reply_record(row: dict[str, Any]) -> OutboundReplyRecord:
         created_at=row["created_at"].isoformat(),
         sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
         error_message=row["error_message"],
+        in_reply_to_message_id=row.get("in_reply_to_message_id"),
     )
 
 

@@ -136,13 +136,17 @@ function sendToQinora_(message, secret, webhookUrl) {
 
 // The mirror image of forwardNewMail() - polls QiNora for anything queued to
 // go out (customer quote replies AND automatic carrier RFQ emails, both
-// normalized to the same {queue, id, recipient, subject, body_text} shape -
-// see interfaces/http/routers/outbound.py), actually sends each one with
-// GmailApp.sendEmail (QiNora's backend has no Gmail credentials of its own),
-// and reports sent/failed back per item so QiNora's queues stay in sync.
-// Also pings /outbound/collect-carrier-rfqs on the same run, piggybacking
-// the carrier-RFQ sourcing sweep onto this trigger's 5-minute cadence rather
-// than needing a separate scheduler.
+// normalized to the same {queue, id, recipient, subject, body_text,
+// in_reply_to_message_id} shape - see interfaces/http/routers/outbound.py),
+// actually sends each one (QiNora's backend has no Gmail credentials of its
+// own), and reports sent/failed back per item so QiNora's queues stay in
+// sync. When in_reply_to_message_id is set (quote and clarification items -
+// see application/quote_workflow.py/booking_workflow.py/
+// request_parsing_agent.py), sends as a real reply on that Gmail thread
+// (sendItem_) instead of a disconnected new email, so the customer sees it
+// nested under their own inquiry. Also pings /outbound/collect-carrier-rfqs
+// on the same run, piggybacking the carrier-RFQ sourcing sweep onto this
+// trigger's 5-minute cadence rather than needing a separate scheduler.
 function sendQueuedReplies() {
   var secret = getRequiredProperty_("QINORA_WEBHOOK_SECRET");
   var baseUrl = getOutboundBaseUrl_();
@@ -153,7 +157,7 @@ function sendQueuedReplies() {
 
   items.forEach(function (item) {
     try {
-      GmailApp.sendEmail(item.recipient, item.subject, item.body_text, { name: "Sandahls" });
+      sendItem_(item);
       ackOutboundItem_(baseUrl, secret, item, "ack", null);
       sent += 1;
     } catch (error) {
@@ -168,6 +172,30 @@ function sendQueuedReplies() {
   Logger.log("Sent " + sent + " queued reply/replies, " + failed + " failed.");
 
   collectCarrierRfqs_(baseUrl, secret);
+}
+
+// Replies within the customer's own Gmail thread when the item names which
+// inbound message it answers, so it threads instead of landing as a new
+// top-level conversation. Falls back to a plain send (also used for carrier
+// RFQ items, which are new outreach, not replies) when no thread is found -
+// e.g. the original message got deleted, or this is running against a
+// different mailbox than the one that received it.
+function sendItem_(item) {
+  var options = { name: "Sandahls" };
+  if (item.in_reply_to_message_id) {
+    var thread = findThreadByMessageId_(item.in_reply_to_message_id);
+    if (thread) {
+      thread.reply(item.body_text, options);
+      return;
+    }
+  }
+  GmailApp.sendEmail(item.recipient, item.subject, item.body_text, options);
+}
+
+function findThreadByMessageId_(messageId) {
+  var cleaned = messageId.replace(/[<>]/g, "");
+  var threads = GmailApp.search("rfc822msgid:" + cleaned, 0, 1);
+  return threads.length > 0 ? threads[0] : null;
 }
 
 function fetchNextQueued_(baseUrl, secret) {

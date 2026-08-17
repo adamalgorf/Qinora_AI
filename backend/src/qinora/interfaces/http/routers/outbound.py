@@ -69,6 +69,7 @@ async def next_queued(
             recipient=item.recipient,
             subject=item.subject,
             body_text=item.body_text,
+            in_reply_to_message_id=item.in_reply_to_message_id,
         )
         for item in quote_items
     ] + [
@@ -87,6 +88,7 @@ async def next_queued(
             recipient=item.recipient,
             subject=item.subject,
             body_text=item.body_text,
+            in_reply_to_message_id=item.in_reply_to_message_id,
         )
         for item in clarification_items
     ]
