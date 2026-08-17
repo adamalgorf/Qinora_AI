@@ -249,8 +249,20 @@ function getOutboundBaseUrl_() {
   );
 }
 
+// Signs the exact UTF-8 bytes of body, not the raw JS string. This matters:
+// computeHmacSha256Signature(string, secret) does not reliably hash the same
+// bytes that actually go out over the wire once body contains non-ASCII
+// characters (e.g. Swedish å/ä/ö in a forwarded email's text) - it can hash
+// UTF-16 code units instead, producing a signature that never matches the
+// backend's hmac.new(secret, body.encode("utf-8"), sha256) for any message
+// with such characters, while pure-ASCII payloads sign correctly by
+// coincidence. Converting to a UTF-8 byte array first removes the ambiguity.
+// Both arguments have to be byte arrays together - computeHmacSha256Signature
+// has no (Byte[], String) overload, only (String, String) or (Byte[], Byte[]).
 function signBody_(body, secret) {
-  return "sha256=" + toHex_(Utilities.computeHmacSha256Signature(body, secret));
+  var bodyBytes = Utilities.newBlob(body).getBytes();
+  var secretBytes = Utilities.newBlob(secret).getBytes();
+  return "sha256=" + toHex_(Utilities.computeHmacSha256Signature(bodyBytes, secretBytes));
 }
 
 // The QiNora webhook payload requires a bare address (recipient/sender are
