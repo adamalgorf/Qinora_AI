@@ -17,6 +17,7 @@ class EmailWebhookCommand:
     message_id: str | None = None
     in_reply_to: str | None = None
     references: str | None = None
+    sender_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class EmailWebhookUseCase:
             message_id=command.message_id,
             in_reply_to=command.in_reply_to,
             references_header=command.references,
+            sender_name=command.sender_name,
         )
         await self._webhook_events.record(command.idempotency_key, "email.received")
         # The real AgentDispatcher (infrastructure/email_dispatch.py) runs

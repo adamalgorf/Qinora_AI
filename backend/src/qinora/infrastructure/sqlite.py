@@ -342,6 +342,7 @@ class SQLiteDatabase:
             _add_column_if_missing(connection, "email_inbound", "references_header", "text")
             _add_column_if_missing(connection, "email_inbound", "request_id", "text")
             _add_column_if_missing(connection, "email_inbound", "quote_id", "text")
+            _add_column_if_missing(connection, "email_inbound", "sender_name", "text")
             _add_column_if_missing(connection, "carriers", "email", "text")
             _add_column_if_missing(connection, "carrier_offers", "carrier_rfq_id", "text")
             _add_column_if_missing(
@@ -739,6 +740,7 @@ class SQLiteInboundEmailRepository:
         message_id: str | None = None,
         in_reply_to: str | None = None,
         references_header: str | None = None,
+        sender_name: str | None = None,
     ) -> str:
         email_id = str(uuid4())
         with self._database.connect() as connection:
@@ -747,9 +749,10 @@ class SQLiteInboundEmailRepository:
                 insert into email_inbound
                   (
                     id, idempotency_key, sender, recipient, subject, body_text,
-                    classification, message_id, in_reply_to, references_header
+                    classification, message_id, in_reply_to, references_header,
+                    sender_name
                   )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     email_id,
@@ -762,6 +765,7 @@ class SQLiteInboundEmailRepository:
                     message_id,
                     in_reply_to,
                     references_header,
+                    sender_name,
                 ),
             )
         return email_id
@@ -1985,7 +1989,8 @@ class SQLiteOutboundReplyRepository:
 
 _EMAIL_THREAD_COLUMNS = """
     id, sender, recipient, subject, body_text, classification, message_id,
-    in_reply_to, references_header, request_id, quote_id, created_at
+    in_reply_to, references_header, request_id, quote_id, created_at,
+    sender_name
 """
 
 

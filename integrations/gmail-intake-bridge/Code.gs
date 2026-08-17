@@ -98,6 +98,7 @@ function forwardNewMail() {
 function sendToQinora_(message, secret, webhookUrl) {
   var payload = {
     sender: extractEmailAddress_(message.getFrom()),
+    sender_name: extractDisplayName_(message.getFrom()),
     recipient: extractEmailAddress_(message.getTo()),
     subject: message.getSubject() || "(no subject)",
     body_text: message.getPlainBody().slice(0, 20000),
@@ -302,6 +303,17 @@ function extractEmailAddress_(raw) {
   var first = (raw || "").split(",")[0];
   var match = first.match(/<([^<>]+)>/);
   return (match ? match[1] : first).trim();
+}
+
+// The display name portion of getFrom() (e.g. "Adam Algorf" out of
+// "Adam Algorf <adam@example.com>"), so QiNora can greet the sender by
+// first name instead of a generic "Hej!" (see application/greeting.py) -
+// empty string when the sender's mail client never set one, in which case
+// the backend falls back to guessing from the email address itself.
+function extractDisplayName_(raw) {
+  var first = (raw || "").split(",")[0].trim();
+  var match = first.match(/^"?([^"<]*)"?\s*<[^<>]+>$/);
+  return match ? match[1].trim() : "";
 }
 
 function getOrCreateLabel_(name) {

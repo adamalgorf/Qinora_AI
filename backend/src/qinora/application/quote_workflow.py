@@ -1,12 +1,18 @@
 from dataclasses import dataclass
 
+from qinora.application.greeting import greeting
 from qinora.application.operational_queries import OperationalQueries
 from qinora.application.ports import (
     EmailThreadRepository,
     OutboundReplyRepository,
     QuoteWriteRepository,
 )
-from qinora.application.read_models import OutboundReplyRecord, QuoteRecord, RequestRecord
+from qinora.application.read_models import (
+    InboundEmailRecord,
+    OutboundReplyRecord,
+    QuoteRecord,
+    RequestRecord,
+)
 from qinora.domain import can_send_quote
 
 QUOTABLE_REQUEST_STATUSES = {
@@ -79,27 +85,33 @@ class QuoteWorkflow:
         request = (
             await self._find_request(sent_quote.request_id) if sent_quote.request_id else None
         )
+        latest_message = await self._latest_thread_email(sent_quote)
+        greeting_line = greeting(
+            latest_message.sender_name if latest_message else None,
+            latest_message.sender if latest_message else command.recipient,
+        )
         outbound_reply = await self._outbound_repository.enqueue_quote(
             quote_id=sent_quote.id,
             recipient=command.recipient,
             subject=f"Din offert - {sent_quote.id}",
-            body_text=_format_quote_body(sent_quote, request),
-            in_reply_to_message_id=await self._latest_thread_message_id(sent_quote),
+            body_text=_format_quote_body(sent_quote, request, greeting_line),
+            in_reply_to_message_id=latest_message.message_id if latest_message else None,
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)
 
-    async def _latest_thread_message_id(self, quote: QuoteRecord) -> str | None:
+    async def _latest_thread_email(self, quote: QuoteRecord) -> InboundEmailRecord | None:
         # Sends the quote as an actual reply on the customer's own thread
         # (see integrations/gmail-intake-bridge/Code.gs's sendQueuedReplies())
         # rather than a disconnected new email - replies onto whichever
         # inbound message in the thread is most recent, matching how a
-        # human would hit "Reply".
+        # human would hit "Reply". Also the source of the sender's name for
+        # the greeting (application/greeting.py).
         if self._email_threads is None:
             return None
         history = await self._email_threads.list_thread_history(
             request_id=quote.request_id, quote_id=quote.id
         )
-        return history[-1].message_id if history else None
+        return history[-1] if history else None
 
     async def _find_request(self, request_id: str) -> RequestRecord | None:
         for request in await self._operational_queries.list_requests():
@@ -108,13 +120,17 @@ class QuoteWorkflow:
         return None
 
 
-def _format_quote_body(quote: QuoteRecord, request: RequestRecord | None) -> str:
+def _format_quote_body(
+    quote: QuoteRecord, request: RequestRecord | None, greeting_line: str
+) -> str:
     # Matches the Rutt/Transportläge/Vikt/Pris + "Ska vi boka?" convention
     # already established in this mailbox's quote history (real quotes sent
     # before this pass, e.g. "Rutt, Ludvika -> Rotterdam. Transportläge,
     # FTL. Pris, 137500.00 SEK. Offerten galler i 7 dagar. Ska vi boka?"),
     # rather than inventing a new, less complete format from scratch.
-    lines = ["Tack för din transportförfrågan. Här är vår offert:", ""]
+    # Greets by first name (application/greeting.py) so it reads as a human
+    # reply, not a form letter.
+    lines = [greeting_line, "", "Tack för din transportförfrågan. Här är vår offert:", ""]
     if request is not None:
         lines.append(f"Rutt: {request.lane}")
         lines.append(f"Transportläge: {request.mode.upper()}")

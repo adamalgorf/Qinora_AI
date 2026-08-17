@@ -127,6 +127,7 @@ class PostgresInboundEmailRepository:
         message_id: str | None = None,
         in_reply_to: str | None = None,
         references_header: str | None = None,
+        sender_name: str | None = None,
     ) -> str:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -134,9 +135,10 @@ class PostgresInboundEmailRepository:
                     insert into public.email_inbound
                       (
                         tenant_id, idempotency_key, sender, recipient, subject, body_text,
-                        classification, message_id, in_reply_to, references_header
+                        classification, message_id, in_reply_to, references_header,
+                        sender_name
                       )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     returning id
                     """,
                 (
@@ -150,6 +152,7 @@ class PostgresInboundEmailRepository:
                     message_id,
                     in_reply_to,
                     references_header,
+                    sender_name,
                 ),
             )
             return str(cursor.fetchone()["id"])
@@ -1621,7 +1624,8 @@ class PostgresOutboundReplyRepository:
 
 _EMAIL_THREAD_COLUMNS = """
     id, sender, recipient, subject, body_text, classification, message_id,
-    in_reply_to, references_header, request_id, quote_id, created_at
+    in_reply_to, references_header, request_id, quote_id, created_at,
+    sender_name
 """
 
 
@@ -2310,6 +2314,7 @@ def _inbound_email_from_postgres_row(row: dict[str, Any]) -> InboundEmailRecord:
         request_id=str(row["request_id"]) if row["request_id"] else None,
         quote_id=str(row["quote_id"]) if row["quote_id"] else None,
         created_at=row["created_at"].isoformat(),
+        sender_name=row.get("sender_name"),
     )
 
 

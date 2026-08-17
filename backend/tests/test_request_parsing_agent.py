@@ -277,6 +277,7 @@ def test_missing_fields_queues_clarification_email_to_sender() -> None:
                 raw_text="partial info",
                 inbound_email_id="email-1",
                 sender_email="customer@example.com",
+                sender_name="Adam Algorf",
                 subject="Fraktforfraga",
             )
         )
@@ -290,6 +291,7 @@ def test_missing_fields_queues_clarification_email_to_sender() -> None:
     assert item["recipient"] == "customer@example.com"
     assert item["subject"] == "Re: Fraktforfraga"
     assert "lastningstid" in item["body_text"].lower()
+    assert item["body_text"].startswith("Hej Adam!")
 
 
 def test_not_relevant_email_does_not_queue_clarification() -> None:

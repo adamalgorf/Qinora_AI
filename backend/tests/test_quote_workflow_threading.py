@@ -106,7 +106,7 @@ def _quote_workflow(
     return workflow, outbound
 
 
-def _inbound(message_id: str) -> InboundEmailRecord:
+def _inbound(message_id: str, sender_name: str | None = None) -> InboundEmailRecord:
     return InboundEmailRecord(
         id="email-1",
         sender="customer@example.com",
@@ -120,11 +120,15 @@ def _inbound(message_id: str) -> InboundEmailRecord:
         request_id="req-1",
         quote_id=None,
         created_at="2026-01-01T00:00:00",
+        sender_name=sender_name,
     )
 
 
 def test_send_quote_threads_onto_latest_inbound_message() -> None:
-    history = [_inbound("<first@mail.example.com>"), _inbound("<latest@mail.example.com>")]
+    history = [
+        _inbound("<first@mail.example.com>", sender_name="Old Name"),
+        _inbound("<latest@mail.example.com>", sender_name="Adam Algorf"),
+    ]
     workflow, outbound = _quote_workflow(history)
 
     async def run():
@@ -136,6 +140,7 @@ def test_send_quote_threads_onto_latest_inbound_message() -> None:
 
     assert len(outbound.enqueued) == 1
     assert outbound.enqueued[0].in_reply_to_message_id == "<latest@mail.example.com>"
+    assert outbound.enqueued[0].body_text.startswith("Hej Adam!")
 
 
 def test_send_quote_has_no_reply_target_when_thread_is_empty() -> None:

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from qinora.application.agent_config import AgentConfigService, should_auto_act
+from qinora.application.greeting import greeting
 from qinora.application.ports import (
     AgentLogWriteRepository,
     ClarificationOutboundRepository,
@@ -49,6 +50,7 @@ class ParseFreeTextRequestCommand:
     matched_request_id: str | None = None
     inbound_email_id: str | None = None
     sender_email: str = ""
+    sender_name: str | None = None
     subject: str = ""
     message_id: str | None = None
 
@@ -223,8 +225,11 @@ class RequestParsingAgent:
         # Matches the "Tack för din transportförfrågan angående ... Vi
         # behöver kompletterande information ..." convention already
         # established in this mailbox's prior clarification emails, rather
-        # than inventing new phrasing from scratch.
+        # than inventing new phrasing from scratch. Greets the sender by
+        # first name (see application/greeting.py) so this reads like a
+        # human wrote it, not a form letter.
         body_text = (
+            f"{greeting(command.sender_name, command.sender_email)}\n\n"
             f'Tack för din transportförfrågan angående "{original_subject}". '
             "Vi behöver kompletterande information för att kunna ge dig en offert:\n\n"
             f"{bullet_list}\n\n"

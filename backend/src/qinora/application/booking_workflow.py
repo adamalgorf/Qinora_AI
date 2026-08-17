@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from qinora.application.greeting import greeting
 from qinora.application.operational_queries import CarrierIntelligenceCommand, OperationalQueries
 from qinora.application.ports import (
     CarrierRfqRepository,
@@ -8,7 +9,7 @@ from qinora.application.ports import (
     QuoteWriteRepository,
     ShipmentWriteRepository,
 )
-from qinora.application.read_models import QuoteRecord, ShipmentRecord
+from qinora.application.read_models import InboundEmailRecord, QuoteRecord, ShipmentRecord
 
 BOOKED_STATUS = "booked"
 
@@ -93,12 +94,19 @@ class BookingWorkflow:
         )
 
         if status == BOOKED_STATUS and command.recipient_email:
+            latest_message = await self._latest_thread_email(quote)
+            greeting_line = greeting(
+                latest_message.sender_name if latest_message else None,
+                latest_message.sender if latest_message else command.recipient_email,
+            )
             await self._outbound_repository.enqueue_quote(
                 quote_id=quote.id,
                 recipient=command.recipient_email,
                 subject=f"Din bokning är bekräftad - {shipment.public_id}",
-                body_text=_format_booking_confirmation(quote, command, lane, shipment),
-                in_reply_to_message_id=await self._latest_thread_message_id(quote),
+                body_text=_format_booking_confirmation(
+                    quote, command, lane, shipment, greeting_line
+                ),
+                in_reply_to_message_id=latest_message.message_id if latest_message else None,
             )
 
         return BookingResult(
@@ -108,13 +116,13 @@ class BookingWorkflow:
             overall_confidence=overall_confidence,
         )
 
-    async def _latest_thread_message_id(self, quote: QuoteRecord) -> str | None:
+    async def _latest_thread_email(self, quote: QuoteRecord) -> InboundEmailRecord | None:
         if self._email_threads is None:
             return None
         history = await self._email_threads.list_thread_history(
             request_id=quote.request_id, quote_id=quote.id
         )
-        return history[-1].message_id if history else None
+        return history[-1] if history else None
 
     async def _resolve_quote_lane(self, request_id: str | None) -> str:
         if request_id is None:
@@ -129,12 +137,19 @@ class BookingWorkflow:
 
 
 def _format_booking_confirmation(
-    quote: QuoteRecord, command: BookQuoteCommand, lane: str, shipment: ShipmentRecord
+    quote: QuoteRecord,
+    command: BookQuoteCommand,
+    lane: str,
+    shipment: ShipmentRecord,
+    greeting_line: str,
 ) -> str:
     # Matches the Route/Mode/Weight/Price recap + tracking-notice convention
     # already established in this mailbox's booking-confirmation history,
     # rather than inventing a new, less complete format from scratch.
+    # Greets by first name (application/greeting.py) so it reads as a human
+    # reply, not a form letter.
     return (
+        f"{greeting_line}\n\n"
         "Tack för din bekräftelse! Din frakt är nu bokad.\n\n"
         f"Rutt: {lane}\n"
         f"Transportläge: {command.mode.upper()}\n"

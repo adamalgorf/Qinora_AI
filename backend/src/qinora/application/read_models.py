@@ -323,6 +323,7 @@ class InboundEmailRecord:
     request_id: str | None
     quote_id: str | None
     created_at: str
+    sender_name: str | None = None
 
 
 @dataclass(frozen=True)

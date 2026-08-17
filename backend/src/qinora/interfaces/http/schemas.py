@@ -14,6 +14,7 @@ class EmailWebhookPayload(BaseModel):
     message_id: str | None = None
     in_reply_to: str | None = None
     references: str | None = None
+    sender_name: str | None = None
 
 
 class EmailWebhookResponse(BaseModel):

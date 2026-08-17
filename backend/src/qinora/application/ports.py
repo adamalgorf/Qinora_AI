@@ -51,6 +51,7 @@ class InboundEmailRepository(Protocol):
         message_id: str | None = None,
         in_reply_to: str | None = None,
         references_header: str | None = None,
+        sender_name: str | None = None,
     ) -> str:
         pass
 
