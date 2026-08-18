@@ -945,10 +945,7 @@ class PostgresCarrierOfferWriteRepository:
                     tenant_id, request_id, carrier_name, price, currency, transit_days,
                     notes, confidence, carrier_rfq_id
                   )
-                values (
-                  %s, %s, %s, %s, %s, %s, %s, %s,
-                  case when %s ~ '^[0-9a-fA-F-]{36}$' then %s::uuid else null end
-                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 returning id, request_id, carrier_name, price, currency, transit_days,
                   notes, confidence, created_at, carrier_rfq_id
                 """,
@@ -961,8 +958,7 @@ class PostgresCarrierOfferWriteRepository:
                     transit_days,
                     notes,
                     confidence,
-                    carrier_rfq_id or "",
-                    carrier_rfq_id or "",
+                    carrier_rfq_id,
                 ),
             )
             row = cursor.fetchone()
