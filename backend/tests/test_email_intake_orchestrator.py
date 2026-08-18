@@ -285,9 +285,11 @@ class FakeOperationalReadRepository:
 class FakeRequestParsingLLM:
     draft: ParsedTransportRequestDraft
     calls: int = 0
+    raw_texts: list = field(default_factory=list)
 
     async def parse(self, *, raw_text: str):
         self.calls += 1
+        self.raw_texts.append(raw_text)
         return self.draft
 
 
@@ -1010,3 +1012,65 @@ def test_carrier_reply_matched_by_sender_email_fallback() -> None:
     assert carrier_rfq_repository.responded == [
         ("rfq-3", carrier_offer_repository.created[0].id)
     ]
+
+
+def test_reply_on_unlinked_thread_still_sees_original_email_as_context() -> None:
+    """A reply answering Parsek's own clarification question (see
+    request_parsing_agent.py's needs_review gate) has no request_id/quote_id
+    yet - the original email was flagged for review, not turned into a
+    request. thread_matching still resolves the anchor email via message-id
+    though, and the orchestrator should fall back to it so Parsek sees the
+    original request details alongside the reply instead of the reply text
+    in isolation.
+    """
+    original = _email(
+        "mail-8-orig",
+        sender="adam@fivestarsmedia.se",
+        subject="fraktforfraga",
+        body_text="Stockholm till Hamburg, 500 kg, 120x80x100 cm.",
+    )
+    reply = _email(
+        "mail-8-reply",
+        sender="adam@fivestarsmedia.se",
+        subject="Re: fraktforfraga",
+        body_text="nasta vecka tisdag kl 10.00",
+    )
+    parsek_config = _parsek_config()
+    thread_match = ThreadMatchResult(
+        request_id=None, quote_id=None, matched_email_id="mail-8-orig", tier=1
+    )
+    draft = ParsedTransportRequestDraft(
+        mode="ltl",
+        origin="Stockholm",
+        destination="Hamburg",
+        cargo=(ParsedCargoLine("Pallets", 1, 500.0, 120, 80, 100),),
+        loading_time=datetime(2026, 8, 25, 10, tzinfo=UTC),
+        unloading_time=None,
+        confidence=0.9,
+        missing_fields=(),
+        action="update",
+    )
+
+    (
+        orchestrator,
+        email_threads,
+        _contacts,
+        _task_repository,
+        _shipment_repository,
+        _quote_repository,
+        llm,
+        *_,
+    ) = _build_orchestrator(
+        email=reply,
+        parsek_config=parsek_config,
+        thread_match=thread_match,
+        llm_draft=draft,
+    )
+    email_threads.emails["mail-8-orig"] = original
+
+    anyio.run(lambda: orchestrator.handle("mail-8-reply"))
+
+    assert llm.calls == 1
+    combined_text = llm.raw_texts[0]
+    assert "Stockholm till Hamburg" in combined_text
+    assert "nasta vecka tisdag kl 10.00" in combined_text

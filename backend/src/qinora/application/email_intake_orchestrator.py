@@ -56,7 +56,7 @@ from qinora.application.request_parsing_agent import (
     ParseFreeTextRequestCommand,
     RequestParsingAgent,
 )
-from qinora.application.thread_matching import ThreadMatchingUseCase
+from qinora.application.thread_matching import ThreadMatchingUseCase, ThreadMatchResult
 from qinora.domain.shipment_status import ShipmentStatus
 
 PARSEK_AGENT_KEY = "request_parsing_agent"
@@ -204,7 +204,7 @@ class EmailIntakeOrchestrator:
                 request_id=request_id, quote_id=quote_id
             )
             if request_id or quote_id
-            else []
+            else await self._unlinked_thread_history(thread_match, email)
         )
         combined_text = _build_combined_text(history, email)
         customer_name = contact.display_name if contact else email.sender
@@ -250,6 +250,26 @@ class EmailIntakeOrchestrator:
             )
         )
         return await self._finish(email_id, "transport_request")
+
+    async def _unlinked_thread_history(
+        self, thread_match: ThreadMatchResult | None, email: InboundEmailRecord
+    ) -> list[InboundEmailRecord]:
+        """A reply on a thread whose earlier message never became a request
+        (e.g. Parsek flagged it for a clarification instead - see
+        request_parsing_agent.py's needs_review gate) has no request_id/
+        quote_id to look up history by, so list_thread_history returns
+        nothing. Fall back to the single anchor email thread_matching
+        already resolved, so Parsek still sees the original request details
+        (origin/destination/cargo) alongside this reply's answer, instead of
+        just the reply text in isolation - which is otherwise low-confidence
+        or unparseable on its own.
+        """
+        if thread_match is None:
+            return []
+        anchor = await self._email_threads.get(thread_match.matched_email_id)
+        if anchor is None or anchor.id == email.id:
+            return []
+        return [anchor]
 
     async def _match_carrier_rfq(self, email: InboundEmailRecord) -> CarrierRfqRecord | None:
         token_match = RFQ_TOKEN_RE.search(email.subject)
