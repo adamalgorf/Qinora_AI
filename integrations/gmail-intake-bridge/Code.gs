@@ -3,9 +3,12 @@
  *
  * Runs INSIDE the Google Workspace mailbox that receives customer/carrier
  * emails (e.g. farah@qinora.org). On a time-driven trigger it finds unread
- * mail that hasn't been forwarded yet, POSTs each one to QiNora's
- * `/webhooks/email` endpoint with an HMAC-SHA256 signature, and labels the
- * message so it's never sent twice (forwardNewMail). A second time-driven
+ * mail, POSTs each one to QiNora's `/webhooks/email` endpoint with an
+ * HMAC-SHA256 signature, marks it read so it's never sent twice, and labels
+ * the thread for visual organization in Gmail (forwardNewMail) - the label
+ * lives on the thread, not the message, so it's never used to gate sending;
+ * a later reply in an already-labeled thread (e.g. answering a clarification
+ * request) still needs to go out. A second time-driven
  * trigger runs the mirror image (sendQueuedReplies): it polls QiNora's
  * `/outbound/next-queued` endpoint for quote replies AND automatic carrier
  * RFQ emails, actually sends each one with GmailApp.sendEmail(...) (QiNora's
@@ -52,7 +55,15 @@
  */
 
 var LABEL_NAME = "QiNora/Forwarded";
-var GMAIL_SEARCH_QUERY = "is:unread in:inbox -label:" + LABEL_NAME;
+// Gmail labels live on the whole thread, not per message - excluding
+// -label:LABEL_NAME here would permanently hide every future reply in a
+// thread the moment it's first forwarded (a real bug this caused once
+// quote/clarification replies started landing back in the customer's own
+// thread - see application/quote_workflow.py's threading support). Per-
+// message dedup is markRead() below instead; the label stays purely for
+// visual organization in Gmail, and the backend's own idempotency-key
+// check (message.getId()) is the actual safety net against double-sends.
+var GMAIL_SEARCH_QUERY = "is:unread in:inbox";
 var MAX_MESSAGES_PER_RUN = 20;
 
 function installTrigger() {
@@ -82,11 +93,11 @@ function forwardNewMail() {
   threads.forEach(function (thread) {
     thread.getMessages().forEach(function (message) {
       if (message.isUnread() === false) return;
-      if (messageHasLabel_(message, LABEL_NAME)) return;
 
       var ok = sendToQinora_(message, secret, webhookUrl);
       if (ok) {
         thread.addLabel(label);
+        message.markRead();
         forwarded += 1;
       }
     });
@@ -318,15 +329,6 @@ function extractDisplayName_(raw) {
 
 function getOrCreateLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
-}
-
-function messageHasLabel_(message, labelName) {
-  return message
-    .getThread()
-    .getLabels()
-    .some(function (label) {
-      return label.getName() === labelName;
-    });
 }
 
 function getRequiredProperty_(key) {
