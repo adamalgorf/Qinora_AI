@@ -42,6 +42,65 @@ services:
       retries: 3
       start_period: 5s
 
+  outbound-mailer:
+    build:
+      context: ./backend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment: &worker_environment
+      EMAIL_WEBHOOK_SECRET: ${EMAIL_WEBHOOK_SECRET:-dev-secret}
+      QINORA_PERSISTENCE: ${QINORA_PERSISTENCE:-sqlite}
+      QINORA_AUTH_TOKEN_SECRET: ${QINORA_AUTH_TOKEN_SECRET:-dev-auth-secret}
+      QINORA_POSTGRES_TENANT_ID: ${QINORA_POSTGRES_TENANT_ID:-00000000-0000-0000-0000-000000000001}
+      QINORA_SQLITE_PATH: /app/data/qinora.sqlite3
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/qinora}
+    volumes:
+      - qinora_data:/app/data
+    # Each workers/*.py entrypoint runs one batch pass and exits (see its
+    # own `if __name__ == "__main__"` - designed to be invoked by an
+    # external scheduler, e.g. cron). Docker Compose services expect a
+    # long-running process, so loop it here rather than changing the
+    # script's own one-shot semantics that README.md's manual `python -m`
+    # instructions rely on.
+    entrypoint: sh -c
+    command:
+      - 'while true; do python -m qinora.workers.outbound_mailer; sleep 30; done'
+    # These containers don't serve HTTP, so the backend image's inherited
+    # HEALTHCHECK (a GET against :8000/ready) can never succeed.
+    healthcheck:
+      disable: true
+
+  tracking-simulator:
+    build:
+      context: ./backend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment: *worker_environment
+    volumes:
+      - qinora_data:/app/data
+    entrypoint: sh -c
+    command:
+      - 'while true; do python -m qinora.workers.tracking_simulator; sleep 60; done'
+    healthcheck:
+      disable: true
+
+  stale-request-escalator:
+    build:
+      context: ./backend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment: *worker_environment
+    volumes:
+      - qinora_data:/app/data
+    entrypoint: sh -c
+    command:
+      - 'while true; do python -m qinora.workers.stale_request_escalator; sleep 300; done'
+    healthcheck:
+      disable: true
+
   postgres:
     image: postgres:16-alpine
     profiles:

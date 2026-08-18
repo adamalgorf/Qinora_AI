@@ -60,6 +60,10 @@ The Vite dev server proxies `/api` to `http://127.0.0.1:8000`.
 
 ## Run Workers
 
+`docker compose up` (below) now runs all three of these continuously, each looping its
+one-shot entrypoint on an interval (30s/60s/300s) against the same data volume as the
+`backend` service. Use the commands below only when running the backend outside Docker.
+
 Process queued outbound customer replies:
 
 ```powershell
@@ -89,7 +93,9 @@ docker compose up --build
 
 The containerized frontend is served at `http://127.0.0.1:8080` and proxies `/api` to the
 backend service. The backend remains reachable at `http://127.0.0.1:8000`.
-Compose waits for backend readiness before starting the frontend service.
+Compose waits for backend readiness before starting the frontend service, and before
+starting the three worker services (`outbound-mailer`, `tracking-simulator`,
+`stale-request-escalator`), which then run continuously alongside it.
 
 To run a local Postgres service for production-style persistence:
 
