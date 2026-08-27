@@ -44,7 +44,10 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
 
-  backup_retention_period = 7
+  # 0 (no automated backups) because this account is currently on AWS's
+  # restricted free plan, which rejects any backup retention period - raise
+  # this once the account plan is upgraded.
+  backup_retention_period = 0
   deletion_protection     = true
   skip_final_snapshot     = false
   final_snapshot_identifier = "${var.project_name}-db-final"

@@ -1,7 +1,7 @@
 variable "aws_region" {
-  description = "AWS region. Stockholm is the closest region to Sweden."
+  description = "AWS region. eu-north-1 (Stockholm) is closest to Sweden but does not support App Runner - eu-central-1 (Frankfurt) is the nearest region that does."
   type        = string
-  default     = "eu-north-1"
+  default     = "eu-central-1"
 }
 
 variable "project_name" {
