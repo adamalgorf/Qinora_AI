@@ -9,6 +9,9 @@ RUN npm ci
 
 COPY frontend ./frontend
 
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build -w @qinora/frontend
 
 FROM nginx:1.27-alpine

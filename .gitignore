@@ -13,3 +13,10 @@ backend/data/
 .env.*
 !.env.example
 *.local
+
+# Terraform (infra/aws)
+infra/aws/.terraform/
+infra/aws/*.tfstate
+infra/aws/*.tfstate.*
+infra/aws/*tfplan*
+infra/aws/crash.log
