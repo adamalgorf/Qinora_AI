@@ -10,6 +10,7 @@ from qinora.interfaces.http.routers.outbound import router as outbound_router
 from qinora.interfaces.http.routers.quotes import router as quotes_router
 from qinora.interfaces.http.routers.rate_profiles import router as rate_profiles_router
 from qinora.interfaces.http.routers.requests import router as requests_router
+from qinora.interfaces.http.routers.rfq import router as rfq_router
 from qinora.interfaces.http.routers.search import router as search_router
 from qinora.interfaces.http.routers.shipments import router as shipments_router
 from qinora.interfaces.http.routers.webhooks import router as webhooks_router
@@ -20,6 +21,7 @@ routers = [
     demo_router,
     dashboard_router,
     requests_router,
+    rfq_router,
     search_router,
     quotes_router,
     shipments_router,

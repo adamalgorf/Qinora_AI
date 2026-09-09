@@ -1,0 +1,124 @@
+name: Deploy to GCP
+
+# Runs on every push to main: tests, then builds+pushes the backend image to
+# Artifact Registry, deploys it to Cloud Run with 0% traffic, health-checks
+# that untrafficked revision, and only then migrates traffic to it. If the
+# health check (or anything before it) fails, traffic never leaves the
+# previous revision - and the explicit rollback step re-asserts that
+# revision at 100% as a safety net for the rarer case where it had already
+# started to migrate.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write # for OIDC -> GCP Workload Identity Federation
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend
+        working-directory: backend
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint backend
+        working-directory: backend
+        run: python -m ruff check .
+
+      - name: Test backend (anyio-based async tests)
+        working-directory: backend
+        run: python -m pytest
+
+  deploy:
+    name: Build, push, deploy
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPOSITORY }}/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Record currently-serving revision (for rollback)
+        id: previous
+        run: |
+          JSON=$(gcloud run services describe "${{ vars.GCP_SERVICE }}" \
+            --region "${{ vars.GCP_REGION }}" --format=json 2>/dev/null || echo '{}')
+          REVISION=$(echo "$JSON" | jq -r '(.status.traffic // []) | map(select(.percent == 100)) | .[0].revisionName // ""')
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+          echo "Currently serving: ${REVISION:-<none - first deploy>}"
+
+      - name: Build image
+        working-directory: backend
+        run: docker build -t "$IMAGE:${{ github.sha }}" .
+
+      - name: Push image
+        run: docker push "$IMAGE:${{ github.sha }}"
+
+      - name: Deploy candidate revision (0% traffic)
+        run: |
+          gcloud run deploy "${{ vars.GCP_SERVICE }}" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --tag candidate \
+            --no-traffic \
+            --quiet
+
+      - name: Health check candidate revision
+        run: |
+          URL=$(gcloud run services describe "${{ vars.GCP_SERVICE }}" \
+            --region "${{ vars.GCP_REGION }}" --format=json \
+            | jq -r '.status.traffic[] | select(.tag == "candidate") | .url')
+          echo "Checking $URL/ready"
+          for attempt in 1 2 3 4 5; do
+            if curl -sf --max-time 10 "$URL/ready"; then
+              echo "Healthy"
+              exit 0
+            fi
+            echo "Attempt $attempt failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "Candidate revision failed its health check"
+          exit 1
+
+      - name: Promote candidate to 100% traffic
+        run: |
+          gcloud run services update-traffic "${{ vars.GCP_SERVICE }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --to-tags candidate=100
+
+      - name: Roll back on failure
+        if: failure() && steps.previous.outputs.revision != ''
+        run: |
+          echo "Deploy failed - pinning traffic back to ${{ steps.previous.outputs.revision }}"
+          gcloud run services update-traffic "${{ vars.GCP_SERVICE }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --to-revisions "${{ steps.previous.outputs.revision }}=100"

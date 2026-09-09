@@ -20,3 +20,12 @@ infra/aws/*.tfstate
 infra/aws/*.tfstate.*
 infra/aws/*tfplan*
 infra/aws/crash.log
+
+# Terraform (infra/gcp)
+infra/gcp/.terraform/
+infra/gcp/*.tfstate
+infra/gcp/*.tfstate.*
+infra/gcp/*tfplan*
+infra/gcp/crash.log
+infra/gcp/terraform.tfvars
+!infra/gcp/terraform.tfvars.example

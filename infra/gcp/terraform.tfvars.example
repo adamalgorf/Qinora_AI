@@ -1,0 +1,54 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+# Secrets (openai_api_key, email_webhook_secret, auth_token_secret) are
+# better passed as TF_VAR_* environment variables or -var on the CLI than
+# left in this file, even locally - see README.md.
+
+project_id  = "qinora-prod"
+region      = "europe-north2" # Stockholm
+name        = "qinora"
+github_repo = "adamalgorf/Qinora_AI"
+
+# Must have (or be about to have) a DNS A record pointing at the
+# load_balancer_ip output for the managed SSL certificate to provision.
+domain_name = "app.qinora.se"
+
+# Leave database_url unset (null) to use the Cloud SQL instance this stack
+# provisions. Only set it to point at an external Postgres instead.
+# database_url = null
+
+db_tier         = "db-f1-micro"
+db_disk_size_gb = 10
+db_name         = "qinora"
+db_user         = "qinora_app"
+
+cloud_run_min_instances = 0
+cloud_run_max_instances = 4
+cloud_run_cpu           = "1"
+cloud_run_memory        = "1Gi"
+
+postgres_tenant_id   = "00000000-0000-0000-0000-000000000001"
+openai_model         = "gpt-4o-mini"
+cors_allowed_origins = "*"
+
+# Leave as "bootstrap" for the very first apply; push a placeholder image at
+# this tag first (see README.md "First-time setup"). After GitHub Actions
+# starts deploying real SHA-tagged images, this only matters again if you
+# ever need to force terraform apply to touch the Cloud Run image (normally
+# it won't - see the lifecycle.ignore_changes note in modules/cloud_run).
+backend_image_tag = "bootstrap"
+
+# --- Outlook / Microsoft 365 intake bridge (see integrations/outlook-intake-bridge/README.md) ---
+# Leave blank to deploy the job anyway with no-op credentials (it'll fail
+# quietly - no monitoring/alerting is wired up per scope) until you're ready.
+outlook_tenant_id    = ""
+outlook_client_id    = ""
+outlook_mailboxes    = "test.spedition@sandahls.com,qinora.ai@sandahls.com"
+outlook_send_mailbox = "test.spedition@sandahls.com"
+outlook_sender_name  = "Sandahls"
+
+# --- Secrets - prefer TF_VAR_openai_api_key etc. over putting these here ---
+# openai_api_key         = ""
+# email_webhook_secret   = ""
+# auth_token_secret      = ""
+# outlook_client_secret  = ""
+# outlook_refresh_token  = ""

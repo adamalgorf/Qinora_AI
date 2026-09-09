@@ -38,8 +38,29 @@ resource "aws_secretsmanager_secret_version" "auth_token_secret" {
   secret_string = var.auth_token_secret
 }
 
+# Outlook bridge credentials. Both secrets always exist (so the worker task
+# definition can reference them); whichever auth mode is unused just holds
+# an empty string, which the worker treats as "not configured".
+resource "aws_secretsmanager_secret" "outlook_client_secret" {
+  name = "${var.project_name}/outlook_client_secret"
+}
+
+resource "aws_secretsmanager_secret_version" "outlook_client_secret" {
+  secret_id     = aws_secretsmanager_secret.outlook_client_secret.id
+  secret_string = var.outlook_client_secret
+}
+
+resource "aws_secretsmanager_secret" "outlook_refresh_token" {
+  name = "${var.project_name}/outlook_refresh_token"
+}
+
+resource "aws_secretsmanager_secret_version" "outlook_refresh_token" {
+  secret_id     = aws_secretsmanager_secret.outlook_refresh_token.id
+  secret_string = var.outlook_refresh_token
+}
+
 # Instance role: what the *running* backend container/task can access -
-# read-only access to just these four secrets, for App Runner and the ECS
+# read-only access to just these secrets, for App Runner and the ECS
 # worker tasks alike.
 data "aws_iam_policy_document" "read_qinora_secrets" {
   statement {
@@ -49,6 +70,8 @@ data "aws_iam_policy_document" "read_qinora_secrets" {
       aws_secretsmanager_secret.openai_api_key.arn,
       aws_secretsmanager_secret.email_webhook_secret.arn,
       aws_secretsmanager_secret.auth_token_secret.arn,
+      aws_secretsmanager_secret.outlook_client_secret.arn,
+      aws_secretsmanager_secret.outlook_refresh_token.arn,
     ]
   }
 }

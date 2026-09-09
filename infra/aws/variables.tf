@@ -50,3 +50,52 @@ variable "frontend_image_tag" {
   type    = string
   default = "latest"
 }
+
+# --- Outlook / Microsoft 365 intake bridge (qinora.workers.outlook_bridge) ---
+# Either outlook_client_secret (application auth, Sandahls admin consent) or
+# outlook_refresh_token (delegated auth via `python -m
+# qinora.workers.outlook_bridge login`) must be non-empty for the bridge to
+# start; leave both empty to deploy without the bridge scheduled at all.
+
+variable "outlook_tenant_id" {
+  description = "Entra ID tenant of the Sandahls mailboxes (GUID or sandahls.com)."
+  type        = string
+  default     = ""
+}
+
+variable "outlook_client_id" {
+  description = "Application (client) ID of the QiNora app registration."
+  type        = string
+  default     = ""
+}
+
+variable "outlook_client_secret" {
+  description = "Client secret for application (client-credentials) auth. Pass via TF_VAR_outlook_client_secret."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "outlook_refresh_token" {
+  description = "Delegated refresh token for one mailbox, printed by the `login` helper. Pass via TF_VAR_outlook_refresh_token."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "outlook_mailboxes" {
+  description = "Comma-separated mailboxes the bridge watches (application auth only)."
+  type        = string
+  default     = "test.spedition@sandahls.com,qinora.ai@sandahls.com"
+}
+
+variable "outlook_send_mailbox" {
+  description = "Mailbox new outbound mail (carrier RFQs, unthreaded quotes) is sent from."
+  type        = string
+  default     = "test.spedition@sandahls.com"
+}
+
+variable "outlook_sender_name" {
+  type    = string
+  default = "Sandahls"
+}

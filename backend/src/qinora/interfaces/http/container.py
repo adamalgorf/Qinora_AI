@@ -4,6 +4,7 @@ from typing import Any
 
 from qinora.application import (
     AgentConfigService,
+    AnalyzeRFQUseCase,
     BookingWorkflow,
     CarrierOfferParsingAgent,
     CarrierRfqCollector,
@@ -24,6 +25,7 @@ from qinora.application import (
     UpdateRequestUseCase,
 )
 from qinora.application.email_intake_orchestrator import EmailIntakeOrchestrator
+from qinora.application.llm_ports import GraphExecutor
 from qinora.application.ports import (
     AgentDispatcher,
     CarrierOfferParsingLLM,
@@ -43,9 +45,11 @@ from qinora.application.thread_matching import ThreadMatchingUseCase
 from qinora.infrastructure.email_dispatch import EmailIntakeDispatcher
 from qinora.infrastructure.llm import (
     OpenAICarrierOfferParsingLLM,
+    OpenAIGraphExecutor,
     OpenAIQuoteReplyInterpretationLLM,
     OpenAIRequestParsingLLM,
     StubCarrierOfferParsingLLM,
+    StubGraphExecutor,
     StubQuoteReplyInterpretationLLM,
     StubRequestParsingLLM,
 )
@@ -122,6 +126,12 @@ def build_quote_reply_interpretation_llm(settings: Settings) -> QuoteReplyInterp
     return StubQuoteReplyInterpretationLLM()
 
 
+def build_graph_executor(settings: Settings) -> GraphExecutor:
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAIGraphExecutor(settings)
+    return StubGraphExecutor()
+
+
 @dataclass(frozen=True)
 class AppContainer:
     settings: Settings
@@ -156,6 +166,8 @@ class AppContainer:
     carrier_write_repository: CarrierWriteRepository
     carrier_rfq_collector: CarrierRfqCollector
     email_intake_orchestrator: EmailIntakeOrchestrator
+    graph_executor: GraphExecutor
+    analyze_rfq_use_case: AnalyzeRFQUseCase
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -264,6 +276,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_collector,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
+    graph_executor = build_graph_executor(settings)
+    analyze_rfq_use_case = AnalyzeRFQUseCase(graph_executor)
 
     return AppContainer(
         settings=settings,
@@ -324,6 +338,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
+        graph_executor=graph_executor,
+        analyze_rfq_use_case=analyze_rfq_use_case,
     )
 
 
@@ -431,6 +447,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_collector,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
+    graph_executor = build_graph_executor(settings)
+    analyze_rfq_use_case = AnalyzeRFQUseCase(graph_executor)
 
     return AppContainer(
         settings=settings,
@@ -491,4 +509,6 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
+        graph_executor=graph_executor,
+        analyze_rfq_use_case=analyze_rfq_use_case,
     )

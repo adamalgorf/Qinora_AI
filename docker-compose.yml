@@ -101,6 +101,35 @@ services:
     healthcheck:
       disable: true
 
+  # Outlook / Microsoft 365 intake bridge - replaces the Gmail Apps Script.
+  # Off by default (profile) since it needs real Graph credentials; run with
+  # `docker compose --profile outlook up` once .env has the OUTLOOK_* values.
+  outlook-bridge:
+    build:
+      context: ./backend
+    profiles:
+      - outlook
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *worker_environment
+      QINORA_API_BASE_URL: http://backend:8000
+      OUTLOOK_TENANT_ID: ${OUTLOOK_TENANT_ID:-}
+      OUTLOOK_CLIENT_ID: ${OUTLOOK_CLIENT_ID:-}
+      OUTLOOK_CLIENT_SECRET: ${OUTLOOK_CLIENT_SECRET:-}
+      OUTLOOK_REFRESH_TOKEN: ${OUTLOOK_REFRESH_TOKEN:-}
+      OUTLOOK_MAILBOXES: ${OUTLOOK_MAILBOXES:-}
+      OUTLOOK_SEND_MAILBOX: ${OUTLOOK_SEND_MAILBOX:-}
+      OUTLOOK_SENDER_NAME: ${OUTLOOK_SENDER_NAME:-Sandahls}
+    volumes:
+      - qinora_data:/app/data
+    entrypoint: sh -c
+    command:
+      - 'while true; do python -m qinora.workers.outlook_bridge; sleep 60; done'
+    healthcheck:
+      disable: true
+
   postgres:
     image: postgres:16-alpine
     profiles:

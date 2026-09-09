@@ -67,20 +67,56 @@ locals {
     { name = "QINORA_AUTH_TOKEN_SECRET", valueFrom = aws_secretsmanager_secret.auth_token_secret.arn },
   ]
 
-  workers = {
-    outbound_mailer = {
-      module      = "qinora.workers.outbound_mailer"
-      schedule    = "rate(1 minute)"  # was a 30s loop in docker-compose.yml
-    }
-    tracking_simulator = {
-      module      = "qinora.workers.tracking_simulator"
-      schedule    = "rate(1 minute)"  # was a 60s loop
-    }
-    stale_request_escalator = {
-      module      = "qinora.workers.stale_request_escalator"
-      schedule    = "rate(5 minutes)" # matches the 300s loop exactly
-    }
-  }
+  # The Outlook bridge (the Microsoft 365 replacement for the Gmail Apps
+  # Script in integrations/gmail-intake-bridge) talks to the backend over
+  # HTTP exactly like Code.gs did, so it needs the backend's public URL plus
+  # its own Graph credentials on top of the shared worker env.
+  outlook_bridge_enabled = var.outlook_client_secret != "" || var.outlook_refresh_token != ""
+
+  outlook_bridge_env = [
+    { name = "QINORA_API_BASE_URL", value = "https://${aws_apprunner_service.backend.service_url}" },
+    { name = "OUTLOOK_TENANT_ID", value = var.outlook_tenant_id },
+    { name = "OUTLOOK_CLIENT_ID", value = var.outlook_client_id },
+    { name = "OUTLOOK_MAILBOXES", value = var.outlook_mailboxes },
+    { name = "OUTLOOK_SEND_MAILBOX", value = var.outlook_send_mailbox },
+    { name = "OUTLOOK_SENDER_NAME", value = var.outlook_sender_name },
+  ]
+
+  outlook_bridge_secrets = [
+    { name = "OUTLOOK_CLIENT_SECRET", valueFrom = aws_secretsmanager_secret.outlook_client_secret.arn },
+    { name = "OUTLOOK_REFRESH_TOKEN", valueFrom = aws_secretsmanager_secret.outlook_refresh_token.arn },
+  ]
+
+  workers = merge(
+    {
+      outbound_mailer = {
+        module   = "qinora.workers.outbound_mailer"
+        schedule = "rate(1 minute)" # was a 30s loop in docker-compose.yml
+        env      = []
+        secrets  = []
+      }
+      tracking_simulator = {
+        module   = "qinora.workers.tracking_simulator"
+        schedule = "rate(1 minute)" # was a 60s loop
+        env      = []
+        secrets  = []
+      }
+      stale_request_escalator = {
+        module   = "qinora.workers.stale_request_escalator"
+        schedule = "rate(5 minutes)" # matches the 300s loop exactly
+        env      = []
+        secrets  = []
+      }
+    },
+    local.outlook_bridge_enabled ? {
+      outlook_bridge = {
+        module   = "qinora.workers.outlook_bridge"
+        schedule = "rate(1 minute)" # Code.gs ran forwardNewMail every minute
+        env      = local.outlook_bridge_env
+        secrets  = local.outlook_bridge_secrets
+      }
+    } : {}
+  )
 }
 
 resource "aws_ecs_task_definition" "worker" {
@@ -99,8 +135,8 @@ resource "aws_ecs_task_definition" "worker" {
     image     = "${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
     essential = true
     command   = ["python", "-m", each.value.module]
-    environment = local.worker_env
-    secrets     = local.worker_secrets
+    environment = concat(local.worker_env, each.value.env)
+    secrets     = concat(local.worker_secrets, each.value.secrets)
     logConfiguration = {
       logDriver = "awslogs"
       options = {

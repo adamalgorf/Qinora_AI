@@ -5,6 +5,7 @@ from qinora.application.agent_config import (
     UpdateAgentConfigCommand,
     should_auto_act,
 )
+from qinora.application.analyze_rfq import AnalyzeRFQUseCase
 from qinora.application.auth import AuthContext, AuthorizationError, Role, require_any_role
 from qinora.application.booking_workflow import BookingResult, BookingWorkflow, BookQuoteCommand
 from qinora.application.carrier_offer_agent import (
@@ -92,6 +93,7 @@ __all__ = [
     "AgentDispatcher",
     "AgentAutoMode",
     "AgentConfigService",
+    "AnalyzeRFQUseCase",
     "AuthContext",
     "AuthorizationError",
     "BookQuoteCommand",
