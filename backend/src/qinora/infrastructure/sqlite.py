@@ -1,6 +1,7 @@
 import json
 import secrets
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -13,8 +14,13 @@ from qinora.application.read_models import (
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
+    CaseNoteRecord,
     ClarificationOutboundRecord,
+    ContactDetailRecord,
     ContactRecord,
+    DocumentContentRecord,
+    DocumentDetailRecord,
+    DocumentRecord,
     InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
@@ -291,6 +297,32 @@ class SQLiteDatabase:
                   sent_at text,
                   error_message text
                 );
+
+                create table if not exists documents (
+                  id text primary key,
+                  public_id text not null unique,
+                  filename text not null,
+                  content_type text not null,
+                  size_bytes integer not null,
+                  content blob not null,
+                  document_type text,
+                  status text not null default 'pending_review',
+                  ai_confidence real,
+                  extracted_fields text not null default '{}',
+                  request_id text,
+                  shipment_id text,
+                  contact_id text,
+                  uploaded_by text,
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists case_notes (
+                  id text primary key,
+                  request_id text not null,
+                  author text not null,
+                  body_text text not null,
+                  created_at text not null default current_timestamp
+                );
                 """
             )
             _add_column_if_missing(
@@ -351,6 +383,28 @@ class SQLiteDatabase:
             _add_column_if_missing(
                 connection, "clarification_outbound", "in_reply_to_message_id", "text"
             )
+            _add_column_if_missing(connection, "transport_requests", "assignee", "text")
+            _add_column_if_missing(connection, "transport_requests", "sla_due_at", "text")
+            _add_column_if_missing(
+                connection,
+                "transport_requests",
+                "priority",
+                "text not null default 'normal'",
+            )
+            _add_column_if_missing(connection, "contacts", "segment", "text")
+            _add_column_if_missing(connection, "contacts", "customer_since", "text")
+            _add_column_if_missing(connection, "contacts", "sla_tolerance_hours", "real")
+            _add_column_if_missing(connection, "contacts", "account_owner", "text")
+            _add_column_if_missing(
+                connection,
+                "contacts",
+                "health_status",
+                "text not null default 'good'",
+            )
+            _add_column_if_missing(connection, "contacts", "contract_note", "text")
+            _add_column_if_missing(connection, "contacts", "customs_contact_name", "text")
+            _add_column_if_missing(connection, "contacts", "customs_contact_email", "text")
+            _add_column_if_missing(connection, "contacts", "annual_volume_estimate", "real")
             self._seed(connection)
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
@@ -780,7 +834,8 @@ class SQLiteOperationalReadRepository:
             RequestRecord(**dict(row))
             for row in self._fetch_all(
                 """
-                select id, public_id, customer, lane, mode, status, weight_kg
+                select id, public_id, customer, lane, mode, status, weight_kg,
+                  assignee, sla_due_at, priority
                 from transport_requests
                 order by public_id
                 """
@@ -790,7 +845,8 @@ class SQLiteOperationalReadRepository:
     async def get_request_detail(self, request_id: str) -> RequestDetailRecord | None:
         row = self._fetch_one(
             """
-            select id, public_id, customer, lane, mode, status, weight_kg, review_reason, created_at
+            select id, public_id, customer, lane, mode, status, weight_kg, review_reason,
+              created_at, assignee, sla_due_at, priority
             from transport_requests
             where id = ?
             """,
@@ -819,6 +875,9 @@ class SQLiteOperationalReadRepository:
                 mode=row["mode"],
                 status=row["status"],
                 weight_kg=row["weight_kg"],
+                assignee=row["assignee"],
+                sla_due_at=row["sla_due_at"],
+                priority=row["priority"],
             ),
             review_reason=row["review_reason"],
             created_at=row["created_at"],
@@ -974,12 +1033,23 @@ class SQLiteOperationalReadRepository:
                 default_markup_percent=row["default_markup_percent"],
                 default_incoterms=row["default_incoterms"],
                 payment_terms=row["payment_terms"],
+                segment=row["segment"],
+                customer_since=row["customer_since"],
+                sla_tolerance_hours=row["sla_tolerance_hours"],
+                account_owner=row["account_owner"],
+                health_status=row["health_status"],
+                contract_note=row["contract_note"],
+                customs_contact_name=row["customs_contact_name"],
+                customs_contact_email=row["customs_contact_email"],
+                annual_volume_estimate=row["annual_volume_estimate"],
             )
             for row in self._fetch_all(
                 """
                 select
                   id, public_id, display_name, email, domain, default_markup_percent,
-                  default_incoterms, payment_terms
+                  default_incoterms, payment_terms, segment, customer_since,
+                  sla_tolerance_hours, account_owner, health_status, contract_note,
+                  customs_contact_name, customs_contact_email, annual_volume_estimate
                 from contacts
                 where is_active = 1
                 order by display_name
@@ -1027,7 +1097,7 @@ class SQLiteOperationalReadRepository:
             AgentLogRecord(**dict(row))
             for row in self._fetch_all(
                 """
-                select agent_key, agent_name, step, entity_id, confidence
+                select agent_key, agent_name, step, entity_id, confidence, created_at
                 from agent_logs
                 order by created_at desc
                 """
@@ -1074,6 +1144,101 @@ class SQLiteOperationalReadRepository:
             )
         ]
 
+    async def list_documents(self) -> list[DocumentRecord]:
+        return [
+            DocumentRecord(
+                id=row["id"],
+                public_id=row["public_id"],
+                filename=row["filename"],
+                content_type=row["content_type"],
+                size_bytes=row["size_bytes"],
+                document_type=row["document_type"],
+                status=row["status"],
+                ai_confidence=row["ai_confidence"],
+                request_id=row["request_id"],
+                shipment_id=row["shipment_id"],
+                contact_id=row["contact_id"],
+                created_at=row["created_at"],
+            )
+            for row in self._fetch_all(
+                """
+                select id, public_id, filename, content_type, size_bytes, document_type,
+                  status, ai_confidence, request_id, shipment_id, contact_id, created_at
+                from documents
+                order by created_at desc
+                """
+            )
+        ]
+
+    async def list_case_notes(self, request_id: str) -> list[CaseNoteRecord]:
+        return [
+            CaseNoteRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select id, request_id, author, body_text, created_at
+                from case_notes
+                where request_id = ?
+                order by created_at
+                """,
+                (request_id,),
+            )
+        ]
+
+    async def get_contact_detail(self, contact_id: str) -> ContactDetailRecord | None:
+        contact_row = self._fetch_one(
+            """
+            select
+              id, public_id, display_name, email, domain, default_markup_percent,
+              default_incoterms, payment_terms, segment, customer_since,
+              sla_tolerance_hours, account_owner, health_status, contract_note,
+              customs_contact_name, customs_contact_email, annual_volume_estimate
+            from contacts
+            where id = ?
+            """,
+            (contact_id,),
+        )
+        if contact_row is None:
+            return None
+
+        # Best-effort join: no adapter in this codebase ever populates a
+        # contact_id FK on transport_requests, so shipments are matched back
+        # to this contact via transport_requests.customer == this contact's
+        # display_name (see ContactDetailRecord's docstring).
+        shipment_rows = self._fetch_all(
+            """
+            select s.status, s.lane
+            from shipments s
+            join quotes q on q.id = s.quote_id
+            join transport_requests r on r.id = q.request_id
+            where r.customer = ?
+            order by s.rowid desc
+            """,
+            (contact_row["display_name"],),
+        )
+        active_rows = [
+            row for row in shipment_rows if row["status"] not in ("delivered", "cancelled")
+        ]
+
+        response_rows = self._fetch_all(
+            """
+            select e.id as email_id, e.created_at as email_at, min(a.created_at) as agent_at
+            from email_inbound e
+            join transport_requests r on r.id = e.request_id
+            left join agent_logs a
+              on a.entity_id = r.public_id and a.created_at >= e.created_at
+            where e.request_id is not null and r.customer = ?
+            group by e.id, e.created_at
+            """,
+            (contact_row["display_name"],),
+        )
+
+        return ContactDetailRecord(
+            contact=ContactRecord(**dict(contact_row)),
+            active_jobs=len(active_rows),
+            active_route=active_rows[0]["lane"] if active_rows else None,
+            avg_ai_response_minutes=_average_response_minutes_sqlite(response_rows),
+        )
+
     def _fetch_all(self, query: str, parameters: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         with self._database.connect() as connection:
             return list(connection.execute(query, parameters).fetchall())
@@ -1109,6 +1274,118 @@ class SQLiteContactReadRepository:
             ).fetchone()
 
         return ContactRecord(**dict(row)) if row else None
+
+
+class SQLiteDocumentRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def get_document(self, document_id: str) -> DocumentDetailRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select id, public_id, filename, content_type, size_bytes, document_type,
+                  status, ai_confidence, extracted_fields, request_id, shipment_id,
+                  contact_id, created_at
+                from documents
+                where id = ?
+                """,
+                (document_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return DocumentDetailRecord(
+            document=_document_from_sqlite_row(row),
+            extracted_fields=json.loads(row["extracted_fields"] or "{}"),
+        )
+
+    async def get_document_content(self, document_id: str) -> DocumentContentRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                select filename, content_type, content
+                from documents
+                where id = ?
+                """,
+                (document_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+        return DocumentContentRecord(
+            filename=row["filename"],
+            content_type=row["content_type"],
+            content=bytes(row["content"]),
+        )
+
+    async def create_document(
+        self,
+        *,
+        filename: str,
+        content_type: str,
+        size_bytes: int,
+        content: bytes,
+        document_type: str | None,
+        status: str,
+        ai_confidence: float | None,
+        extracted_fields: dict,
+        request_id: str | None = None,
+        shipment_id: str | None = None,
+        contact_id: str | None = None,
+        uploaded_by: str | None = None,
+    ) -> DocumentRecord:
+        document_id = str(uuid4())
+        with self._database.connect() as connection:
+            public_id = _next_public_id(connection, "documents", "DOC")
+            row = connection.execute(
+                """
+                insert into documents
+                  (
+                    id, public_id, filename, content_type, size_bytes, content,
+                    document_type, status, ai_confidence, extracted_fields, request_id,
+                    shipment_id, contact_id, uploaded_by
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                returning id, public_id, filename, content_type, size_bytes, document_type,
+                  status, ai_confidence, request_id, shipment_id, contact_id, created_at
+                """,
+                (
+                    document_id,
+                    public_id,
+                    filename,
+                    content_type,
+                    size_bytes,
+                    content,
+                    document_type,
+                    status,
+                    ai_confidence,
+                    json.dumps(extracted_fields),
+                    request_id,
+                    shipment_id,
+                    contact_id,
+                    uploaded_by,
+                ),
+            ).fetchone()
+        return _document_from_sqlite_row(row)
+
+
+class SQLiteCaseNoteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_note(self, request_id: str, *, author: str, body_text: str) -> CaseNoteRecord:
+        note_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into case_notes (id, request_id, author, body_text)
+                values (?, ?, ?, ?)
+                returning id, request_id, author, body_text, created_at
+                """,
+                (note_id, request_id, author, body_text),
+            ).fetchone()
+        return CaseNoteRecord(**dict(row))
 
 
 class SQLiteAgentLogWriteRepository:
@@ -2577,6 +2854,47 @@ def _clarification_outbound_from_sqlite_row(row: sqlite3.Row) -> ClarificationOu
 
 def _inbound_email_from_sqlite_row(row: sqlite3.Row) -> InboundEmailRecord:
     return InboundEmailRecord(**dict(row))
+
+
+def _document_from_sqlite_row(row: sqlite3.Row) -> DocumentRecord:
+    return DocumentRecord(
+        id=row["id"],
+        public_id=row["public_id"],
+        filename=row["filename"],
+        content_type=row["content_type"],
+        size_bytes=row["size_bytes"],
+        document_type=row["document_type"],
+        status=row["status"],
+        ai_confidence=row["ai_confidence"],
+        request_id=row["request_id"],
+        shipment_id=row["shipment_id"],
+        contact_id=row["contact_id"],
+        created_at=row["created_at"],
+    )
+
+
+def _parse_sqlite_timestamp(value: str) -> datetime | None:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+
+
+def _average_response_minutes_sqlite(rows: list[sqlite3.Row]) -> float | None:
+    """Average minutes from an inbound email to the first agent_logs entry
+    against the same request. None - never a fabricated number - when no
+    row has a matching agent_at.
+    """
+    diffs: list[float] = []
+    for row in rows:
+        agent_at = _parse_sqlite_timestamp(row["agent_at"])
+        email_at = _parse_sqlite_timestamp(row["email_at"])
+        if agent_at is None or email_at is None:
+            continue
+        diffs.append((agent_at - email_at).total_seconds() / 60)
+    if not diffs:
+        return None
+    return sum(diffs) / len(diffs)
 
 
 def _count(connection: sqlite3.Connection, table: str) -> int:

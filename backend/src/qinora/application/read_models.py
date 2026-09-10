@@ -90,6 +90,13 @@ class RequestRecord:
     mode: str
     status: str
     weight_kg: float
+    # Case-view fields added by migrations/0011_case_fields.sql - composed
+    # over transport_requests, not a separate "cases" table. Defaulted so
+    # every existing construction site (create/update_transport_request,
+    # tests, seed data) keeps working unchanged.
+    assignee: str | None = None
+    sla_due_at: str | None = None
+    priority: str = "normal"
 
 
 @dataclass(frozen=True)
@@ -219,6 +226,37 @@ class ContactRecord:
     default_markup_percent: float
     default_incoterms: str | None
     payment_terms: str | None
+    # Customer-profile fields added by migrations/0012_customer_profile_fields.sql.
+    # All optional/defaulted so existing construction sites (list_contacts,
+    # find_by_sender, tests) keep working unchanged.
+    segment: str | None = None
+    customer_since: str | None = None
+    sla_tolerance_hours: float | None = None
+    account_owner: str | None = None
+    health_status: str = "good"
+    contract_note: str | None = None
+    customs_contact_name: str | None = None
+    customs_contact_email: str | None = None
+    annual_volume_estimate: float | None = None
+
+
+@dataclass(frozen=True)
+class ContactDetailRecord:
+    """GET /contacts/{id} - a contact plus best-effort operational signals.
+
+    active_jobs/active_route are derived from shipments joined back to this
+    contact via transport_requests.customer == contacts.display_name, since
+    no adapter in this codebase ever populates a contact_id FK on
+    transport_requests (see infrastructure/postgres.py's
+    PostgresOperationalReadRepository.get_contact_detail for the join and a
+    fuller note). avg_ai_response_minutes is None when no inbound email for
+    this contact was ever threaded to a request - never fabricated.
+    """
+
+    contact: ContactRecord
+    active_jobs: int
+    active_route: str | None
+    avg_ai_response_minutes: float | None
 
 
 @dataclass(frozen=True)
@@ -228,6 +266,13 @@ class AgentLogRecord:
     step: str
     entity_id: str
     confidence: float
+    # Populated by list_agent_logs() (both adapters) so analytics_summary()'s
+    # workload_by_weekday grouping and the Cases activity feed's timestamp
+    # sort have something to key off - the agent_logs table already had this
+    # column, it just wasn't surfaced on the record before. Empty string
+    # default keeps AgentLogWriteRepository.record()'s call sites (which
+    # don't round-trip through a SELECT) working unchanged.
+    created_at: str = ""
 
 
 @dataclass(frozen=True)
@@ -392,3 +437,51 @@ class ClarificationOutboundRecord:
     sent_at: str | None = None
     error_message: str | None = None
     in_reply_to_message_id: str | None = None
+
+
+@dataclass(frozen=True)
+class DocumentRecord:
+    """One documents row (migrations/0010_documents.sql), minus the raw
+    bytes - used for list/detail metadata everywhere except
+    get_document_content().
+    """
+
+    id: str
+    public_id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    document_type: str | None
+    status: str
+    ai_confidence: float | None
+    request_id: str | None
+    shipment_id: str | None
+    contact_id: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
+class DocumentDetailRecord:
+    document: DocumentRecord
+    extracted_fields: dict
+
+
+@dataclass(frozen=True)
+class DocumentContentRecord:
+    """The raw bytes for GET /documents/{id}/content, kept separate from
+    DocumentRecord so a plain list_documents()/get_document() call never
+    pulls a potentially-8MB bytea/BLOB column off the wire.
+    """
+
+    filename: str
+    content_type: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class CaseNoteRecord:
+    id: str
+    request_id: str
+    author: str
+    body_text: str
+    created_at: str

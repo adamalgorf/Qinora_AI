@@ -19,12 +19,18 @@ from qinora.application.carrier_rfq_collector import (
     CollectCarrierRfqsResult,
     FinalizedBatch,
 )
+from qinora.application.case_notes import AddCaseNoteCommand, CaseNotesService
 from qinora.application.contact_matching import (
     ContactMatchingUseCase,
     MatchContactCommand,
     MatchContactResult,
 )
 from qinora.application.demo_flow import DemoFlowResult, DemoFlowUseCase
+from qinora.application.document_intake import (
+    DocumentIntakeService,
+    UnsupportedDocumentError,
+    UploadDocumentCommand,
+)
 from qinora.application.email_webhook import EmailWebhookCommand, EmailWebhookUseCase
 from qinora.application.invoice_audit import (
     CreateInvoiceAuditCommand,
@@ -89,6 +95,7 @@ from qinora.application.tracking_simulator import (
 )
 
 __all__ = [
+    "AddCaseNoteCommand",
     "AgentDispatcher",
     "AgentAutoMode",
     "AgentConfigService",
@@ -100,8 +107,10 @@ __all__ = [
     "CarrierOfferParsingAgent",
     "CarrierRfqCollector",
     "CarrierRfqTargeting",
+    "CaseNotesService",
     "CollectCarrierRfqsCommand",
     "CollectCarrierRfqsResult",
+    "DocumentIntakeService",
     "FinalizedBatch",
     "ParseCarrierOfferCommand",
     "ParseCarrierOfferResult",
@@ -126,6 +135,8 @@ __all__ = [
     "DEFAULT_AGENT_CONFIGS",
     "DemoFlowResult",
     "DemoFlowUseCase",
+    "UnsupportedDocumentError",
+    "UploadDocumentCommand",
     "PricingGateError",
     "ProcessOutboundQueueCommand",
     "ProcessOutboundQueueResult",

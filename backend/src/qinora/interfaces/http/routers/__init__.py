@@ -1,9 +1,13 @@
 from qinora.interfaces.http.routers.agents import router as agents_router
+from qinora.interfaces.http.routers.analytics import router as analytics_router
 from qinora.interfaces.http.routers.auth import router as auth_router
+from qinora.interfaces.http.routers.automations import router as automations_router
 from qinora.interfaces.http.routers.carriers import router as carriers_router
+from qinora.interfaces.http.routers.cases import router as cases_router
 from qinora.interfaces.http.routers.contacts import router as contacts_router
 from qinora.interfaces.http.routers.dashboard import router as dashboard_router
 from qinora.interfaces.http.routers.demo import router as demo_router
+from qinora.interfaces.http.routers.documents import router as documents_router
 from qinora.interfaces.http.routers.health import router as health_router
 from qinora.interfaces.http.routers.inbox import router as inbox_router
 from qinora.interfaces.http.routers.outbound import router as outbound_router
@@ -30,4 +34,8 @@ routers = [
     rate_profiles_router,
     webhooks_router,
     outbound_router,
+    documents_router,
+    cases_router,
+    automations_router,
+    analytics_router,
 ]

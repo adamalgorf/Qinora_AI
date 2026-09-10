@@ -278,17 +278,19 @@ def test_global_search_returns_deep_links_across_entities(client: TestClient) ->
     assert response.status_code == 200
     results = response.json()
     assert any(
-        item["entity_type"] == "request" and item["href"] == "/requests?highlight=req-001"
-        for item in results
+        item["entity_type"] == "request" and item["href"] == "/cases/req-001" for item in results
     )
     assert any(
         item["entity_type"] == "contact" and item["href"] == "/contacts?highlight=cnt-001"
         for item in results
     )
 
+    # shp-001's quote (quo-003) is linked back to req-001, so the search
+    # result deep-links straight into that case rather than a bare
+    # /shipments?highlight= URL (see OperationalQueries._searchable_result_groups).
     shipment_response = client.get("/search", params={"q": "SHP-0001"})
     assert shipment_response.status_code == 200
-    assert shipment_response.json()[0]["href"] == "/shipments?highlight=shp-001"
+    assert shipment_response.json()[0]["href"] == "/cases/req-001"
 
 
 def test_global_search_requires_operator_role(client: TestClient) -> None:

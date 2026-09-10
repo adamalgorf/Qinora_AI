@@ -8,9 +8,11 @@ from qinora.application import (
     CarrierOfferParsingAgent,
     CarrierRfqCollector,
     CarrierRfqTargeting,
+    CaseNotesService,
     ContactMatchingUseCase,
     CreateRequestUseCase,
     DemoFlowUseCase,
+    DocumentIntakeService,
     EmailWebhookUseCase,
     InvoiceAuditWorkflow,
     OperationalQueries,
@@ -30,7 +32,9 @@ from qinora.application.ports import (
     CarrierRfqOutboundRepository,
     CarrierRfqRepository,
     CarrierWriteRepository,
+    CaseNoteRepository,
     ClarificationOutboundRepository,
+    DocumentRepository,
     OutboundReplyRepository,
     QuoteReplyInterpretationLLM,
     RateProfileRepository,
@@ -58,9 +62,11 @@ from qinora.infrastructure.postgres import (
     PostgresCarrierRfqOutboundRepository,
     PostgresCarrierRfqRepository,
     PostgresCarrierWriteRepository,
+    PostgresCaseNoteRepository,
     PostgresClarificationOutboundRepository,
     PostgresContactReadRepository,
     PostgresDatabase,
+    PostgresDocumentRepository,
     PostgresEmailThreadRepository,
     PostgresInboundEmailRepository,
     PostgresInvoiceWriteRepository,
@@ -84,9 +90,11 @@ from qinora.infrastructure.sqlite import (
     SQLiteCarrierRfqOutboundRepository,
     SQLiteCarrierRfqRepository,
     SQLiteCarrierWriteRepository,
+    SQLiteCaseNoteRepository,
     SQLiteClarificationOutboundRepository,
     SQLiteContactReadRepository,
     SQLiteDatabase,
+    SQLiteDocumentRepository,
     SQLiteEmailThreadRepository,
     SQLiteInboundEmailRepository,
     SQLiteInvoiceWriteRepository,
@@ -156,6 +164,10 @@ class AppContainer:
     carrier_write_repository: CarrierWriteRepository
     carrier_rfq_collector: CarrierRfqCollector
     email_intake_orchestrator: EmailIntakeOrchestrator
+    document_repository: DocumentRepository
+    document_intake_service: DocumentIntakeService
+    case_note_repository: CaseNoteRepository
+    case_notes_service: CaseNotesService
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -265,6 +277,11 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
 
+    document_repository = SQLiteDocumentRepository(database)
+    document_intake_service = DocumentIntakeService(document_repository)
+    case_note_repository = SQLiteCaseNoteRepository(database)
+    case_notes_service = CaseNotesService(case_note_repository)
+
     return AppContainer(
         settings=settings,
         database=database,
@@ -324,6 +341,10 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
+        document_repository=document_repository,
+        document_intake_service=document_intake_service,
+        case_note_repository=case_note_repository,
+        case_notes_service=case_notes_service,
     )
 
 
@@ -432,6 +453,11 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
 
+    document_repository = PostgresDocumentRepository(database)
+    document_intake_service = DocumentIntakeService(document_repository)
+    case_note_repository = PostgresCaseNoteRepository(database)
+    case_notes_service = CaseNotesService(case_note_repository)
+
     return AppContainer(
         settings=settings,
         database=database,
@@ -491,4 +517,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
+        document_repository=document_repository,
+        document_intake_service=document_intake_service,
+        case_note_repository=case_note_repository,
+        case_notes_service=case_notes_service,
     )
