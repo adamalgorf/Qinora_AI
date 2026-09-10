@@ -226,6 +226,16 @@ module "cloud_run" {
     EMAIL_WEBHOOK_SECRET     = { secret_id = google_secret_manager_secret.email_webhook_secret.secret_id }
     QINORA_AUTH_TOKEN_SECRET = { secret_id = google_secret_manager_secret.auth_token_secret.secret_id }
   }
+
+  # secret_env_vars above only names the parent secret - Cloud Run resolves
+  # "latest" at creation time, so it also needs the *version* resources to
+  # exist first, which referencing only the secret's id doesn't guarantee.
+  depends_on = [
+    module.secrets,
+    google_secret_manager_secret_version.openai_api_key,
+    google_secret_manager_secret_version.email_webhook_secret,
+    google_secret_manager_secret_version.auth_token_secret,
+  ]
 }
 
 # --- Frontend static site + external HTTPS load balancer ---------------------
@@ -280,6 +290,7 @@ module "outbound_mailer" {
 
   project_id            = var.project_id
   region                = var.region
+  scheduler_region      = var.scheduler_region
   name                  = "${var.name}-outbound-mailer"
   image                 = local.worker_image
   args                  = ["python", "-m", "qinora.workers.outbound_mailer"]
@@ -289,6 +300,8 @@ module "outbound_mailer" {
   env_vars              = local.worker_env_vars
   secret_env_vars       = local.worker_secret_env_vars
   labels                = local.labels
+
+  depends_on = [module.secrets]
 }
 
 module "tracking_simulator" {
@@ -296,6 +309,7 @@ module "tracking_simulator" {
 
   project_id            = var.project_id
   region                = var.region
+  scheduler_region      = var.scheduler_region
   name                  = "${var.name}-tracking-simulator"
   image                 = local.worker_image
   args                  = ["python", "-m", "qinora.workers.tracking_simulator"]
@@ -305,6 +319,8 @@ module "tracking_simulator" {
   env_vars              = local.worker_env_vars
   secret_env_vars       = local.worker_secret_env_vars
   labels                = local.labels
+
+  depends_on = [module.secrets]
 }
 
 module "stale_request_escalator" {
@@ -312,6 +328,7 @@ module "stale_request_escalator" {
 
   project_id            = var.project_id
   region                = var.region
+  scheduler_region      = var.scheduler_region
   name                  = "${var.name}-stale-request-escalator"
   image                 = local.worker_image
   args                  = ["python", "-m", "qinora.workers.stale_request_escalator"]
@@ -321,6 +338,8 @@ module "stale_request_escalator" {
   env_vars              = local.worker_env_vars
   secret_env_vars       = local.worker_secret_env_vars
   labels                = local.labels
+
+  depends_on = [module.secrets]
 }
 
 module "outlook_bridge" {
@@ -328,6 +347,7 @@ module "outlook_bridge" {
 
   project_id            = var.project_id
   region                = var.region
+  scheduler_region      = var.scheduler_region
   name                  = "${var.name}-outlook-bridge"
   image                 = local.worker_image
   args                  = ["python", "-m", "qinora.workers.outlook_bridge"]
@@ -350,4 +370,10 @@ module "outlook_bridge" {
   })
 
   labels = local.labels
+
+  depends_on = [
+    module.secrets,
+    google_secret_manager_secret_version.outlook_client_secret,
+    google_secret_manager_secret_version.outlook_refresh_token,
+  ]
 }

@@ -9,6 +9,12 @@ variable "region" {
   description = "europe-north2 (Stockholm) - eu-north1/europe-north1 are not the same region (Finland)"
 }
 
+variable "scheduler_region" {
+  type        = string
+  default     = "europe-west1"
+  description = "Region for Cloud Scheduler triggers - it doesn't support europe-north2, so this is a separate, valid region (see modules/scheduled_job)."
+}
+
 variable "name" {
   type    = string
   default = "qinora"
@@ -120,17 +126,17 @@ variable "outlook_client_id" {
 }
 
 variable "outlook_client_secret" {
-  description = "Leave blank if using OUTLOOK_REFRESH_TOKEN (delegated auth) instead."
+  description = "Leave as the placeholder if using OUTLOOK_REFRESH_TOKEN (delegated auth) instead - Secret Manager rejects an empty payload, so a real blank isn't an option."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "not-configured"
 }
 
 variable "outlook_refresh_token" {
-  description = "Leave blank if using OUTLOOK_CLIENT_SECRET (application auth) instead."
+  description = "Leave as the placeholder if using OUTLOOK_CLIENT_SECRET (application auth) instead - Secret Manager rejects an empty payload, so a real blank isn't an option."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "not-configured"
 }
 
 variable "outlook_mailboxes" {

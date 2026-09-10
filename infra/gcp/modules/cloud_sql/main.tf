@@ -11,6 +11,10 @@ resource "google_sql_database_instance" "postgres" {
   deletion_protection = var.deletion_protection
 
   settings {
+    # New Cloud SQL instances default to the ENTERPRISE_PLUS edition, which
+    # doesn't support shared-core tiers like db-f1-micro (only
+    # db-perf-optimized-N-*) - ENTERPRISE is the edition that still does.
+    edition           = "ENTERPRISE"
     tier              = var.tier
     availability_type = "ZONAL"
     disk_size         = var.disk_size_gb

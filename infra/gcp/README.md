@@ -78,11 +78,12 @@ existing cadence exactly.
 `outlook-bridge` needs `outlook_tenant_id`/`outlook_client_id` plus either
 `outlook_client_secret` (application auth) or `outlook_refresh_token`
 (delegated auth, from `python -m qinora.workers.outlook_bridge login`) — see
-`integrations/outlook-intake-bridge/README.md`. Leave them blank to deploy
-anyway; the job will just fail on each run (harmlessly — no
-monitoring/alerting is wired up, per scope) until you fill them in, which
-needs no infra change, just updating the secret values and letting the next
-scheduled run pick them up.
+`integrations/outlook-intake-bridge/README.md`. Leave them at their
+`"not-configured"` default (Secret Manager rejects an empty payload, so a
+real blank isn't an option) to deploy anyway; the job will just fail on
+each run (harmlessly — no monitoring/alerting is wired up, per scope) until
+you fill them in, which needs no infra change, just updating the secret
+values and letting the next scheduled run pick them up.
 
 ## Prerequisites
 

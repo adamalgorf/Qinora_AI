@@ -65,8 +65,10 @@ resource "google_cloud_run_v2_job" "job" {
 # Dedicated identity for Cloud Scheduler to invoke this one job - narrower
 # than granting it broadly on the runtime service account.
 resource "google_service_account" "invoker" {
-  project      = var.project_id
-  account_id   = "${var.name}-invoker"
+  project = var.project_id
+  # GCP service account IDs are capped at 30 chars - truncate rather than
+  # error on longer worker names (e.g. qinora-stale-request-escalator).
+  account_id   = substr("${var.name}-inv", 0, 30)
   display_name = "Cloud Scheduler invoker for ${var.name}"
 }
 
@@ -80,7 +82,7 @@ resource "google_cloud_run_v2_job_iam_member" "invoker" {
 
 resource "google_cloud_scheduler_job" "trigger" {
   project  = var.project_id
-  region   = var.region
+  region   = var.scheduler_region
   name     = "${var.name}-trigger"
   schedule = var.schedule
 

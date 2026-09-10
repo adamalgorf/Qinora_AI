@@ -38,8 +38,11 @@ cors_allowed_origins = "*"
 backend_image_tag = "bootstrap"
 
 # --- Outlook / Microsoft 365 intake bridge (see integrations/outlook-intake-bridge/README.md) ---
-# Leave blank to deploy the job anyway with no-op credentials (it'll fail
-# quietly - no monitoring/alerting is wired up per scope) until you're ready.
+# Leave tenant/client blank, and outlook_client_secret/outlook_refresh_token
+# at their "not-configured" default (see variables.tf - Secret Manager
+# rejects an empty payload), to deploy the job anyway with no-op
+# credentials. It'll fail quietly - no monitoring/alerting is wired up per
+# scope - until you're ready to fill these in for real.
 outlook_tenant_id    = ""
 outlook_client_id    = ""
 outlook_mailboxes    = "test.spedition@sandahls.com,qinora.ai@sandahls.com"

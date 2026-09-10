@@ -3,7 +3,13 @@ variable "project_id" {
 }
 
 variable "region" {
-  type = string
+  type        = string
+  description = "Region for the Cloud Run Job itself"
+}
+
+variable "scheduler_region" {
+  type        = string
+  description = "Region for the Cloud Scheduler trigger. Cloud Scheduler supports a much smaller region list than Cloud Run - europe-north2 isn't on it - so this is deliberately separate from `region`; the scheduler just calls the job's regional API endpoint over HTTP, so they don't need to match."
 }
 
 variable "name" {
