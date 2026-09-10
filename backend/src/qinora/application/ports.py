@@ -7,8 +7,13 @@ from qinora.application.read_models import (
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
+    CaseNoteRecord,
     ClarificationOutboundRecord,
+    ContactDetailRecord,
     ContactRecord,
+    DocumentContentRecord,
+    DocumentDetailRecord,
+    DocumentRecord,
     InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
@@ -222,6 +227,61 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
+        pass
+
+    async def list_documents(self) -> list[DocumentRecord]:
+        pass
+
+    async def get_contact_detail(self, contact_id: str) -> ContactDetailRecord | None:
+        pass
+
+    async def list_case_notes(self, request_id: str) -> list[CaseNoteRecord]:
+        pass
+
+
+class DocumentRepository(Protocol):
+    """Single-document reads plus the write side of the documents table
+    (migrations/0010_documents.sql). Listing lives on
+    OperationalReadRepository.list_documents() instead - it's a plain
+    tenant-scoped SELECT with the same shape as list_requests()/list_quotes(),
+    and OperationalQueries.list_cases()/get_case_detail() need it available
+    on the one repository they already hold.
+    """
+
+    async def get_document(self, document_id: str) -> DocumentDetailRecord | None:
+        pass
+
+    async def get_document_content(self, document_id: str) -> DocumentContentRecord | None:
+        pass
+
+    async def create_document(
+        self,
+        *,
+        filename: str,
+        content_type: str,
+        size_bytes: int,
+        content: bytes,
+        document_type: str | None,
+        status: str,
+        ai_confidence: float | None,
+        extracted_fields: dict,
+        request_id: str | None = None,
+        shipment_id: str | None = None,
+        contact_id: str | None = None,
+        uploaded_by: str | None = None,
+    ) -> DocumentRecord:
+        pass
+
+
+class CaseNoteRepository(Protocol):
+    """The write side of case_notes (migrations/0011_case_fields.sql).
+    Listing lives on OperationalReadRepository.list_case_notes() (same
+    split as documents above, and mirrors how OperationalTaskWriteRepository
+    is write-only while list_operational_tasks() lives on the read
+    repository).
+    """
+
+    async def create_note(self, request_id: str, *, author: str, body_text: str) -> CaseNoteRecord:
         pass
 
 

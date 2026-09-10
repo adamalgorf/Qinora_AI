@@ -13,8 +13,13 @@ from qinora.application.read_models import (
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
+    CaseNoteRecord,
     ClarificationOutboundRecord,
+    ContactDetailRecord,
     ContactRecord,
+    DocumentContentRecord,
+    DocumentDetailRecord,
+    DocumentRecord,
     InboundEmailRecord,
     InboxDetailRecord,
     InboxRecord,
@@ -172,10 +177,14 @@ class PostgresOperationalReadRepository:
                 mode=row["mode"],
                 status=row["status"],
                 weight_kg=float(row["weight_kg"] or 0),
+                assignee=row["assignee"],
+                sla_due_at=row["sla_due_at"].isoformat() if row["sla_due_at"] else None,
+                priority=row["priority"],
             )
             for row in self._fetch_all(
                 """
-                select id, public_id, customer, lane, origin, destination, mode, status, weight_kg
+                select id, public_id, customer, lane, origin, destination, mode, status,
+                  weight_kg, assignee, sla_due_at, priority
                 from public.transport_requests
                 where tenant_id = %s
                 order by public_id
@@ -189,7 +198,7 @@ class PostgresOperationalReadRepository:
             cursor.execute(
                 """
                 select id, public_id, customer, lane, origin, destination, mode, status,
-                  weight_kg, review_reason, created_at
+                  weight_kg, review_reason, created_at, assignee, sla_due_at, priority
                 from public.transport_requests
                 where tenant_id = %s and id = %s
                 """,
@@ -221,6 +230,11 @@ class PostgresOperationalReadRepository:
                 mode=request_row["mode"],
                 status=request_row["status"],
                 weight_kg=float(request_row["weight_kg"] or 0),
+                assignee=request_row["assignee"],
+                sla_due_at=(
+                    request_row["sla_due_at"].isoformat() if request_row["sla_due_at"] else None
+                ),
+                priority=request_row["priority"],
             ),
             review_reason=request_row["review_reason"],
             created_at=request_row["created_at"].isoformat(),
@@ -436,12 +450,31 @@ class PostgresOperationalReadRepository:
                 default_markup_percent=float(row["default_markup_percent"] or 0),
                 default_incoterms=row["default_incoterms"],
                 payment_terms=row["payment_terms"],
+                segment=row["segment"],
+                customer_since=row["customer_since"].isoformat() if row["customer_since"] else None,
+                sla_tolerance_hours=(
+                    float(row["sla_tolerance_hours"])
+                    if row["sla_tolerance_hours"] is not None
+                    else None
+                ),
+                account_owner=row["account_owner"],
+                health_status=row["health_status"],
+                contract_note=row["contract_note"],
+                customs_contact_name=row["customs_contact_name"],
+                customs_contact_email=row["customs_contact_email"],
+                annual_volume_estimate=(
+                    float(row["annual_volume_estimate"])
+                    if row["annual_volume_estimate"] is not None
+                    else None
+                ),
             )
             for row in self._fetch_all(
                 """
                 select
                   id, public_id, name, email, domain, default_markup_percent,
-                  default_incoterms, payment_terms
+                  default_incoterms, payment_terms, segment, customer_since,
+                  sla_tolerance_hours, account_owner, health_status, contract_note,
+                  customs_contact_name, customs_contact_email, annual_volume_estimate
                 from public.contacts
                 where tenant_id = %s and is_active = true
                 order by name
@@ -502,10 +535,11 @@ class PostgresOperationalReadRepository:
                 step=row["step"],
                 entity_id=row["entity_id"] or "",
                 confidence=float(row["confidence"] or 0),
+                created_at=row["created_at"].isoformat() if row["created_at"] else "",
             )
             for row in self._fetch_all(
                 """
-                select agent_key, agent_name, step, entity_id, confidence
+                select agent_key, agent_name, step, entity_id, confidence, created_at
                 from public.agent_logs
                 where tenant_id = %s
                 order by created_at desc
@@ -583,6 +617,109 @@ class PostgresOperationalReadRepository:
             )
         ]
 
+    async def list_documents(self) -> list[DocumentRecord]:
+        return [
+            _document_from_postgres_row(row)
+            for row in self._fetch_all(
+                """
+                select id, public_id, filename, content_type, size_bytes, document_type,
+                  status, ai_confidence, request_id, shipment_id, contact_id, created_at
+                from public.documents
+                where tenant_id = %s
+                order by created_at desc
+                """,
+                (self._database.tenant_id,),
+            )
+        ]
+
+    async def list_case_notes(self, request_id: str) -> list[CaseNoteRecord]:
+        return [
+            CaseNoteRecord(
+                id=str(row["id"]),
+                request_id=str(row["request_id"]),
+                author=row["author"],
+                body_text=row["body_text"],
+                created_at=row["created_at"].isoformat(),
+            )
+            for row in self._fetch_all(
+                """
+                select id, request_id, author, body_text, created_at
+                from public.case_notes
+                where tenant_id = %s and request_id = %s
+                order by created_at
+                """,
+                (self._database.tenant_id, request_id),
+            )
+        ]
+
+    async def get_contact_detail(self, contact_id: str) -> ContactDetailRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, public_id, name, email, domain, default_markup_percent,
+                  default_incoterms, payment_terms, segment, customer_since,
+                  sla_tolerance_hours, account_owner, health_status, contract_note,
+                  customs_contact_name, customs_contact_email, annual_volume_estimate
+                from public.contacts
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, contact_id),
+            )
+            contact_row = cursor.fetchone()
+            if contact_row is None:
+                return None
+
+            # Best-effort join: no adapter in this codebase ever populates a
+            # contact_id FK on transport_requests (see
+            # ContactDetailRecord's docstring), so we match shipments back
+            # to this contact via transport_requests.customer == this
+            # contact's name instead of a real FK chain.
+            cursor.execute(
+                """
+                select s.status, s.lane
+                from public.shipments s
+                join public.quotes q on q.id = s.quote_id
+                join public.transport_requests r on r.id = q.request_id
+                where s.tenant_id = %s and r.tenant_id = %s and r.customer = %s
+                order by s.created_at desc
+                """,
+                (self._database.tenant_id, self._database.tenant_id, contact_row["name"]),
+            )
+            shipment_rows = cursor.fetchall()
+
+            # Best-effort AI-response-time signal: for this contact's
+            # threaded inbound emails, the time to the first agent_logs
+            # entry against the same request. None (not a fabricated
+            # number) when no such pairing exists.
+            cursor.execute(
+                """
+                select e.id as email_id, e.created_at as email_at, min(a.created_at) as agent_at
+                from public.email_inbound e
+                join public.transport_requests r on r.id = e.request_id
+                left join public.agent_logs a
+                  on a.tenant_id = e.tenant_id
+                  and a.entity_id = r.public_id
+                  and a.created_at >= e.created_at
+                where e.tenant_id = %s and r.tenant_id = %s
+                  and e.request_id is not null and r.customer = %s
+                group by e.id, e.created_at
+                """,
+                (self._database.tenant_id, self._database.tenant_id, contact_row["name"]),
+            )
+            response_rows = cursor.fetchall()
+
+        active_rows = [
+            row for row in shipment_rows if row["status"] not in ("delivered", "cancelled")
+        ]
+
+        return ContactDetailRecord(
+            contact=_contact_from_postgres_row(contact_row),
+            active_jobs=len(active_rows),
+            active_route=active_rows[0]["lane"] if active_rows else None,
+            avg_ai_response_minutes=_average_response_minutes(response_rows),
+        )
+
     def _fetch_all(self, query: str, parameters: tuple[Any, ...]) -> list[dict[str, Any]]:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(query, parameters)
@@ -627,6 +764,137 @@ class PostgresContactReadRepository:
             default_markup_percent=float(row["default_markup_percent"] or 0),
             default_incoterms=row["default_incoterms"],
             payment_terms=row["payment_terms"],
+        )
+
+
+class PostgresDocumentRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def get_document(self, document_id: str) -> DocumentDetailRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, public_id, filename, content_type, size_bytes, document_type,
+                  status, ai_confidence, extracted_fields, request_id, shipment_id,
+                  contact_id, created_at
+                from public.documents
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, document_id),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return None
+        return DocumentDetailRecord(
+            document=_document_from_postgres_row(row),
+            extracted_fields=dict(row["extracted_fields"] or {}),
+        )
+
+    async def get_document_content(self, document_id: str) -> DocumentContentRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select filename, content_type, content
+                from public.documents
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, document_id),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return None
+        return DocumentContentRecord(
+            filename=row["filename"],
+            content_type=row["content_type"],
+            content=bytes(row["content"]),
+        )
+
+    async def create_document(
+        self,
+        *,
+        filename: str,
+        content_type: str,
+        size_bytes: int,
+        content: bytes,
+        document_type: str | None,
+        status: str,
+        ai_confidence: float | None,
+        extracted_fields: dict,
+        request_id: str | None = None,
+        shipment_id: str | None = None,
+        contact_id: str | None = None,
+        uploaded_by: str | None = None,
+    ) -> DocumentRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            public_id = _next_public_id(
+                cursor, "public.documents", "DOC", self._database.tenant_id
+            )
+            # request_id/shipment_id/contact_id are plain nullable uuid FKs
+            # (unlike quotes.request_id, which needs the
+            # regex-guarded-cast-or-null dance elsewhere in this file to
+            # tolerate a legacy non-uuid request_id_text value) - a bare
+            # %s binds None to SQL NULL and a real uuid string straight
+            # into the uuid column, the same way
+            # PostgresCarrierOfferWriteRepository.create_offer's nullable
+            # carrier_rfq_id column does.
+            cursor.execute(
+                """
+                insert into public.documents
+                  (
+                    tenant_id, public_id, filename, content_type, size_bytes, content,
+                    document_type, status, ai_confidence, extracted_fields, request_id,
+                    shipment_id, contact_id, uploaded_by
+                  )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                returning id, public_id, filename, content_type, size_bytes, document_type,
+                  status, ai_confidence, request_id, shipment_id, contact_id, created_at
+                """,
+                (
+                    self._database.tenant_id,
+                    public_id,
+                    filename,
+                    content_type,
+                    size_bytes,
+                    content,
+                    document_type,
+                    status,
+                    ai_confidence,
+                    Jsonb(extracted_fields),
+                    request_id,
+                    shipment_id,
+                    contact_id,
+                    uploaded_by,
+                ),
+            )
+            row = cursor.fetchone()
+        return _document_from_postgres_row(row)
+
+
+class PostgresCaseNoteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_note(self, request_id: str, *, author: str, body_text: str) -> CaseNoteRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.case_notes (tenant_id, request_id, author, body_text)
+                values (%s, %s, %s, %s)
+                returning id, request_id, author, body_text, created_at
+                """,
+                (self._database.tenant_id, request_id, author, body_text),
+            )
+            row = cursor.fetchone()
+
+        return CaseNoteRecord(
+            id=str(row["id"]),
+            request_id=str(row["request_id"]),
+            author=row["author"],
+            body_text=row["body_text"],
+            created_at=row["created_at"].isoformat(),
         )
 
 
@@ -2363,6 +2631,69 @@ def _agent_config_from_postgres_row(row: dict[str, Any]) -> AgentConfigRecord:
         min_confidence=float(config.get("min_confidence", 0)),
         config=dict(config),
     )
+
+
+def _document_from_postgres_row(row: dict[str, Any]) -> DocumentRecord:
+    return DocumentRecord(
+        id=str(row["id"]),
+        public_id=row["public_id"],
+        filename=row["filename"],
+        content_type=row["content_type"],
+        size_bytes=int(row["size_bytes"]),
+        document_type=row["document_type"],
+        status=row["status"],
+        ai_confidence=float(row["ai_confidence"]) if row["ai_confidence"] is not None else None,
+        request_id=str(row["request_id"]) if row["request_id"] else None,
+        shipment_id=str(row["shipment_id"]) if row["shipment_id"] else None,
+        contact_id=str(row["contact_id"]) if row["contact_id"] else None,
+        created_at=row["created_at"].isoformat(),
+    )
+
+
+def _contact_from_postgres_row(row: dict[str, Any]) -> ContactRecord:
+    return ContactRecord(
+        id=str(row["id"]),
+        public_id=row["public_id"],
+        display_name=row["name"],
+        email=row["email"],
+        domain=row["domain"],
+        default_markup_percent=float(row["default_markup_percent"] or 0),
+        default_incoterms=row["default_incoterms"],
+        payment_terms=row["payment_terms"],
+        segment=row["segment"],
+        customer_since=row["customer_since"].isoformat() if row["customer_since"] else None,
+        sla_tolerance_hours=(
+            float(row["sla_tolerance_hours"]) if row["sla_tolerance_hours"] is not None else None
+        ),
+        account_owner=row["account_owner"],
+        health_status=row["health_status"],
+        contract_note=row["contract_note"],
+        customs_contact_name=row["customs_contact_name"],
+        customs_contact_email=row["customs_contact_email"],
+        annual_volume_estimate=(
+            float(row["annual_volume_estimate"])
+            if row["annual_volume_estimate"] is not None
+            else None
+        ),
+    )
+
+
+def _average_response_minutes(rows: list[dict[str, Any]]) -> float | None:
+    """Average minutes from an inbound email to the first agent_logs entry
+    against the same request, over the given (email_at, agent_at) pairs.
+    None - never a fabricated number - when no row has a matching agent_at.
+    """
+    diffs: list[float] = []
+    for row in rows:
+        agent_at = row.get("agent_at")
+        email_at = row.get("email_at")
+        if agent_at is None or email_at is None:
+            continue
+        delta: Any = agent_at - email_at
+        diffs.append(delta.total_seconds() / 60)
+    if not diffs:
+        return None
+    return sum(diffs) / len(diffs)
 
 
 def _insert_postgres_quote_line_item(

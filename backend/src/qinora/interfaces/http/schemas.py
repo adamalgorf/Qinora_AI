@@ -81,6 +81,9 @@ class RequestListItem(BaseModel):
     mode: str
     status: str
     weight_kg: float
+    assignee: str | None = None
+    sla_due_at: str | None = None
+    priority: str = "normal"
 
 
 class RequestCargoLineItem(BaseModel):
@@ -395,6 +398,21 @@ class ContactListItem(BaseModel):
     default_markup_percent: float
     default_incoterms: str | None
     payment_terms: str | None
+    segment: str | None = None
+    customer_since: str | None = None
+    sla_tolerance_hours: float | None = None
+    account_owner: str | None = None
+    health_status: str = "good"
+    contract_note: str | None = None
+    customs_contact_name: str | None = None
+    customs_contact_email: str | None = None
+    annual_volume_estimate: float | None = None
+
+
+class CustomerDetailResponse(ContactListItem):
+    active_jobs: int
+    active_route: str | None = None
+    avg_ai_response_minutes: float | None = None
 
 
 class InboxListItem(BaseModel):
@@ -517,3 +535,105 @@ class OutboundFailPayload(BaseModel):
 class CollectCarrierRfqsResponse(BaseModel):
     finalized: int
     escalated: int
+
+
+class DocumentListItem(BaseModel):
+    id: str
+    public_id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    document_type: str | None
+    status: str
+    ai_confidence: float | None
+    request_id: str | None
+    shipment_id: str | None
+    contact_id: str | None
+    created_at: str
+
+
+class DocumentDetailResponse(BaseModel):
+    document: DocumentListItem
+    extracted_fields: dict
+
+
+class CreateDocumentResponse(DocumentListItem):
+    pass
+
+
+class CaseListItem(BaseModel):
+    id: str
+    public_id: str
+    customer: str
+    category: str
+    lane: str
+    priority: str
+    sla_due_at: str | None
+    assignee: str | None
+    status: str
+
+
+class CaseActivityItem(BaseModel):
+    type: str
+    timestamp: str | None
+    tag: str
+    description: str
+
+
+class InternalNoteItem(BaseModel):
+    id: str
+    request_id: str
+    author: str
+    body_text: str
+    created_at: str
+
+
+class CaseDetailResponse(BaseModel):
+    case: CaseListItem
+    request_detail: RequestDetailResponse
+    quotes: list[QuoteListItem]
+    shipment: ShipmentListItem | None
+    invoice: InvoiceListItem | None
+    documents: list[DocumentListItem]
+    contact: ContactListItem | None
+    notes: list[InternalNoteItem]
+    activity: list[CaseActivityItem]
+
+
+class CreateCaseNotePayload(BaseModel):
+    author: str = Field(min_length=1)
+    body_text: str = Field(min_length=1)
+
+
+class AutomationListItem(BaseModel):
+    agent_key: str
+    agent_name: str
+    trigger: str
+    scope: str
+    success_rate: float
+    volume: int
+    status: str
+
+
+class AnalyticsKpiItem(BaseModel):
+    label: str
+    value: str
+    trend: str
+
+
+class WorkloadByWeekdayItem(BaseModel):
+    weekday: str
+    ai: int
+    manual: int
+
+
+class ExceptionCategoryItem(BaseModel):
+    category: str
+    percent: float
+    location: str | None = None
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    kpis: list[AnalyticsKpiItem]
+    workload_by_weekday: list[WorkloadByWeekdayItem]
+    top_exception_categories: list[ExceptionCategoryItem]
