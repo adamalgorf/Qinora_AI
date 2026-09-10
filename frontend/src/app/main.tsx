@@ -6,15 +6,16 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { ThemeProvider } from "@/shared/theme/ThemeProvider";
 
 import { AppShell } from "./shell/AppShell";
-import { ControlTowerPage } from "../features/control-tower/ControlTowerPage";
-import { AdminPage } from "../features/modules/AdminPage";
+import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
+import { AutomationsPage } from "../features/automations/AutomationsPage";
+import { CaseDetailPage } from "../features/cases/CaseDetailPage";
+import { CasesPage } from "../features/cases/CasesPage";
+import { CustomersPage } from "../features/customers/CustomersPage";
+import { DocumentsPage } from "../features/documents/DocumentsPage";
+import { InboxPage } from "../features/inbox/InboxPage";
+import { OverviewPage } from "../features/overview/OverviewPage";
+import { QuotesPage } from "../features/quotes/QuotesPage";
 import { CarriersPage } from "../features/modules/CarriersPage";
-import { ContactsPage } from "../features/modules/ContactsPage";
-import { InboxPage } from "../features/modules/InboxPage";
-import { InvoicesPage } from "../features/modules/InvoicesPage";
-import { QuotesPage } from "../features/modules/QuotesPage";
-import { RequestsPage } from "../features/modules/RequestsPage";
-import { ShipmentsPage } from "../features/modules/ShipmentsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import "./styles.css";
 
@@ -24,15 +25,16 @@ const router = createBrowserRouter([
     path: "/",
     element: <AppShell />,
     children: [
-      { index: true, element: <ControlTowerPage /> },
+      { index: true, element: <OverviewPage /> },
       { path: "inbox", element: <InboxPage /> },
-      { path: "requests", element: <RequestsPage /> },
-      { path: "contacts", element: <ContactsPage /> },
+      { path: "cases", element: <CasesPage /> },
+      { path: "cases/:id", element: <CaseDetailPage /> },
       { path: "quotes", element: <QuotesPage /> },
-      { path: "shipments", element: <ShipmentsPage /> },
-      { path: "invoices", element: <InvoicesPage /> },
+      { path: "automations", element: <AutomationsPage /> },
+      { path: "documents", element: <DocumentsPage /> },
+      { path: "customers", element: <CustomersPage /> },
+      { path: "analytics", element: <AnalyticsPage /> },
       { path: "carriers", element: <CarriersPage /> },
-      { path: "admin", element: <AdminPage /> },
       { path: "settings", element: <SettingsPage /> },
     ],
   },

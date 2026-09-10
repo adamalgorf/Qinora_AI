@@ -1,15 +1,14 @@
 import {
-  Activity,
-  Bot,
-  ContactRound,
+  BarChart3,
   FileCheck2,
   FileText,
-  Inbox,
-  RadioTower,
+  FolderArchive,
+  LayoutDashboard,
+  Mail,
   Search,
   Settings,
-  Truck,
   Users,
+  Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -48,6 +47,7 @@ import {
   type AuthConfig,
   type AuthMe,
   type DevTokenPayload,
+  type InboxListItem,
   type LoginPayload,
   type SearchResultItem,
   type TokenResponse,
@@ -59,16 +59,22 @@ import { LoginScreen } from "./LoginScreen";
 import { Logo } from "./Logo";
 
 const navItems = [
-  { label: "Tower", href: "/", icon: Activity },
-  { label: "Inkorg", href: "/inbox", icon: Inbox },
-  { label: "Förfrågningar", href: "/requests", icon: RadioTower },
-  { label: "Kontakter", href: "/contacts", icon: ContactRound },
-  { label: "Offerter", href: "/quotes", icon: FileText },
-  { label: "Sändningar", href: "/shipments", icon: Truck },
-  { label: "Fakturor", href: "/invoices", icon: FileCheck2 },
-  { label: "Transportörer", href: "/carriers", icon: Users },
-  { label: "Admin", href: "/admin", icon: Bot },
+  { label: "Översikt", href: "/", icon: LayoutDashboard },
+  { label: "Inkorg", href: "/inbox", icon: Mail },
+  { label: "Ärenden", href: "/cases", icon: FolderArchive },
+  { label: "Offerter", href: "/quotes", icon: FileCheck2 },
+  { label: "Automatiseringar", href: "/automations", icon: Workflow },
+  { label: "Dokument", href: "/documents", icon: FileText },
+  { label: "Kunder", href: "/customers", icon: Users },
+  { label: "Analys", href: "/analytics", icon: BarChart3 },
 ];
+
+function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === "/") {
+    return pathname === "/";
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -134,6 +140,13 @@ export function AppShell() {
     enabled: normalizedSearchTerm.length >= 2,
   });
 
+  const inboxQuery = useQuery({
+    queryKey: ["inbox"],
+    queryFn: () => apiGet<InboxListItem[]>("/inbox/pending"),
+    enabled: Boolean(authQuery.data),
+  });
+  const unreadInboxCount = inboxQuery.data?.length ?? 0;
+
   useEffect(() => {
     function toggleSearch(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -187,12 +200,17 @@ export function AppShell() {
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton
                       asChild
-                      isActive={location.pathname === item.href}
+                      isActive={isNavItemActive(location.pathname, item.href)}
                       tooltip={item.label}
                     >
                       <NavLink to={item.href}>
                         <item.icon aria-hidden="true" />
                         <span>{item.label}</span>
+                        {item.href === "/inbox" && unreadInboxCount > 0 ? (
+                          <span className="ml-auto flex min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                            {unreadInboxCount}
+                          </span>
+                        ) : null}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

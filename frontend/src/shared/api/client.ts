@@ -58,6 +58,9 @@ export type RequestListItem = {
   mode: string;
   status: string;
   weight_kg: number;
+  assignee: string | null;
+  sla_due_at: string | null;
+  priority: "low" | "normal" | "high" | "critical";
 };
 
 export type RequestCargoLineItem = {
@@ -94,6 +97,18 @@ export type CreateRequestPayload = {
     width_cm?: number;
     height_cm?: number;
   }>;
+};
+
+export type ParseFreeTextRequestPayload = {
+  customer: string;
+  raw_text: string;
+};
+
+export type ParseFreeTextRequestResponse = {
+  draft: Record<string, unknown>;
+  needs_human_review: boolean;
+  request: RequestListItem | null;
+  agent_confidence: number;
 };
 
 export type CreateRequestResponse = {
@@ -189,16 +204,6 @@ export type ProcessOutboundQueueResponse = {
   failed: OutboundReplyItem[];
 };
 
-export type DemoFlowResponse = {
-  steps: string[];
-  request: RequestListItem;
-  quote: QuoteListItem;
-  outbound_reply: OutboundReplyItem;
-  shipment: ShipmentListItem;
-  invoice: InvoiceListItem;
-  shipment_status: string;
-};
-
 export type CreateQuotePayload = {
   request_id: string;
   customer_price: number;
@@ -283,6 +288,21 @@ export type ContactListItem = {
   default_markup_percent: number;
   default_incoterms: string | null;
   payment_terms: string | null;
+  segment: string | null;
+  customer_since: string | null;
+  sla_tolerance_hours: number | null;
+  account_owner: string | null;
+  health_status: "good" | "watch" | "at_risk";
+  contract_note: string | null;
+  customs_contact_name: string | null;
+  customs_contact_email: string | null;
+  annual_volume_estimate: number | null;
+};
+
+export type CustomerDetailResponse = ContactListItem & {
+  active_jobs: number;
+  active_route: string | null;
+  avg_ai_response_minutes: number | null;
 };
 
 export type InboxListItem = {
@@ -339,6 +359,94 @@ export type ShipmentEventItem = {
   created_at: string;
 };
 
+// --- Documents ---
+
+export type DocumentListItem = {
+  id: string;
+  public_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  document_type: string | null;
+  status: "pending_review" | "validated" | "manual_review" | "flagged";
+  ai_confidence: number | null;
+  request_id: string | null;
+  shipment_id: string | null;
+  contact_id: string | null;
+  created_at: string;
+};
+
+export type DocumentDetailResponse = {
+  document: DocumentListItem;
+  extracted_fields: Record<string, unknown>;
+};
+
+// --- Cases ---
+
+export type CaseListItem = {
+  id: string;
+  public_id: string;
+  customer: string;
+  category: string;
+  lane: string;
+  priority: "low" | "normal" | "high" | "critical";
+  sla_due_at: string | null;
+  assignee: string | null;
+  status: string;
+};
+
+export type CaseActivityItem = {
+  type: string;
+  timestamp: string;
+  tag: string;
+  description: string;
+};
+
+export type CaseDetailResponse = {
+  case: CaseListItem;
+  request_detail: RequestDetailResponse;
+  quotes: QuoteListItem[];
+  shipment: ShipmentListItem | null;
+  invoice: InvoiceListItem | null;
+  documents: DocumentListItem[];
+  contact: ContactListItem | null;
+  notes: InternalNoteItem[];
+  activity: CaseActivityItem[];
+};
+
+export type InternalNoteItem = {
+  id: string;
+  request_id: string;
+  author: string;
+  body_text: string;
+  created_at: string;
+};
+
+export type CreateInternalNotePayload = {
+  author: string;
+  body_text: string;
+};
+
+// --- Automations ---
+
+export type AutomationListItem = {
+  agent_key: string;
+  agent_name: string;
+  trigger: string;
+  scope: string;
+  success_rate: number;
+  volume: number;
+  status: "active" | "paused";
+};
+
+// --- Analytics ---
+
+export type AnalyticsSummaryResponse = {
+  kpis: Array<{ label: string; value: string; trend: string }>;
+  workload_by_weekday: Array<{ weekday: string; ai: number; manual: number }>;
+  top_exception_categories: Array<{ category: string; percent: number; location: string | null }>;
+};
+
 const AUTH_TOKEN_KEY = "qinora.authToken";
 
 export function getAuthToken(): string | null {
@@ -375,6 +483,24 @@ export async function apiPost<TResponse, TPayload>(path: string, payload: TPaylo
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await toApiProblem(response);
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+export async function apiUpload<TResponse>(path: string, formData: FormData): Promise<TResponse> {
+  const token = getAuthToken();
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
   });
 
   if (!response.ok) {

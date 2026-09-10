@@ -54,6 +54,20 @@ const STATUS_TONE: Record<string, StatusTone> = {
   cancelled: "destructive",
   disputed: "destructive",
   invoice_disputed: "destructive",
+
+  // cases / documents / automations / customers (new IA screens)
+  pending_review: "neutral",
+  ai_processing: "neutral",
+  queued: "neutral",
+  active: "positive",
+  validated: "positive",
+  good: "positive",
+  closed: "positive",
+  paused: "neutral",
+  watch: "warning",
+  flagged: "destructive",
+  critical: "destructive",
+  at_risk: "destructive",
 };
 
 type StatusChipProps = {
