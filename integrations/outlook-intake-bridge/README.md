@@ -86,14 +86,14 @@ the worker runs every minute so that is never an issue in practice.
 
 ## Deploying
 
-* **AWS** - `infra/aws` already knows about the bridge. Pass the credentials
-  as Terraform variables (`TF_VAR_outlook_client_secret=...` or
-  `TF_VAR_outlook_refresh_token=...`, plus `-var outlook_tenant_id=...
-  -var outlook_client_id=...`). When either credential is non-empty an
-  extra ECS scheduled task `qinora-outlook-bridge` (rate: 1 minute) is
-  created alongside the other three workers; it reads the backend URL from
-  the App Runner service, so no manual wiring. Logs land in
-  `/ecs/qinora-workers` with stream prefix `outlook_bridge`.
+* **GCP** - `infra/gcp` already knows about the bridge (`module.outlook_bridge`
+  in `main.tf`). `OUTLOOK_TENANT_ID`/`OUTLOOK_CLIENT_ID`/`OUTLOOK_MAILBOXES`/
+  `OUTLOOK_SEND_MAILBOX`/`OUTLOOK_SENDER_NAME` are plain Terraform variables;
+  `OUTLOOK_CLIENT_SECRET` and `OUTLOOK_REFRESH_TOKEN` live in Secret Manager
+  (`qinora-outlook-client-secret`, `qinora-outlook-refresh-token`). It runs as
+  a Cloud Run job on a Cloud Scheduler trigger (rate: 1 minute) and reads the
+  backend URL from the main Cloud Run service, so no manual wiring. Logs land
+  in Cloud Logging under the job's own log name (`qinora-outlook-bridge`).
 * **Local** - fill in the `OUTLOOK_*` block in `.env`, then
   `docker compose --profile outlook up`.
 * **One-off run** - `QINORA_API_BASE_URL=... EMAIL_WEBHOOK_SECRET=... OUTLOOK_...=... python -m qinora.workers.outlook_bridge`.
