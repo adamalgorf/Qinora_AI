@@ -369,6 +369,67 @@ module "stale_request_escalator" {
   depends_on = [module.secrets]
 }
 
+# Plain job, no Cloud Scheduler trigger - run by hand (or from CI, later)
+# with `gcloud run jobs execute qinora-migrate --region <region> --wait`
+# whenever backend/migrations/ gains a new file. Not a `scheduled_job`
+# module instance since that always wires up a recurring schedule, which
+# a one-off migration run must never have.
+resource "google_cloud_run_v2_job" "migrate" {
+  project             = var.project_id
+  name                = "${var.name}-migrate"
+  location            = var.region
+  deletion_protection = false
+  labels              = local.labels
+
+  template {
+    template {
+      service_account = module.iam.cloud_run_service_account_email
+      timeout         = "120s"
+      max_retries     = 0
+
+      vpc_access {
+        connector = module.network.vpc_connector_id
+        egress    = "PRIVATE_RANGES_ONLY"
+      }
+
+      containers {
+        image   = local.worker_image
+        command = ["python", "-m", "qinora.infrastructure.migrations"]
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
+          }
+        }
+
+        dynamic "env" {
+          for_each = local.worker_env_vars
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        dynamic "env" {
+          for_each = local.worker_secret_env_vars
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = env.value.secret_id
+                version = "latest"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [module.secrets]
+}
+
 module "outlook_bridge" {
   source = "./modules/scheduled_job"
 

@@ -21,6 +21,9 @@ db_disk_size_gb = 10
 db_name         = "qinora"
 db_user         = "qinora_app"
 
+# 0 scales to zero when idle (cheapest, but the next request pays a cold
+# start of up to ~1 minute). Set to 1 for production to keep an instance
+# warm and avoid that delay.
 cloud_run_min_instances = 0
 cloud_run_max_instances = 4
 cloud_run_cpu           = "1"
