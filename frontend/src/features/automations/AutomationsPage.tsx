@@ -36,6 +36,7 @@ export function AutomationsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<AutomationListItem | null>(null);
+  const [showCreateNotice, setShowCreateNotice] = useState(false);
 
   const query = useQuery({
     queryKey: ["automations"],
@@ -97,6 +98,7 @@ export function AutomationsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
+            <Button onClick={() => setShowCreateNotice(true)}>Skapa nytt Workflow</Button>
           </div>
           <DataTable
             columns={[
@@ -176,6 +178,18 @@ export function AutomationsPage() {
           ) : (
             <p className="text-sm text-muted-foreground">Laddar konfiguration…</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreateNotice} onOpenChange={setShowCreateNotice}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Skapa nytt Workflow</DialogTitle>
+            <DialogDescription>
+              Den visuella workflow-byggaren är inte tillgänglig ännu — idag konfigureras
+              varje agent individuellt genom att klicka på en rad i tabellen ovan.
+            </DialogDescription>
+          </DialogHeader>
         </DialogContent>
       </Dialog>
     </PageShell>

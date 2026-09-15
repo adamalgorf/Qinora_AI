@@ -30,6 +30,15 @@ const TABS: Array<{ value: InboxTab; label: string }> = [
 
 // Best-effort tab split over the free-form `classification` field: no dedicated
 // "critical"/"draft" flag exists on email_inbound today.
+// Generic navigational hint per classification — not a claim about what the
+// AI has actually determined, just points the operator at the next step.
+function suggestedAction(classification: string): string {
+  const c = classification.toLowerCase();
+  if (c === "invoice") return "Granska faktura";
+  if (c === "pending" || c === "unknown") return "Bearbeta";
+  return "Öppna ärende";
+}
+
 function matchesTab(item: InboxListItem, tab: InboxTab): boolean {
   if (tab === "alla") return true;
   const classification = item.classification.toLowerCase();
@@ -139,7 +148,12 @@ export function InboxPage() {
                     <span className="text-xs text-muted-foreground">{item.received_at}</span>
                   </div>
                   <span className="text-sm">{item.subject}</span>
-                  <StatusChip className="mt-1" status={item.classification} />
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <StatusChip status={item.classification} />
+                    <span className="text-xs font-medium text-accent">
+                      {suggestedAction(item.classification)}
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>

@@ -56,7 +56,6 @@ import { ThemeToggle } from "@/shared/theme/ThemeToggle";
 import { APP_VERSION } from "@/shared/version";
 import { LoadingScreen } from "./LoadingScreen";
 import { LoginScreen } from "./LoginScreen";
-import { Logo } from "./Logo";
 
 const navItems = [
   { label: "Översikt", href: "/", icon: LayoutDashboard },
@@ -125,10 +124,10 @@ export function AppShell() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: (password: string) =>
+    mutationFn: ({ password }: { password: string; rememberMe: boolean }) =>
       apiPost<TokenResponse, LoginPayload>("/auth/login", { password }),
-    onSuccess: (session) => {
-      setAuthToken(session.access_token);
+    onSuccess: (session, variables) => {
+      setAuthToken(session.access_token, variables.rememberMe);
       queryClient.setQueryData(["auth-me", true], session.user);
     },
   });
@@ -174,37 +173,47 @@ export function AppShell() {
       <LoginScreen
         error={loginMutation.isError ? "Fel lösenord." : null}
         isSubmitting={loginMutation.isPending}
-        onSubmit={(password) => loginMutation.mutate(password)}
+        onSubmit={(password, rememberMe) => loginMutation.mutate({ password, rememberMe })}
       />
     );
   }
 
   const searchResults = searchQuery.data ?? [];
 
+  const displayName = authQuery.data?.user_id ?? "Qinora User";
+  const displayRole = authQuery.data?.roles?.[0] ?? "Operatör";
+  const initials = displayName
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ "--sidebar-width": "240px" } as React.CSSProperties}>
       <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <div className="brand">
-            <span className="brand-mark">
-              <Logo />
+        <SidebarHeader className="gap-8 px-4 py-6">
+          <div className="flex flex-col gap-1 group-data-[collapsible=icon]:hidden">
+            <span className="text-[20px] font-bold leading-none text-white">Qinora</span>
+            <span className="text-[11px] text-sidebar-foreground/70">
+              Din AI-drivna logistikchef
             </span>
-            <span className="group-data-[collapsible=icon]:hidden">QiNora</span>
           </div>
         </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
+        <SidebarContent className="px-2">
+          <SidebarGroup className="p-0">
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-1">
                 {navItems.map((item) => (
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton
                       asChild
+                      className="h-auto rounded-md px-3 py-2.5 text-[14px] data-[active=true]:font-semibold"
                       isActive={isNavItemActive(location.pathname, item.href)}
                       tooltip={item.label}
                     >
                       <NavLink to={item.href}>
-                        <item.icon aria-hidden="true" />
+                        <item.icon aria-hidden="true" className="size-4" />
                         <span>{item.label}</span>
                         {item.href === "/inbox" && unreadInboxCount > 0 ? (
                           <span className="ml-auto flex min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
@@ -219,16 +228,27 @@ export function AppShell() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter>
+        <SidebarFooter className="gap-4 px-4 pb-6">
+          <div className="h-px bg-sidebar-border group-data-[collapsible=icon]:hidden" />
+          <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-[12px] font-semibold text-white">
+              {initials || "Q"}
+            </span>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate text-[13px] font-semibold text-white">{displayName}</span>
+              <span className="truncate text-[11px] text-sidebar-foreground/70">{displayRole}</span>
+            </div>
+          </div>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
+                className="h-auto rounded-md px-3 py-2.5 text-[14px]"
                 isActive={location.pathname === "/settings"}
                 tooltip="Inställningar"
               >
                 <NavLink to="/settings">
-                  <Settings aria-hidden="true" />
+                  <Settings aria-hidden="true" className="size-4" />
                   <span>Inställningar</span>
                 </NavLink>
               </SidebarMenuButton>

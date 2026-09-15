@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { KpiCard, KpiGrid } from "@/components/patterns/KpiCard";
 import { PageShell } from "@/components/patterns/PageShell";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -57,12 +58,17 @@ export function QuotesPage() {
 
       <Card>
         <CardContent className="flex flex-col gap-4 p-5">
-          <Input
-            className="max-w-sm"
-            placeholder="Sök efter kund eller offert-ID…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Input
+              className="max-w-sm"
+              placeholder="Sök efter kund eller offert-ID…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Button variant="secondary" onClick={() => navigate("/cases")}>
+              Skapa offert
+            </Button>
+          </div>
           <DataTable
             columns={[
               { key: "id", label: "Offert-ID", mono: true },

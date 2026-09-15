@@ -11,14 +11,16 @@ export function TimelineFeed({ items }: { items: TimelineFeedItem[] }) {
   }
 
   return (
-    <div className="timeline-list">
+    <div className="timeline-list min-w-0 w-full">
       {items.map((item) => (
-        <div className="timeline-item" key={item.id}>
-          <div className="flex items-center gap-2 text-[11px] font-semibold">
-            <span className="text-muted-foreground/90">{item.timestamp}</span>
-            <span className="text-primary">{item.tag}</span>
+        <div className="timeline-item min-w-0" key={item.id}>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold">
+            <span className="shrink-0 text-muted-foreground/90">{item.timestamp}</span>
+            <span className="break-words text-primary">{item.tag}</span>
           </div>
-          <p className="m-0 text-[13px] font-normal text-muted-foreground">{item.description}</p>
+          <p className="m-0 min-w-0 break-words text-[13px] font-normal text-muted-foreground">
+            {item.description}
+          </p>
         </div>
       ))}
     </div>

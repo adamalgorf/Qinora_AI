@@ -65,6 +65,7 @@ export function CasesPage() {
             <PriorityList>
               {QUEUES.map((q) => (
                 <PriorityListItem
+                  active={q.value === queue}
                   key={q.value}
                   onClick={() => setQueue(q.value)}
                   tag={<Badge variant="outline">{counts[q.value] ?? 0}</Badge>}

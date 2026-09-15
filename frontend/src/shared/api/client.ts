@@ -448,20 +448,42 @@ export type AnalyticsSummaryResponse = {
 };
 
 const AUTH_TOKEN_KEY = "qinora.authToken";
+const LAST_EMAIL_KEY = "qinora.lastLoginEmail";
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
-  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+  return window.localStorage.getItem(AUTH_TOKEN_KEY) ?? window.sessionStorage.getItem(AUTH_TOKEN_KEY);
 }
 
-export function setAuthToken(token: string): void {
-  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+/**
+ * `remember` picks where the token lives: localStorage survives browser
+ * restarts ("Kom ihåg mig på denna enhet"), sessionStorage clears when the
+ * tab/window closes - a real difference, not just a decorative checkbox.
+ */
+export function setAuthToken(token: string, remember = true): void {
+  if (remember) {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  } else {
+    window.sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
 }
 
 export function clearAuthToken(): void {
   window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+export function getLastLoginEmail(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(LAST_EMAIL_KEY) ?? "";
+}
+
+export function setLastLoginEmail(email: string): void {
+  window.localStorage.setItem(LAST_EMAIL_KEY, email);
 }
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";

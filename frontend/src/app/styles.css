@@ -717,6 +717,16 @@ h1 {
   padding: 32px;
 }
 
+/* Same grid/flex min-width:auto trap as the .request-form/.kpi-grid rule
+   above, for every new-IA page's own grid/flex layouts: a long unbroken
+   token (a UUID, an email, a comma-joined field list) counts as one very
+   wide "word", so a track/item with no explicit min-width refuses to
+   shrink below it and blows out of its card. Force every direct child of
+   a grid or flex layout on these pages to shrink instead. */
+.page-shell-content .grid > * {
+  min-width: 0;
+}
+
 .status-pill-live {
   display: inline-flex;
   align-items: center;
@@ -821,6 +831,11 @@ button.priority-row {
   cursor: pointer;
   font: inherit;
   appearance: none;
+}
+
+.priority-row-active {
+  border-color: hsl(var(--accent) / 0.3);
+  background: hsl(var(--accent) / 0.1);
 }
 
 @media (max-width: 860px) {
