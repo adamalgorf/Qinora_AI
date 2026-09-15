@@ -75,6 +75,20 @@ resource "google_project_iam_member" "github_run_developer" {
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
 
+# Lets CI sync the built frontend to the GCS static site bucket.
+resource "google_project_iam_member" "github_storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+}
+
+# Lets CI invalidate the CDN cache for index.html after a frontend deploy.
+resource "google_project_iam_member" "github_cdn_cache_invalidator" {
+  project = var.project_id
+  role    = "roles/compute.loadBalancerAdmin"
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+}
+
 # Lets the GitHub Actions SA deploy new revisions running as the Cloud Run SA.
 resource "google_service_account_iam_member" "github_actas_cloud_run_sa" {
   service_account_id = google_service_account.cloud_run.name

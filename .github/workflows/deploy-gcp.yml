@@ -122,3 +122,54 @@ jobs:
           gcloud run services update-traffic "${{ vars.GCP_SERVICE }}" \
             --region "${{ vars.GCP_REGION }}" \
             --to-revisions "${{ steps.previous.outputs.revision }}=100"
+
+  deploy-frontend:
+    name: Build, deploy frontend
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_API_URL: /api
+        run: npm run build -w @qinora/frontend
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sync to GCS
+        run: |
+          gcloud storage rsync frontend/dist "gs://${{ vars.GCP_FRONTEND_BUCKET }}" \
+            --recursive --delete-unmatched-destination-objects
+
+      # index.html references content-hashed asset filenames, so it must
+      # never be served stale - hashed assets under /assets/ are immutable
+      # and fine to cache normally (CACHE_ALL_STATIC on the backend bucket).
+      - name: Set no-cache on index.html
+        run: |
+          gcloud storage objects update "gs://${{ vars.GCP_FRONTEND_BUCKET }}/index.html" \
+            --cache-control="no-cache, max-age=0"
+
+      - name: Invalidate CDN cache for index.html
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache "${{ vars.GCP_LOAD_BALANCER_URL_MAP }}" \
+            --path "/index.html" --async

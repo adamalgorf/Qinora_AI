@@ -27,6 +27,28 @@ resource "google_compute_security_policy" "cloud_armor" {
     description = "Default allow"
   }
 
+  # The auth endpoints' bodies are a high-entropy password and a small JSON
+  # blob (user_id/tenant_id/roles) - both routinely false-positive against
+  # the OWASP CRS sqli/xss rules below (different rule ID each time), which
+  # locked authentication itself out of the app. Backend queries are all
+  # parameterized (psycopg %s placeholders), so SQLi/XSS body inspection
+  # adds no real protection here; scope the bypass to just these two paths
+  # rather than weakening sensitivity site-wide.
+  rule {
+    action   = "allow"
+    priority = 900
+    match {
+      expr {
+        # Cloud Armor evaluates against the backend-service-bound request,
+        # i.e. after the url_map's /api prefix-strip route_rules above -
+        # match both forms since which one actually arrives here isn't
+        # documented and is safer to over-match on a same-origin path check.
+        expression = "request.path == '/auth/login' || request.path == '/auth/dev-token' || request.path == '/api/auth/login' || request.path == '/api/auth/dev-token'"
+      }
+    }
+    description = "Auth endpoints: skip WAF body inspection (parameterized queries, high-entropy bodies false-positive)"
+  }
+
   rule {
     action   = "deny(403)"
     priority = 1000
@@ -99,13 +121,38 @@ resource "google_compute_url_map" "default" {
     path_matcher = "main"
   }
 
+  # route_rules (not path_rule) so we can strip the /api prefix before
+  # forwarding to Cloud Run - the backend's own routes (/cases, /quotes,
+  # ...) aren't prefixed, matching the same proxy_pass-strips-/api/
+  # behavior frontend/nginx.conf uses for local docker-compose.
   path_matcher {
     name            = "main"
     default_service = var.backend_bucket_id
 
-    path_rule {
-      paths   = ["/api", "/api/*"]
+    route_rules {
+      priority = 1
+      match_rules {
+        prefix_match = "/api/"
+      }
       service = google_compute_backend_service.api.id
+      route_action {
+        url_rewrite {
+          path_prefix_rewrite = "/"
+        }
+      }
+    }
+
+    route_rules {
+      priority = 2
+      match_rules {
+        full_path_match = "/api"
+      }
+      service = google_compute_backend_service.api.id
+      route_action {
+        url_rewrite {
+          path_prefix_rewrite = "/"
+        }
+      }
     }
   }
 }

@@ -138,6 +138,21 @@ resource "google_secret_manager_secret_version" "auth_token_secret" {
   secret_data = var.auth_token_secret
 }
 
+resource "google_secret_manager_secret" "app_password" {
+  project   = var.project_id
+  secret_id = "${var.name}-app-password"
+  labels    = local.labels
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.required]
+}
+
+resource "google_secret_manager_secret_version" "app_password" {
+  secret      = google_secret_manager_secret.app_password.id
+  secret_data = var.app_password
+}
+
 # Blank until you set outlook_client_secret/outlook_refresh_token - the
 # outlook-bridge job will fail (harmlessly, no monitoring/alerting wired up
 # per scope) until one of them is populated. See README.md.
@@ -188,6 +203,7 @@ module "iam" {
     google_secret_manager_secret.openai_api_key.secret_id,
     google_secret_manager_secret.email_webhook_secret.secret_id,
     google_secret_manager_secret.auth_token_secret.secret_id,
+    google_secret_manager_secret.app_password.secret_id,
     google_secret_manager_secret.outlook_client_secret.secret_id,
     google_secret_manager_secret.outlook_refresh_token.secret_id,
   ]
@@ -225,6 +241,7 @@ module "cloud_run" {
     OPENAI_API_KEY           = { secret_id = google_secret_manager_secret.openai_api_key.secret_id }
     EMAIL_WEBHOOK_SECRET     = { secret_id = google_secret_manager_secret.email_webhook_secret.secret_id }
     QINORA_AUTH_TOKEN_SECRET = { secret_id = google_secret_manager_secret.auth_token_secret.secret_id }
+    QINORA_APP_PASSWORD      = { secret_id = google_secret_manager_secret.app_password.secret_id }
   }
 
   # secret_env_vars above only names the parent secret - Cloud Run resolves
@@ -235,6 +252,7 @@ module "cloud_run" {
     google_secret_manager_secret_version.openai_api_key,
     google_secret_manager_secret_version.email_webhook_secret,
     google_secret_manager_secret_version.auth_token_secret,
+    google_secret_manager_secret_version.app_password,
   ]
 }
 
