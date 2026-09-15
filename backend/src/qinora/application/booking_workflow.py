@@ -9,6 +9,7 @@ from qinora.application.ports import (
     QuoteWriteRepository,
     ShipmentWriteRepository,
 )
+from qinora.application.quote_workflow import latest_customer_email
 from qinora.application.read_models import InboundEmailRecord, QuoteRecord, ShipmentRecord
 
 BOOKED_STATUS = "booked"
@@ -46,6 +47,7 @@ class BookingWorkflow:
         carrier_rfqs: CarrierRfqRepository,
         outbound_repository: OutboundReplyRepository,
         email_threads: EmailThreadRepository | None = None,
+        customer_mailbox: str | None = None,
     ) -> None:
         self._quote_repository = quote_repository
         self._shipment_repository = shipment_repository
@@ -53,6 +55,7 @@ class BookingWorkflow:
         self._carrier_rfqs = carrier_rfqs
         self._outbound_repository = outbound_repository
         self._email_threads = email_threads
+        self._customer_mailbox = customer_mailbox
 
     async def book_quote(self, command: BookQuoteCommand) -> BookingResult:
         quote = await self._quote_repository.mark_quote_accepted(command.quote_id)
@@ -107,6 +110,7 @@ class BookingWorkflow:
                     quote, command, lane, shipment, greeting_line
                 ),
                 in_reply_to_message_id=latest_message.message_id if latest_message else None,
+                sender_mailbox=self._customer_mailbox,
             )
 
         return BookingResult(
@@ -122,7 +126,7 @@ class BookingWorkflow:
         history = await self._email_threads.list_thread_history(
             request_id=quote.request_id, quote_id=quote.id
         )
-        return history[-1] if history else None
+        return latest_customer_email(history)
 
     async def _resolve_quote_lane(self, request_id: str | None) -> str:
         if request_id is None:

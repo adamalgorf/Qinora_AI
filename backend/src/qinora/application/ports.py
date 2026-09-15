@@ -99,6 +99,18 @@ class EmailThreadRepository(Protocol):
     async def mark_classification(self, email_id: str, classification: str) -> None:
         pass
 
+    async def link_quote_to_request(self, request_id: str, quote_id: str) -> None:
+        """Back-fills quote_id onto every email_inbound row already linked to
+        request_id but still missing one - needed for a quote created
+        asynchronously after the original request email (e.g. the carrier-RFQ
+        sourcing path in application/carrier_rfq_collector.py), so a later
+        customer reply on that original thread can still resolve via
+        application/thread_matching.py's tier-1 message-id match and reach
+        the accept/reject/revise handling in
+        application/email_intake_orchestrator.py.
+        """
+        pass
+
 
 class ContactReadRepository(Protocol):
     async def find_by_sender(self, sender: str) -> ContactRecord | None:
@@ -457,6 +469,7 @@ class OutboundReplyRepository(Protocol):
         subject: str,
         body_text: str,
         in_reply_to_message_id: str | None = None,
+        sender_mailbox: str | None = None,
     ) -> OutboundReplyRecord:
         pass
 
@@ -570,6 +583,7 @@ class CarrierRfqOutboundRepository(Protocol):
         recipient: str,
         subject: str,
         body_text: str,
+        sender_mailbox: str | None = None,
     ) -> CarrierRfqOutboundRecord:
         pass
 
@@ -600,6 +614,7 @@ class ClarificationOutboundRepository(Protocol):
         subject: str,
         body_text: str,
         in_reply_to_message_id: str | None = None,
+        sender_mailbox: str | None = None,
     ) -> ClarificationOutboundRecord:
         pass
 

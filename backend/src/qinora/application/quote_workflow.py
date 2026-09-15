@@ -52,11 +52,17 @@ class QuoteWorkflow:
         outbound_repository: OutboundReplyRepository,
         operational_queries: OperationalQueries,
         email_threads: EmailThreadRepository | None = None,
+        customer_mailbox: str | None = None,
     ) -> None:
         self._repository = repository
         self._outbound_repository = outbound_repository
         self._operational_queries = operational_queries
         self._email_threads = email_threads
+        # Which mailbox customer-facing quotes should be sent from (e.g.
+        # test.spedition@sandahls.com) when more than one Outlook bridge
+        # instance is running - see workers/outlook_bridge.py. None means
+        # "any bridge instance may send it" (single-mailbox deployments).
+        self._customer_mailbox = customer_mailbox
 
     async def create_quote(self, command: CreateQuoteCommand) -> QuoteRecord:
         request = await self._find_request(command.request_id)
@@ -96,6 +102,7 @@ class QuoteWorkflow:
             subject=f"Din offert - {sent_quote.id}",
             body_text=_format_quote_body(sent_quote, request, greeting_line),
             in_reply_to_message_id=latest_message.message_id if latest_message else None,
+            sender_mailbox=self._customer_mailbox,
         )
         return SendQuoteResult(quote=sent_quote, outbound_reply=outbound_reply)
 
@@ -111,13 +118,34 @@ class QuoteWorkflow:
         history = await self._email_threads.list_thread_history(
             request_id=quote.request_id, quote_id=quote.id
         )
-        return history[-1] if history else None
+        return latest_customer_email(history)
 
     async def _find_request(self, request_id: str) -> RequestRecord | None:
         for request in await self._operational_queries.list_requests():
             if request.id == request_id:
                 return request
         return None
+
+
+# "carrier_offer" (application/email_intake_orchestrator.py's
+# _handle_carrier_reply) is the one classification that isn't customer mail:
+# a transport_request's email thread links both the customer's own messages
+# and, once carrier sourcing starts (application/pricing_engine.py), the
+# carrier's replies - all keyed to the same request_id, but a carrier reply
+# lives in a different physical mailbox (e.g. qinora.ai@ vs test.spedition@ -
+# see workers/outlook_bridge.py's per-mailbox bridge instances). Picking a
+# carrier reply as "the message to reply to" here would have the wrong
+# bridge instance try to find it via Graph, fail (it's not in that mailbox),
+# and silently fall back to sending a brand new, unthreaded email instead of
+# a reply in the customer's own thread - reproduced live 2026-09-15.
+_CARRIER_CLASSIFICATION = "carrier_offer"
+
+
+def latest_customer_email(
+    history: list[InboundEmailRecord],
+) -> InboundEmailRecord | None:
+    customer_messages = [row for row in history if row.classification != _CARRIER_CLASSIFICATION]
+    return customer_messages[-1] if customer_messages else None
 
 
 def _format_quote_body(

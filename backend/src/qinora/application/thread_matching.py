@@ -84,6 +84,7 @@ class ThreadMatchingUseCase:
     async def match(
         self,
         *,
+        email_id: str,
         sender: str,
         subject: str,
         message_id: str | None,
@@ -92,7 +93,11 @@ class ThreadMatchingUseCase:
     ) -> ThreadMatchResult | None:
         candidate_ids = _extract_message_ids(in_reply_to, references)
         if candidate_ids:
-            rows = await self._repository.find_candidates_by_message_ids(candidate_ids)
+            rows = [
+                row
+                for row in await self._repository.find_candidates_by_message_ids(candidate_ids)
+                if row.id != email_id
+            ]
             row = _first_linked(rows) or (rows[0] if rows else None)
             if row is not None:
                 return ThreadMatchResult(row.request_id, row.quote_id, row.id, 1)
@@ -107,8 +112,17 @@ class ThreadMatchingUseCase:
         else:
             candidates = await self._repository.find_candidates_by_domain(domain)
 
+        # Exclude the email being processed itself - already saved to
+        # email_inbound (EmailWebhookUseCase.save() runs before this) so it's
+        # in its own candidate pool, and a "Re: <original subject>" reply
+        # normalizes to the same subject as the thread it's replying to. Left
+        # in, it's the most recent row (candidates are created_at desc) and
+        # "matches itself" with empty request_id/quote_id, masking the real
+        # match underneath it - reproduced live 2026-09-15.
         subject_matches = [
-            row for row in candidates if normalize_subject(row.subject) == normalized_subject
+            row
+            for row in candidates
+            if row.id != email_id and normalize_subject(row.subject) == normalized_subject
         ]
         if not subject_matches:
             return None

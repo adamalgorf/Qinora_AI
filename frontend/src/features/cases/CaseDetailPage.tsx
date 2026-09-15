@@ -210,7 +210,9 @@ export function CaseDetailPage() {
 
         <Card className="h-fit">
           <CardContent className="flex flex-col gap-3 p-5">
-            <h2 className="text-sm font-semibold">{data.contact?.display_name ?? data.case.customer}</h2>
+            <h2 className="break-words text-sm font-semibold">
+              {data.contact?.display_name ?? data.case.customer}
+            </h2>
             <Field
               label="SLA-tolerans"
               value={
@@ -233,9 +235,9 @@ export function CaseDetailPage() {
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium text-foreground">{value}</p>
+      <p className="break-words text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }

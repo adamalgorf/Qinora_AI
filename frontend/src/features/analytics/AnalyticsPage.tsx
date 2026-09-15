@@ -54,12 +54,16 @@ export function AnalyticsPage() {
               <div className="flex flex-col gap-4">
                 {(data?.top_exception_categories ?? []).map((item) => (
                   <div className="flex flex-col gap-1" key={item.category}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold">{item.category}</span>
-                      <span className="font-bold text-destructive">{item.percent}%</span>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 break-words font-semibold">{item.category}</span>
+                      <span className="shrink-0 whitespace-nowrap font-bold text-destructive">
+                        {item.percent}%
+                      </span>
                     </div>
                     {item.location ? (
-                      <span className="text-[11px] text-muted-foreground">{item.location}</span>
+                      <span className="break-words text-[11px] text-muted-foreground">
+                        {item.location}
+                      </span>
                     ) : null}
                   </div>
                 ))}

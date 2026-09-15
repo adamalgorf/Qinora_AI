@@ -94,6 +94,7 @@ class RequestParsingAgent:
         update_request: UpdateRequestUseCase | None = None,
         task_repository: OperationalTaskWriteRepository | None = None,
         clarification_outbound: ClarificationOutboundRepository | None = None,
+        customer_mailbox: str | None = None,
     ) -> None:
         self._llm = llm
         self._create_request = create_request
@@ -102,6 +103,11 @@ class RequestParsingAgent:
         self._update_request = update_request
         self._task_repository = task_repository
         self._clarification_outbound = clarification_outbound
+        # Which mailbox clarification requests should be sent from (e.g.
+        # test.spedition@sandahls.com) when more than one Outlook bridge
+        # instance is running - see workers/outlook_bridge.py. None means
+        # "any bridge instance may send it" (single-mailbox deployments).
+        self._customer_mailbox = customer_mailbox
 
     async def execute(self, command: ParseFreeTextRequestCommand) -> ParseFreeTextRequestResult:
         draft = await self._llm.parse(raw_text=command.raw_text)
@@ -246,6 +252,7 @@ class RequestParsingAgent:
             subject=subject,
             body_text=body_text,
             in_reply_to_message_id=command.message_id,
+            sender_mailbox=self._customer_mailbox,
         )
 
 

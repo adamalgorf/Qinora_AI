@@ -43,9 +43,9 @@ from qinora.application.ports import (
     CarrierRfqRepository,
     EmailThreadRepository,
     OperationalTaskWriteRepository,
+    QuoteReplyInterpretationLLM,
 )
 from qinora.application.pricing_engine import PriceAndQuoteCommand, PricingEngine
-from qinora.application.quote_response_workflow import interpret_quote_reply
 from qinora.application.read_models import (
     CarrierRfqRecord,
     InboundEmailRecord,
@@ -68,6 +68,23 @@ MANUAL_REVIEW_REASON = "granska och svara manuellt"
 # matches "Re: QiNora RFQ #A1B2C3D4 ..." since it only anchors on the token
 # itself, not the start of the string.
 RFQ_TOKEN_RE = re.compile(r"QiNora RFQ #([0-9a-fA-F]{8})", re.IGNORECASE)
+
+# Matches the subject line application/quote_workflow.py's send_quote
+# generates, e.g. "Din offert - a1b2c3d4-..." - also matches
+# "Re: Din offert - a1b2c3d4-..." for the same reason RFQ_TOKEN_RE does.
+# Belt-and-suspenders alongside application/thread_matching.py's
+# In-Reply-To/References/subject matching: workers/outlook_bridge.py's
+# graph.reply() occasionally can't find the original message via Graph's
+# internetMessageId search and falls back to sending the quote as a brand
+# new email (see its "sending as a new mail" log line), which breaks normal
+# thread matching entirely since neither the quote's own Message-ID nor its
+# exact subject ever appear in email_inbound. The quote id is already right
+# there in the subject, so use it directly rather than depending on mail
+# threading working correctly.
+QUOTE_ID_RE = re.compile(
+    r"Din offert - ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
+    re.IGNORECASE,
+)
 
 # An RFQ is still awaiting a reply in this status - see
 # application/ports.py's CarrierRfqRepository and migrations/0006_carrier_rfq.sql.
@@ -109,6 +126,7 @@ class EmailIntakeOrchestrator:
         carrier_rfqs: CarrierRfqRepository,
         carrier_offer_agent: CarrierOfferParsingAgent,
         carrier_rfq_collector: CarrierRfqCollector,
+        quote_reply_llm: QuoteReplyInterpretationLLM,
     ) -> None:
         self._agent_config = agent_config
         self._contact_matching = contact_matching
@@ -122,6 +140,7 @@ class EmailIntakeOrchestrator:
         self._carrier_rfqs = carrier_rfqs
         self._carrier_offer_agent = carrier_offer_agent
         self._carrier_rfq_collector = carrier_rfq_collector
+        self._quote_reply_llm = quote_reply_llm
 
     async def handle(self, email_id: str) -> HandleInboundEmailResult:
         email = await self._email_threads.get(email_id)
@@ -149,6 +168,7 @@ class EmailIntakeOrchestrator:
         contact = match_result.contact
 
         thread_match = await self._thread_matching.match(
+            email_id=email_id,
             sender=email.sender,
             subject=email.subject,
             message_id=email.message_id,
@@ -158,12 +178,21 @@ class EmailIntakeOrchestrator:
         request_id = thread_match.request_id if thread_match else None
         quote_id = thread_match.quote_id if thread_match else None
 
+        if quote_id is None:
+            subject_match = await self._match_quote_reply_subject(email.subject)
+            if subject_match is not None:
+                quote_id, matched_request_id = subject_match
+                request_id = request_id or matched_request_id
+
         if quote_id:
             quote_detail = await self._operational_queries.get_quote_detail(quote_id)
             if quote_detail is not None:
                 status = quote_detail.quote.status
                 if status in ACTIVE_QUOTE_STATUSES:
-                    intent = interpret_quote_reply(email.body_text)
+                    interpretation = await self._quote_reply_llm.interpret(
+                        body_text=email.body_text
+                    )
+                    intent = interpretation.intent
                     if intent is QuoteReplyIntent.ACCEPTED:
                         await self._book_accepted_quote(
                             quote_id, quote_detail.quote.request_id, recipient_email=email.sender
@@ -270,6 +299,16 @@ class EmailIntakeOrchestrator:
         if anchor is None or anchor.id == email.id:
             return []
         return [anchor]
+
+    async def _match_quote_reply_subject(self, subject: str) -> tuple[str, str | None] | None:
+        match = QUOTE_ID_RE.search(subject)
+        if match is None:
+            return None
+        quote_id = match.group(1)
+        quote_detail = await self._operational_queries.get_quote_detail(quote_id)
+        if quote_detail is None:
+            return None
+        return quote_id, quote_detail.quote.request_id
 
     async def _match_carrier_rfq(self, email: InboundEmailRecord) -> CarrierRfqRecord | None:
         token_match = RFQ_TOKEN_RE.search(email.subject)

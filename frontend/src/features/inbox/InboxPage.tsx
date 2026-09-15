@@ -143,14 +143,16 @@ export function InboxPage() {
                   onClick={() => setSelectedMessageId(item.id)}
                   type="button"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{item.sender}</span>
-                    <span className="text-xs text-muted-foreground">{item.received_at}</span>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-semibold">{item.sender}</span>
+                    <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                      {item.received_at}
+                    </span>
                   </div>
-                  <span className="text-sm">{item.subject}</span>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <StatusChip status={item.classification} />
-                    <span className="text-xs font-medium text-accent">
+                  <span className="w-full truncate text-sm">{item.subject}</span>
+                  <div className="mt-1 flex w-full items-center justify-between gap-2">
+                    <StatusChip className="shrink-0" status={item.classification} />
+                    <span className="shrink-0 whitespace-nowrap text-xs font-medium text-accent">
                       {suggestedAction(item.classification)}
                     </span>
                   </div>
@@ -169,16 +171,18 @@ export function InboxPage() {
           ) : selected ? (
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-3">
-                <StatusChip status={selected.message.classification} />
-                <span className="text-xs text-muted-foreground">
+                <StatusChip className="shrink-0" status={selected.message.classification} />
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                   {selected.message.received_at}
                 </span>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold">{selected.message.subject}</h2>
-                <p className="text-sm text-muted-foreground">Från: {selected.message.sender}</p>
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-semibold">{selected.message.subject}</h2>
+                <p className="break-words text-sm text-muted-foreground">
+                  Från: {selected.message.sender}
+                </p>
               </div>
-              <div className="border-t border-border/40 pt-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+              <div className="min-w-0 break-words border-t border-border/40 pt-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
                 {selected.body_text}
               </div>
               <AiInsightBanner

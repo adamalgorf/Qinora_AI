@@ -1803,17 +1803,18 @@ class PostgresOutboundReplyRepository:
         subject: str,
         body_text: str,
         in_reply_to_message_id: str | None = None,
+        sender_mailbox: str | None = None,
     ) -> OutboundReplyRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.outbound_reply_queue
                   (tenant_id, quote_id, recipient, subject, body_text, status,
-                   in_reply_to_message_id)
-                values (%s, %s, %s, %s, %s, %s, %s)
+                   in_reply_to_message_id, sender_mailbox)
+                values (%s, %s, %s, %s, %s, %s, %s, %s)
                 returning
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message, in_reply_to_message_id
+                  created_at, sent_at, error_message, in_reply_to_message_id, sender_mailbox
                 """,
                 (
                     self._database.tenant_id,
@@ -1823,6 +1824,7 @@ class PostgresOutboundReplyRepository:
                     body_text,
                     "queued",
                     in_reply_to_message_id,
+                    sender_mailbox,
                 ),
             )
             row = cursor.fetchone()
@@ -1835,7 +1837,7 @@ class PostgresOutboundReplyRepository:
                 """
                 select
                   id, quote_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message, in_reply_to_message_id
+                  created_at, sent_at, error_message, in_reply_to_message_id, sender_mailbox
                 from public.outbound_reply_queue
                 where tenant_id = %s and status = %s
                 order by created_at
@@ -2004,6 +2006,17 @@ class PostgresEmailThreadRepository:
                 where tenant_id = %s and id = %s
                 """,
                 (classification, self._database.tenant_id, email_id),
+            )
+
+    async def link_quote_to_request(self, request_id: str, quote_id: str) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.email_inbound
+                set quote_id = %s
+                where tenant_id = %s and request_id = %s and quote_id is null
+                """,
+                (quote_id, self._database.tenant_id, request_id),
             )
 
 
@@ -2367,16 +2380,18 @@ class PostgresCarrierRfqOutboundRepository:
         recipient: str,
         subject: str,
         body_text: str,
+        sender_mailbox: str | None = None,
     ) -> CarrierRfqOutboundRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.carrier_rfq_outbound
-                  (tenant_id, carrier_rfq_id, recipient, subject, body_text, status)
-                values (%s, %s, %s, %s, %s, %s)
+                  (tenant_id, carrier_rfq_id, recipient, subject, body_text, status,
+                   sender_mailbox)
+                values (%s, %s, %s, %s, %s, %s, %s)
                 returning
                   id, carrier_rfq_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, sender_mailbox
                 """,
                 (
                     self._database.tenant_id,
@@ -2385,6 +2400,7 @@ class PostgresCarrierRfqOutboundRepository:
                     subject,
                     body_text,
                     "queued",
+                    sender_mailbox,
                 ),
             )
             row = cursor.fetchone()
@@ -2396,7 +2412,7 @@ class PostgresCarrierRfqOutboundRepository:
                 """
                 select
                   id, carrier_rfq_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message
+                  created_at, sent_at, error_message, sender_mailbox
                 from public.carrier_rfq_outbound
                 where tenant_id = %s and status = %s
                 order by created_at
@@ -2455,6 +2471,7 @@ def _carrier_rfq_outbound_from_postgres_row(row: dict[str, Any]) -> CarrierRfqOu
         created_at=row["created_at"].isoformat(),
         sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
         error_message=row["error_message"],
+        sender_mailbox=row.get("sender_mailbox"),
     )
 
 
@@ -2470,17 +2487,18 @@ class PostgresClarificationOutboundRepository:
         subject: str,
         body_text: str,
         in_reply_to_message_id: str | None = None,
+        sender_mailbox: str | None = None,
     ) -> ClarificationOutboundRecord:
         with self._database.connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.clarification_outbound
                   (tenant_id, inbound_email_id, recipient, subject, body_text, status,
-                   in_reply_to_message_id)
-                values (%s, %s, %s, %s, %s, %s, %s)
+                   in_reply_to_message_id, sender_mailbox)
+                values (%s, %s, %s, %s, %s, %s, %s, %s)
                 returning
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message, in_reply_to_message_id
+                  created_at, sent_at, error_message, in_reply_to_message_id, sender_mailbox
                 """,
                 (
                     self._database.tenant_id,
@@ -2490,6 +2508,7 @@ class PostgresClarificationOutboundRepository:
                     body_text,
                     "queued",
                     in_reply_to_message_id,
+                    sender_mailbox,
                 ),
             )
             row = cursor.fetchone()
@@ -2501,7 +2520,7 @@ class PostgresClarificationOutboundRepository:
                 """
                 select
                   id, inbound_email_id, recipient, subject, body_text, status,
-                  created_at, sent_at, error_message, in_reply_to_message_id
+                  created_at, sent_at, error_message, in_reply_to_message_id, sender_mailbox
                 from public.clarification_outbound
                 where tenant_id = %s and status = %s
                 order by created_at
@@ -2561,6 +2580,7 @@ def _clarification_outbound_from_postgres_row(row: dict[str, Any]) -> Clarificat
         sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
         error_message=row["error_message"],
         in_reply_to_message_id=row.get("in_reply_to_message_id"),
+        sender_mailbox=row.get("sender_mailbox"),
     )
 
 
@@ -2618,6 +2638,7 @@ def _outbound_reply_record(row: dict[str, Any]) -> OutboundReplyRecord:
         sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
         error_message=row["error_message"],
         in_reply_to_message_id=row.get("in_reply_to_message_id"),
+        sender_mailbox=row.get("sender_mailbox"),
     )
 
 

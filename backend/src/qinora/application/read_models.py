@@ -337,6 +337,12 @@ class OutboundReplyRecord:
     # (GmailThread.reply()) instead of a new top-level email. See
     # integrations/gmail-intake-bridge/Code.gs's sendQueuedReplies().
     in_reply_to_message_id: str | None = None
+    # Which mailbox should send this (e.g. "test.spedition@sandahls.com") -
+    # None means "any bridge instance may send it" (legacy rows, and
+    # deployments with only one mailbox). See workers/outlook_bridge.py's
+    # per-instance filtering when more than one bridge instance is running,
+    # each authenticated as a different mailbox.
+    sender_mailbox: str | None = None
 
 
 @dataclass(frozen=True)
@@ -417,6 +423,7 @@ class CarrierRfqOutboundRecord:
     created_at: str
     sent_at: str | None = None
     error_message: str | None = None
+    sender_mailbox: str | None = None
 
 
 @dataclass(frozen=True)
@@ -437,6 +444,7 @@ class ClarificationOutboundRecord:
     sent_at: str | None = None
     error_message: str | None = None
     in_reply_to_message_id: str | None = None
+    sender_mailbox: str | None = None
 
 
 @dataclass(frozen=True)

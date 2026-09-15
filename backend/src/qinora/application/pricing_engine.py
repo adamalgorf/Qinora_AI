@@ -91,6 +91,7 @@ class PricingEngine:
         carrier_rfqs: CarrierRfqRepository,
         carrier_rfq_outbound: CarrierRfqOutboundRepository,
         request_repository: RequestWriteRepository,
+        carrier_mailbox: str | None = None,
     ) -> None:
         self._rate_profiles = rate_profiles
         self._quote_workflow = quote_workflow
@@ -100,6 +101,11 @@ class PricingEngine:
         self._carrier_rfqs = carrier_rfqs
         self._carrier_rfq_outbound = carrier_rfq_outbound
         self._request_repository = request_repository
+        # Which mailbox carrier RFQs should be sent from (e.g.
+        # qinora.ai@sandahls.com) when more than one Outlook bridge instance
+        # is running - see workers/outlook_bridge.py. None means "any
+        # bridge instance may send it" (single-mailbox deployments).
+        self._carrier_mailbox = carrier_mailbox
 
     async def price_and_quote(self, command: PriceAndQuoteCommand) -> PricingResult:
         profile = await self._rate_profiles.find_matching(
@@ -158,6 +164,7 @@ class PricingEngine:
                 recipient=carrier.email,
                 subject=subject,
                 body_text=body_text,
+                sender_mailbox=self._carrier_mailbox,
             )
 
         await self._request_repository.update_request_status(command.request_id, SOURCING_STATUS)

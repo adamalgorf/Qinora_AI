@@ -438,10 +438,28 @@ def forward_new_mail(graph: GraphClient, api: QinoraClient, s: Settings, stats: 
                 stats.forwarded += 1
 
 
+def _mailbox_matches(item: dict, s: Settings) -> bool:
+    """True if this bridge instance (authenticated as s.send_mailbox) is the
+    one that should send `item`. A queue item's sender_mailbox is None for
+    legacy rows and single-mailbox deployments - those are fair game for any
+    bridge instance. When more than one bridge instance is running (e.g. one
+    per test.spedition@/qinora.ai@ - see application/pricing_engine.py and
+    application/quote_workflow.py's sender_mailbox routing), each instance
+    only sends the items addressed to its own mailbox and leaves the rest
+    queued for the instance that owns them.
+    """
+    sender_mailbox = item.get("sender_mailbox")
+    if not sender_mailbox:
+        return True
+    return sender_mailbox.strip().lower() == s.send_mailbox.strip().lower()
+
+
 def send_queued_replies(
     graph: GraphClient, api: QinoraClient, s: Settings, stats: RunStats
 ) -> None:
     for item in api.next_queued():
+        if not _mailbox_matches(item, s):
+            continue
         try:
             _send_item(graph, s, item)
             api.ack(item, "ack")

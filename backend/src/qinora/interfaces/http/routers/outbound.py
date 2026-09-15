@@ -70,6 +70,7 @@ async def next_queued(
             subject=item.subject,
             body_text=item.body_text,
             in_reply_to_message_id=item.in_reply_to_message_id,
+            sender_mailbox=item.sender_mailbox,
         )
         for item in quote_items
     ] + [
@@ -79,6 +80,7 @@ async def next_queued(
             recipient=item.recipient,
             subject=item.subject,
             body_text=item.body_text,
+            sender_mailbox=item.sender_mailbox,
         )
         for item in carrier_items
     ] + [
@@ -89,6 +91,7 @@ async def next_queued(
             subject=item.subject,
             body_text=item.body_text,
             in_reply_to_message_id=item.in_reply_to_message_id,
+            sender_mailbox=item.sender_mailbox,
         )
         for item in clarification_items
     ]

@@ -19,10 +19,14 @@ export function PageShell({ title, subtitle, showStatusPill = true, children }: 
   return (
     <section>
       <header className="page-shell-header">
-        <h1>{subtitle ? `${title} — ${subtitle}` : title}</h1>
+        <h1 title={subtitle ? `${title} — ${subtitle}` : title}>
+          {subtitle ? `${title} — ${subtitle}` : title}
+        </h1>
         <div className="page-shell-header-right">
-          {showStatusPill ? <span className="status-pill-live">Systemet i drift</span> : null}
-          <span className="text-[13px] text-muted-foreground">
+          {showStatusPill ? (
+            <span className="status-pill-live hidden sm:inline-flex">Systemet i drift</span>
+          ) : null}
+          <span className="hidden whitespace-nowrap text-[13px] text-muted-foreground md:inline">
             Idag: {dateFormatter.format(new Date())}
           </span>
         </div>

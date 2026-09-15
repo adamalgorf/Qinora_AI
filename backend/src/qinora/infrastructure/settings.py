@@ -28,6 +28,8 @@ class Settings:
     openai_api_key: str | None
     openai_model: str
     default_markup_percent: float
+    customer_mailbox: str | None
+    carrier_mailbox: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -51,4 +53,12 @@ class Settings:
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             default_markup_percent=float(os.getenv("QINORA_DEFAULT_MARKUP_PERCENT", "10")),
+            # Which mailbox each outbound queue's items should be sent from,
+            # when more than one mailbox/bridge instance is in play (see
+            # workers/outlook_bridge.py) - e.g. customer-facing quotes from
+            # test.spedition@sandahls.com, carrier RFQs from
+            # qinora.ai@sandahls.com. Unset (the single-mailbox default)
+            # means "any bridge instance may send it".
+            customer_mailbox=os.getenv("QINORA_CUSTOMER_MAILBOX") or None,
+            carrier_mailbox=os.getenv("QINORA_CARRIER_MAILBOX") or None,
         )

@@ -220,13 +220,18 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         outbound_repository,
         email_thread_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
 
     request_repository = SQLiteRequestWriteRepository(database)
     create_request = CreateRequestUseCase(request_repository, task_repository)
     update_request = UpdateRequestUseCase(request_repository, task_repository)
     quote_workflow = QuoteWorkflow(
-        quote_repository, outbound_repository, operational_queries, email_thread_repository
+        quote_repository,
+        outbound_repository,
+        operational_queries,
+        email_thread_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
     agent_log_repository = SQLiteAgentLogWriteRepository(database)
@@ -245,6 +250,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         carrier_rfq_outbound_repository,
         request_repository,
+        carrier_mailbox=settings.carrier_mailbox,
     )
 
     request_parsing_agent = RequestParsingAgent(
@@ -255,6 +261,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         update_request=update_request,
         task_repository=task_repository,
         clarification_outbound=clarification_outbound_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
     carrier_offer_agent = CarrierOfferParsingAgent(
         build_carrier_offer_parsing_llm(settings),
@@ -286,6 +293,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         carrier_offer_agent,
         carrier_rfq_collector,
+        build_quote_reply_interpretation_llm(settings),
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)
@@ -400,13 +408,18 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         outbound_repository,
         email_thread_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
 
     request_repository = PostgresRequestWriteRepository(database)
     create_request = CreateRequestUseCase(request_repository, task_repository)
     update_request = UpdateRequestUseCase(request_repository, task_repository)
     quote_workflow = QuoteWorkflow(
-        quote_repository, outbound_repository, operational_queries, email_thread_repository
+        quote_repository,
+        outbound_repository,
+        operational_queries,
+        email_thread_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
     process_outbound_queue = ProcessOutboundQueueUseCase(outbound_repository, outbound_mailer)
     agent_log_repository = PostgresAgentLogWriteRepository(database)
@@ -425,6 +438,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         carrier_rfq_outbound_repository,
         request_repository,
+        carrier_mailbox=settings.carrier_mailbox,
     )
 
     request_parsing_agent = RequestParsingAgent(
@@ -435,6 +449,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         update_request=update_request,
         task_repository=task_repository,
         clarification_outbound=clarification_outbound_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
     carrier_offer_agent = CarrierOfferParsingAgent(
         build_carrier_offer_parsing_llm(settings),
@@ -466,6 +481,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         carrier_offer_agent,
         carrier_rfq_collector,
+        build_quote_reply_interpretation_llm(settings),
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)

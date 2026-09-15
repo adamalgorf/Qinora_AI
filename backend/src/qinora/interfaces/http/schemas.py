@@ -522,6 +522,10 @@ class OutboundQueueItem(BaseModel):
     subject: str
     body_text: str
     in_reply_to_message_id: str | None = None
+    # Which mailbox this item should be sent from, when more than one
+    # Outlook bridge instance is running - see workers/outlook_bridge.py.
+    # None means "any bridge instance may send it".
+    sender_mailbox: str | None = None
 
 
 class OutboundAckResponse(BaseModel):

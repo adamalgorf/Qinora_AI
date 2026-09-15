@@ -4,6 +4,7 @@ import {
   FileText,
   FolderArchive,
   LayoutDashboard,
+  LogOut,
   Mail,
   Search,
   Settings,
@@ -23,7 +24,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -81,6 +89,7 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const normalizedSearchTerm = searchTerm.trim();
 
   const configQuery = useQuery({
@@ -162,6 +171,14 @@ export function AppShell() {
     navigate(result.href);
     setSearchTerm("");
     setSearchOpen(false);
+  }
+
+  function confirmLogout() {
+    clearAuthToken();
+    queryClient.setQueryData(["auth-me", loginRequired], null);
+    void queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+    setLogoutConfirmOpen(false);
+    navigate("/");
   }
 
   if (configQuery.isLoading || authQuery.isLoading) {
@@ -253,13 +270,23 @@ export function AppShell() {
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                className="h-auto rounded-md px-3 py-2.5 text-[14px] text-sidebar-foreground hover:text-destructive"
+                tooltip="Logga ut"
+                onClick={() => setLogoutConfirmOpen(true)}
+              >
+                <LogOut aria-hidden="true" className="size-4" />
+                <span>Logga ut</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
           <div className="px-2 pb-1 text-xs text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
             QiNora v{APP_VERSION}
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <header className="app-header">
           <SidebarTrigger />
           <Button
@@ -320,6 +347,26 @@ export function AppShell() {
               ) : null}
             </CommandList>
           </Command>
+        </DialogContent>
+      </Dialog>
+      <Dialog onOpenChange={setLogoutConfirmOpen} open={logoutConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Logga ut?</DialogTitle>
+            <DialogDescription>
+              Du loggas ut från QiNora på den här enheten. Eventuella osparade ändringar går
+              förlorade.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogoutConfirmOpen(false)}>
+              Avbryt
+            </Button>
+            <Button variant="destructive" onClick={confirmLogout}>
+              <LogOut aria-hidden="true" className="size-4" />
+              Logga ut
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </SidebarProvider>

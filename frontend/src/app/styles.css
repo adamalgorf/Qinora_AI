@@ -690,7 +690,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  height: 64px;
+  min-height: 64px;
   padding: 0 32px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
@@ -698,16 +698,19 @@ h1 {
 
 .page-shell-header h1 {
   max-width: none;
+  min-width: 0;
+  overflow: hidden;
   font-size: 1.25rem;
   font-weight: 600;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .page-shell-header-right {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 24px;
-  flex: none;
 }
 
 .page-shell-content {
@@ -723,7 +726,8 @@ h1 {
    wide "word", so a track/item with no explicit min-width refuses to
    shrink below it and blows out of its card. Force every direct child of
    a grid or flex layout on these pages to shrink instead. */
-.page-shell-content .grid > * {
+.page-shell-content .grid > *,
+.page-shell-content .flex > * {
   min-width: 0;
 }
 

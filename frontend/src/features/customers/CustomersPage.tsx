@@ -71,9 +71,9 @@ export function CustomersPage() {
               <Skeleton className="h-40 w-full" />
             ) : detail ? (
               <>
-                <div>
-                  <h2 className="text-lg font-semibold">{detail.display_name}</h2>
-                  <p className="text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <h2 className="break-words text-lg font-semibold">{detail.display_name}</h2>
+                  <p className="break-words text-sm text-muted-foreground">
                     {detail.segment ?? "—"}
                     {detail.customer_since ? ` · Kund sedan ${detail.customer_since}` : ""}
                   </p>
@@ -108,9 +108,9 @@ export function CustomersPage() {
 
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium text-foreground">{value}</p>
+      <p className="break-words text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }

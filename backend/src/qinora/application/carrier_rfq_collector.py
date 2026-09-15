@@ -151,6 +151,13 @@ class CarrierRfqCollector:
                 currency=cheapest.currency or "SEK",
             )
         )
+        # Back-fill quote_id onto the request's existing email thread so a
+        # later customer reply (accept/reject/revise) can resolve back to
+        # this quote via thread_matching - see EmailThreadRepository
+        # .link_quote_to_request's docstring for why this is needed here
+        # specifically (the quote didn't exist yet when the original request
+        # email was linked).
+        await self._email_threads.link_quote_to_request(request_id, quote.id)
         send_result = await self._quote_workflow.send_quote(
             SendQuoteCommand(quote_id=quote.id, recipient=recipient_email)
         )
