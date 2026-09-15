@@ -270,6 +270,15 @@ module "gcs_site" {
   labels     = local.labels
 }
 
+# Scoped to just this bucket (not project-wide) - CI needs storage.admin
+# here specifically because storage.objectAdmin alone lacks buckets.get,
+# which `gcloud storage rsync` needs to list the bucket before syncing.
+resource "google_storage_bucket_iam_member" "github_actions_frontend_deploy" {
+  bucket = module.gcs_site.bucket_name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:${module.iam.github_actions_service_account_email}"
+}
+
 module "load_balancer" {
   source = "./modules/load_balancer"
 
