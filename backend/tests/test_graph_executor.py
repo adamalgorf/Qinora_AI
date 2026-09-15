@@ -52,6 +52,8 @@ def _settings(*, openai_api_key: str | None) -> Settings:
         openai_api_key=openai_api_key,
         openai_model="gpt-4o-mini",
         default_markup_percent=10.0,
+        customer_mailbox=None,
+        carrier_mailbox=None,
     )
 
 

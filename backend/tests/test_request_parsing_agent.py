@@ -73,7 +73,14 @@ class FakeClarificationOutboundRepository:
     enqueued: list[dict] = field(default_factory=list)
 
     async def enqueue(
-        self, *, inbound_email_id, recipient, subject, body_text, in_reply_to_message_id=None
+        self,
+        *,
+        inbound_email_id,
+        recipient,
+        subject,
+        body_text,
+        in_reply_to_message_id=None,
+        sender_mailbox=None,
     ):
         item = {
             "inbound_email_id": inbound_email_id,
@@ -81,6 +88,7 @@ class FakeClarificationOutboundRepository:
             "subject": subject,
             "body_text": body_text,
             "in_reply_to_message_id": in_reply_to_message_id,
+            "sender_mailbox": sender_mailbox,
         }
         self.enqueued.append(item)
         return item

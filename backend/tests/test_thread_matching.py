@@ -70,6 +70,9 @@ class FakeEmailThreadRepository:
     async def mark_classification(self, email_id, classification):
         raise NotImplementedError
 
+    async def link_quote_to_request(self, request_id, quote_id):
+        raise NotImplementedError
+
 
 def test_normalize_subject_strips_reply_and_forward_prefixes() -> None:
     assert normalize_subject("Re: Fwd: SV: Quote request") == "quote request"
@@ -83,6 +86,7 @@ def test_tier_1_matches_on_in_reply_to_message_id() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="logistics@volvo.example",
             subject="Re: Quote request Hamburg",
             message_id="<xyz@mail.example>",
@@ -112,6 +116,7 @@ def test_tier_2_matches_normalized_subject_and_sender_within_30_days() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="logistics@volvo.example",
             subject="Re: Quote request Hamburg",
             message_id=None,
@@ -138,6 +143,7 @@ def test_tier_3_falls_back_beyond_30_day_window() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="logistics@volvo.example",
             subject="Fwd: Quote request Hamburg",
             message_id=None,
@@ -166,6 +172,7 @@ def test_public_webmail_domain_requires_exact_sender_match() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="me@gmail.com",
             subject="Re: Quote request Hamburg",
             message_id=None,
@@ -189,6 +196,7 @@ def test_non_webmail_domain_matches_on_domain() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="logistics@volvo.example",
             subject="Re: Quote request Hamburg",
             message_id=None,
@@ -208,6 +216,7 @@ def test_blank_subject_never_matches() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="logistics@volvo.example",
             subject="   ",
             message_id=None,
@@ -225,6 +234,7 @@ def test_no_candidates_returns_none() -> None:
 
     result = anyio.run(
         lambda: matcher.match(
+            email_id="mail-new",
             sender="nobody@example.com",
             subject="Something new",
             message_id=None,

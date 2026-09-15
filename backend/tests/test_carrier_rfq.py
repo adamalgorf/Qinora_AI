@@ -227,6 +227,9 @@ class FakeCollectorEmailThreadRepository:
     async def mark_classification(self, email_id, classification):
         raise NotImplementedError
 
+    async def link_quote_to_request(self, request_id, quote_id):
+        pass
+
 
 @dataclass
 class FakeCollectorContactReadRepository:
@@ -314,7 +317,14 @@ class FakeOutboundReplyRepository:
     enqueued: list = field(default_factory=list)
 
     async def enqueue_quote(
-        self, *, quote_id, recipient, subject, body_text, in_reply_to_message_id=None
+        self,
+        *,
+        quote_id,
+        recipient,
+        subject,
+        body_text,
+        in_reply_to_message_id=None,
+        sender_mailbox=None,
     ):
         record = OutboundReplyRecord(
             id="reply-1",
@@ -325,6 +335,7 @@ class FakeOutboundReplyRepository:
             status="queued",
             created_at="2026-01-01T00:00:00",
             in_reply_to_message_id=in_reply_to_message_id,
+            sender_mailbox=sender_mailbox,
         )
         self.enqueued.append(record)
         return record
