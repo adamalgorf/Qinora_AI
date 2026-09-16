@@ -538,7 +538,10 @@ def device_code_login() -> None:
         )
         payload = json.loads(body)
         if status == 200:
-            print("\nSigned in. Store this as OUTLOOK_REFRESH_TOKEN (qinora-outlook-refresh-token in Secret Manager):\n")
+            print(
+                "\nSigned in. Store this as OUTLOOK_REFRESH_TOKEN "
+                "(qinora-outlook-refresh-token in Secret Manager):\n"
+            )
             print(payload["refresh_token"])
             return
         if payload.get("error") in {"authorization_pending", "slow_down"}:
