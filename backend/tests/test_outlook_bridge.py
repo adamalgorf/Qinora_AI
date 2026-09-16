@@ -240,6 +240,90 @@ def test_send_failure_is_reported_back(settings, http):
     assert "ErrorAccessDenied" in json.loads(fail["raw"])["error_message"]
 
 
+def test_mailbox_matches_true_when_sender_mailbox_unset(settings):
+    # Legacy rows and single-mailbox deployments have no sender_mailbox at
+    # all - fair game for any bridge instance to pick up.
+    assert ob._mailbox_matches({"sender_mailbox": None}, settings) is True
+    assert ob._mailbox_matches({}, settings) is True
+
+
+def test_mailbox_matches_is_case_and_whitespace_insensitive(settings):
+    assert ob._mailbox_matches({"sender_mailbox": " Test.Spedition@Sandahls.com "}, settings)
+
+
+def test_mailbox_matches_false_for_a_different_bridge_instances_mail(settings):
+    # settings.send_mailbox is test.spedition@sandahls.com - an item routed
+    # to qinora.ai@sandahls.com belongs to the OTHER bridge instance and
+    # must be left alone, not raced for / double-sent.
+    assert not ob._mailbox_matches({"sender_mailbox": "qinora.ai@sandahls.com"}, settings)
+
+
+def test_send_queued_replies_skips_items_for_another_mailbox(settings, http):
+    # Reproduced live 2026-09-16: two bridge instances (one per mailbox)
+    # both polling the same /outbound/next-queued raced each other and
+    # marked the other instance's item "sent" without actually delivering
+    # it. This locks in that a mismatched item is skipped entirely - never
+    # sent and never ack'd - so the owning instance still gets to send it.
+    items = [
+        {
+            "queue": "carrier_offer_report",
+            "id": "r1",
+            "recipient": "test.spedition@sandahls.com",
+            "subject": "QiNora Offert",
+            "body_text": "Billigaste svaret ...",
+            "in_reply_to_message_id": None,
+            "sender_mailbox": "qinora.ai@sandahls.com",
+        },
+        {
+            "queue": "quote",
+            "id": "q1",
+            "recipient": "kund@example.com",
+            "subject": "Din offert",
+            "body_text": "Pris: 1100 SEK",
+            "in_reply_to_message_id": None,
+            "sender_mailbox": "test.spedition@sandahls.com",
+        },
+    ]
+    http.route("GET", "/outbound/next-queued", 200, items)
+    http.route("POST", "/sendMail", 202, b"")
+    http.route("POST", "/outbound/quote/q1/ack", 200, {})
+    http.route("POST", "/outbound/collect-carrier-rfqs", 200, {})
+
+    stats = ob.RunStats()
+    ob.send_queued_replies(ob.GraphClient(settings), ob.QinoraClient(settings), settings, stats)
+
+    assert (stats.sent, stats.failed) == (1, 0)
+    send_calls = [c for c in http.calls if "/sendMail" in c["url"]]
+    assert len(send_calls) == 1
+    assert send_calls[0]["json"]["message"]["toRecipients"][0]["emailAddress"]["address"] == (
+        "kund@example.com"
+    )
+    assert not any(c["url"].endswith("/r1/ack") for c in http.calls)
+    assert not any(c["url"].endswith("/r1/fail") for c in http.calls)
+
+
+def test_repair_mojibake_reverses_latin1_as_utf8_misdecoding():
+    original = "Förfrågan från Åsa"
+    # Build the exact mangling Graph produces: the original UTF-8 bytes
+    # mis-decoded as Latin-1 (see _repair_mojibake's docstring) - spelled
+    # out programmatically rather than as a literal, since the mangled form
+    # is itself fragile to how this file/editor round-trips non-ASCII text.
+    mangled = original.encode("utf-8").decode("latin1")
+    assert ob._repair_mojibake(mangled) == original
+
+
+def test_repair_mojibake_is_a_safe_no_op_on_already_correct_text():
+    # "ö" (U+00F6) encodes to a single Latin-1 byte (0xF6), which is not
+    # valid UTF-8 on its own - the round trip must raise internally and
+    # return the original text unchanged rather than corrupting it further.
+    correct = "Förfrågan från Åsa"
+    assert ob._repair_mojibake(correct) == correct
+
+
+def test_repair_mojibake_handles_empty_string():
+    assert ob._repair_mojibake("") == ""
+
+
 def test_delegated_mode_uses_me_and_refresh_grant(monkeypatch, http):
     monkeypatch.setenv("OUTLOOK_TENANT_ID", "t")
     monkeypatch.setenv("OUTLOOK_CLIENT_ID", "c")
