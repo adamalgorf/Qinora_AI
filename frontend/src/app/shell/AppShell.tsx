@@ -199,7 +199,7 @@ export function AppShell() {
 
   const searchResults = searchQuery.data ?? [];
 
-  const displayName = authQuery.data?.user_id ?? "Qinora User";
+  const displayName = authQuery.data?.full_name || "Qinora User";
   const displayRole = authQuery.data?.roles?.[0] ?? "Operatör";
   const initials = displayName
     .split(/[\s._-]+/)

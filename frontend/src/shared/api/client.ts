@@ -27,6 +27,7 @@ export type AuthMe = {
   user_id: string;
   tenant_id: string;
   roles: string[];
+  full_name: string | null;
 };
 
 export type DevTokenPayload = {
