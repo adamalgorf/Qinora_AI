@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { getLastLoginEmail, setLastLoginEmail } from "@/shared/api/client";
+import { ThemeToggle } from "@/shared/theme/ThemeToggle";
 
 type LoginScreenProps = {
   error: string | null;
@@ -45,7 +46,11 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-6 py-12">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
+
       <Card className="w-full max-w-md">
         <CardContent className="flex flex-col gap-6 p-8">
           <div className="flex flex-col items-center gap-3 text-center">
