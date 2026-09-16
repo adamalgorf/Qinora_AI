@@ -488,9 +488,24 @@ class FakeCarrierOfferWriteRepository:
 @dataclass
 class FakeCarrierRfqCollector:
     finalized: list = field(default_factory=list)
+    finalized_customer_quotes: list = field(default_factory=list)
+    # Set by tests that need to observe ordering: which email_threads fake
+    # and which inbound email id to read the classification of, at the
+    # moment finalize_customer_quote() is invoked.
+    email_threads: object = None
+    offer_report_email_id: str | None = None
+    classification_at_finalize: str | None = "not_called"
 
     async def finalize_batch(self, request_id):
         self.finalized.append(request_id)
+        return None
+
+    async def finalize_customer_quote(self, request_id):
+        self.finalized_customer_quotes.append(request_id)
+        if self.email_threads is not None and self.offer_report_email_id is not None:
+            self.classification_at_finalize = self.email_threads.classifications.get(
+                self.offer_report_email_id
+            )
         return None
 
 
@@ -556,6 +571,7 @@ def _build_orchestrator(
     carrier_rfq_repository: FakeCarrierRfqRepository | None = None,
     carrier_offer_draft: ParsedCarrierOfferDraft | None = None,
     carrier_offer_agent_config: AgentConfigRecord | None = None,
+    carrier_mailbox: str | None = None,
 ):
     email_threads = FakeEmailThreadRepository(emails={email.id: email})
     contacts = FakeContactReadRepository(contact=contact)
@@ -657,6 +673,7 @@ def _build_orchestrator(
         carrier_offer_agent,
         carrier_rfq_collector,
         StubQuoteReplyInterpretationLLM(),
+        carrier_mailbox=carrier_mailbox,
     )
     return (
         orchestrator,
@@ -1092,3 +1109,79 @@ def test_reply_on_unlinked_thread_still_sees_original_email_as_context() -> None
     combined_text = llm.raw_texts[0]
     assert "Stockholm till Hamburg" in combined_text
     assert "nasta vecka tisdag kl 10.00" in combined_text
+
+
+def test_offer_report_marks_classification_before_finalizing_customer_quote() -> None:
+    # Reproduced live 2026-09-16: finalize_customer_quote() (via
+    # quote_workflow.latest_customer_email()) reads this email's
+    # classification back from the database to decide whether it's "the
+    # customer" to quote. If it's still whatever the default was at insert
+    # time instead of already "carrier_offer_report", this row (sender=
+    # qinora.ai@, not the customer) gets picked as the customer by mistake
+    # and the quote is sent back to qinora.ai@ instead of the real customer.
+    # _handle_offer_report() fixes this by marking the classification BEFORE
+    # calling finalize_customer_quote(), not after like every other branch's
+    # self._finish(). This test locks in that ordering.
+    request_id = "a1b2c3d4-0000-4000-8000-000000000001"
+    email = _email(
+        "mail-9",
+        sender="qinora.ai@sandahls.com",
+        subject=f"QiNora Offert #{request_id} - transportörssvar",
+        body_text="Billigaste transportörssvaret ...",
+    )
+    parsek_config = _parsek_config()
+
+    (
+        orchestrator,
+        email_threads,
+        _contacts,
+        _task_repository,
+        *_,
+        carrier_rfq_collector,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        carrier_mailbox="qinora.ai@sandahls.com",
+    )
+    carrier_rfq_collector.email_threads = email_threads
+    carrier_rfq_collector.offer_report_email_id = "mail-9"
+
+    result = anyio.run(lambda: orchestrator.handle("mail-9"))
+
+    assert result.classification == "carrier_offer_report"
+    assert email_threads.classifications["mail-9"] == "carrier_offer_report"
+    assert carrier_rfq_collector.finalized_customer_quotes == [request_id]
+    assert carrier_rfq_collector.classification_at_finalize == "carrier_offer_report"
+    assert ("mail-9", request_id, None) in email_threads.linked
+
+
+def test_offer_report_from_unconfigured_sender_is_not_matched() -> None:
+    # A customer or a real carrier can't spoof the offer-report path just by
+    # guessing the subject format - it must also come from the exact
+    # configured carrier mailbox. Falls through to normal Parsek handling
+    # instead (here, an incomplete/unparseable draft -> "pending").
+    request_id = "a1b2c3d4-0000-4000-8000-000000000002"
+    email = _email(
+        "mail-10",
+        sender="someone-else@example.com",
+        subject=f"QiNora Offert #{request_id} - transportörssvar",
+        body_text="trying to spoof the offer report",
+    )
+    parsek_config = _parsek_config()
+
+    (
+        orchestrator,
+        _email_threads,
+        _contacts,
+        _task_repository,
+        *_,
+        carrier_rfq_collector,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        carrier_mailbox="qinora.ai@sandahls.com",
+    )
+
+    anyio.run(lambda: orchestrator.handle("mail-10"))
+
+    assert carrier_rfq_collector.finalized_customer_quotes == []

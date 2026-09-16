@@ -228,6 +228,70 @@ def test_blank_subject_never_matches() -> None:
     assert result is None
 
 
+def test_excludes_the_email_being_processed_from_its_own_candidate_pool() -> None:
+    # EmailWebhookUseCase.save() already wrote this exact email to
+    # email_inbound before thread_matching ever runs, so it's in its own
+    # candidate pool - a "Re: <original subject>" reply normalizes to the
+    # same subject as the thread it's replying to, and since candidates are
+    # ordered created_at desc, the email would "match itself" first (with
+    # empty request_id/quote_id) and mask the real anchor underneath it.
+    # Reproduced live 2026-09-16.
+    real_anchor = _email(
+        "mail-1",
+        subject="Quote request Hamburg",
+        request_id="req-7",
+        created_at=(datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
+    )
+    self_row = _email(
+        "mail-new",
+        subject="Re: Quote request Hamburg",
+        request_id=None,
+        created_at=datetime.now(UTC).isoformat(),
+    )
+    repository = FakeEmailThreadRepository(domain_candidates=[self_row, real_anchor])
+    matcher = ThreadMatchingUseCase(repository)
+
+    result = anyio.run(
+        lambda: matcher.match(
+            email_id="mail-new",
+            sender="logistics@volvo.example",
+            subject="Re: Quote request Hamburg",
+            message_id=None,
+            in_reply_to=None,
+            references=None,
+        )
+    )
+
+    assert result is not None
+    assert result.request_id == "req-7"
+    assert result.matched_email_id == "mail-1"
+
+
+def test_excludes_the_email_being_processed_from_tier_1_message_id_candidates() -> None:
+    # Same self-matching risk as the subject-based tiers above, but for the
+    # In-Reply-To/References message-id lookup - a message can't legitimately
+    # be a reply to itself.
+    real_anchor = _email("mail-1", message_id="<abc@mail.example>", request_id="req-8")
+    self_row = _email("mail-new", message_id="<xyz@mail.example>", request_id=None)
+    repository = FakeEmailThreadRepository(message_id_candidates=[self_row, real_anchor])
+    matcher = ThreadMatchingUseCase(repository)
+
+    result = anyio.run(
+        lambda: matcher.match(
+            email_id="mail-new",
+            sender="logistics@volvo.example",
+            subject="Re: Quote request Hamburg",
+            message_id="<xyz@mail.example>",
+            in_reply_to="<abc@mail.example> <xyz@mail.example>",
+            references=None,
+        )
+    )
+
+    assert result is not None
+    assert result.request_id == "req-8"
+    assert result.matched_email_id == "mail-1"
+
+
 def test_no_candidates_returns_none() -> None:
     repository = FakeEmailThreadRepository()
     matcher = ThreadMatchingUseCase(repository)

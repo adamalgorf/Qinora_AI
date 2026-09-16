@@ -3,7 +3,12 @@ from dataclasses import dataclass, field, replace
 import anyio
 
 from qinora.application.operational_queries import OperationalQueries
-from qinora.application.quote_workflow import QuoteWorkflow, SendQuoteCommand
+from qinora.application.quote_workflow import (
+    QuoteWorkflow,
+    SendQuoteCommand,
+    first_customer_email,
+    latest_customer_email,
+)
 from qinora.application.read_models import (
     InboundEmailRecord,
     OutboundReplyRecord,
@@ -114,14 +119,21 @@ def _quote_workflow(
     return workflow, outbound
 
 
-def _inbound(message_id: str, sender_name: str | None = None) -> InboundEmailRecord:
+def _inbound(
+    message_id: str,
+    sender_name: str | None = None,
+    *,
+    sender: str = "customer@example.com",
+    classification: str = "transport_request",
+    email_id: str = "email-1",
+) -> InboundEmailRecord:
     return InboundEmailRecord(
-        id="email-1",
-        sender="customer@example.com",
+        id=email_id,
+        sender=sender,
         recipient="farah@qinora.org",
         subject="Fraktforfragan",
         body_text="...",
-        classification="transport_request",
+        classification=classification,
         message_id=message_id,
         in_reply_to=None,
         references_header=None,
@@ -162,3 +174,69 @@ def test_send_quote_has_no_reply_target_when_thread_is_empty() -> None:
     anyio.run(run)
 
     assert outbound.enqueued[0].in_reply_to_message_id is None
+
+
+def test_latest_customer_email_skips_carrier_offer_report_at_end_of_thread() -> None:
+    # Reproduced live 2026-09-16: qinora.ai@ reports the winning carrier
+    # rate back to test.spedition@ as the newest row in the thread. Picking
+    # it as "the customer to reply to" sent the customer's own quote back to
+    # qinora.ai@ instead of the customer - see quote_workflow.py's
+    # _NON_CUSTOMER_CLASSIFICATIONS docstring.
+    history = [
+        _inbound("<opening@mail.example.com>", "Real Customer"),
+        _inbound(
+            "<report@mail.example.com>",
+            "Qinora",
+            sender="qinora.ai@sandahls.com",
+            classification="carrier_offer_report",
+        ),
+    ]
+
+    result = latest_customer_email(history)
+
+    assert result is not None
+    assert result.message_id == "<opening@mail.example.com>"
+    assert result.sender == "customer@example.com"
+
+
+def test_first_customer_email_stays_fixed_regardless_of_later_thread_contamination() -> None:
+    # first_customer_email() must keep pointing at whoever opened the
+    # request even when later noise lands in the thread (a carrier reply, an
+    # offer report, a stray bounce) - carrier_rfq_collector.py._quote_customer
+    # uses this specifically so "who do we quote" never drifts. See
+    # first_customer_email()'s own docstring for the full incident history.
+    opening = _inbound("<opening@mail.example.com>", "Real Customer")
+    carrier_reply = _inbound(
+        "<carrier@mail.example.com>",
+        "Carrier Co",
+        sender="carrier@example.com",
+        classification="carrier_offer",
+        email_id="email-2",
+    )
+    offer_report = _inbound(
+        "<report@mail.example.com>",
+        "Qinora",
+        sender="qinora.ai@sandahls.com",
+        classification="carrier_offer_report",
+        email_id="email-3",
+    )
+    history = [opening, carrier_reply, offer_report]
+
+    result = first_customer_email(history)
+
+    assert result is not None
+    assert result.message_id == "<opening@mail.example.com>"
+    assert result.sender == "customer@example.com"
+
+
+def test_first_customer_email_returns_none_when_thread_has_no_customer_message() -> None:
+    history = [
+        _inbound(
+            "<report@mail.example.com>",
+            "Qinora",
+            sender="qinora.ai@sandahls.com",
+            classification="carrier_offer_report",
+        ),
+    ]
+
+    assert first_customer_email(history) is None
