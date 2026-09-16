@@ -10,6 +10,7 @@ import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { AutomationsPage } from "../features/automations/AutomationsPage";
 import { CaseDetailPage } from "../features/cases/CaseDetailPage";
 import { CasesPage } from "../features/cases/CasesPage";
+import { CustomerCasesPage } from "../features/customers/CustomerCasesPage";
 import { CustomersPage } from "../features/customers/CustomersPage";
 import { DocumentsPage } from "../features/documents/DocumentsPage";
 import { InboxPage } from "../features/inbox/InboxPage";
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
       { path: "automations", element: <AutomationsPage /> },
       { path: "documents", element: <DocumentsPage /> },
       { path: "customers", element: <CustomersPage /> },
+      { path: "customers/by-email/:email", element: <CustomerCasesPage /> },
       { path: "analytics", element: <AnalyticsPage /> },
       { path: "carriers", element: <CarriersPage /> },
       { path: "settings", element: <SettingsPage /> },

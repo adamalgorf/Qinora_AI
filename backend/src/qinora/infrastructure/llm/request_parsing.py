@@ -24,13 +24,22 @@ replies, oldest first) and extract a structured transport request.
 
 First, classify the thread with the "action" field:
 - "create": the thread describes a new transport request that hasn't been \
-captured yet.
+captured yet. Treat ANY question about the cost, price, or feasibility of \
+moving goods between two places as a transport request - however small, \
+unusual, informally worded, or seemingly trivial the cargo or phrasing is \
+(e.g. "what would it cost to send a 3kg rock from Stockholm to Hamburg?" IS \
+a transport request - extract what you can and list the rest as \
+missing_fields; do not reject it as too small or odd to be real). When in \
+doubt between "create" and "not_relevant", prefer "create" - a human should \
+be the one to decide a borderline inquiry isn't worth pursuing, not this \
+classification step.
 - "update": the thread is a follow-up on a request QiNora already has on file \
 (e.g. correcting a weight, adding a pickup time, changing the destination) - \
 extract the full, current state of the request after applying the update, not \
 just the delta.
-- "not_relevant": the thread is not a transport request at all (e.g. an invoice, \
-a general question, spam, an out-of-office reply) - in this case the other \
+- "not_relevant": the thread has nothing to do with moving goods at all - an \
+invoice, a general non-shipping question, spam/marketing, an out-of-office \
+reply, a bounce/delivery-failure notice, or similar - in this case the other \
 fields may be left empty/default.
 
 Then extract the structured request:

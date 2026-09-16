@@ -4,6 +4,7 @@ from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
     CarrierOfferRecord,
+    CarrierOfferReportOutboundRecord,
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
@@ -240,6 +241,16 @@ class OperationalReadRepository(Protocol):
         pass
 
     async def list_outbound_replies(self) -> list[OutboundReplyRecord]:
+        pass
+
+    async def list_clarification_replies(self) -> list[ClarificationOutboundRecord]:
+        pass
+
+    async def list_thread_emails_for_request(self, request_id: str) -> list[InboundEmailRecord]:
+        """Every email_inbound row (customer AND carrier) linked to this
+        request, oldest first - the full email conversation for a case, see
+        application/operational_queries.py's get_case_detail().
+        """
         pass
 
     async def list_documents(self) -> list[DocumentRecord]:
@@ -625,6 +636,39 @@ class CarrierRfqOutboundRepository(Protocol):
         pass
 
     async def mark_failed(self, item_id: str, error_message: str) -> CarrierRfqOutboundRecord:
+        pass
+
+
+class CarrierOfferReportOutboundRepository(Protocol):
+    """Mirrors CarrierRfqOutboundRepository, but for the
+    carrier_offer_report_outbound table - queues the "here's the winning
+    carrier rate" email application/carrier_rfq_collector.py sends from the
+    carrier mailbox to the customer mailbox once a batch's cheapest offer is
+    known, ahead of the customer-facing quote (see CarrierOfferReportOutboundRecord's
+    docstring in read_models.py for why this hop is a real email rather
+    than a function call).
+    """
+
+    async def enqueue(
+        self,
+        *,
+        request_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        sender_mailbox: str | None = None,
+    ) -> CarrierOfferReportOutboundRecord:
+        pass
+
+    async def next_queued(self, limit: int) -> list[CarrierOfferReportOutboundRecord]:
+        pass
+
+    async def mark_sent(self, item_id: str) -> CarrierOfferReportOutboundRecord:
+        pass
+
+    async def mark_failed(
+        self, item_id: str, error_message: str
+    ) -> CarrierOfferReportOutboundRecord:
         pass
 
 

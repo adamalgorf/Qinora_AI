@@ -127,25 +127,57 @@ class QuoteWorkflow:
         return None
 
 
-# "carrier_offer" (application/email_intake_orchestrator.py's
-# _handle_carrier_reply) is the one classification that isn't customer mail:
-# a transport_request's email thread links both the customer's own messages
-# and, once carrier sourcing starts (application/pricing_engine.py), the
-# carrier's replies - all keyed to the same request_id, but a carrier reply
-# lives in a different physical mailbox (e.g. qinora.ai@ vs test.spedition@ -
-# see workers/outlook_bridge.py's per-mailbox bridge instances). Picking a
-# carrier reply as "the message to reply to" here would have the wrong
-# bridge instance try to find it via Graph, fail (it's not in that mailbox),
-# and silently fall back to sending a brand new, unthreaded email instead of
-# a reply in the customer's own thread - reproduced live 2026-09-15.
-_CARRIER_CLASSIFICATION = "carrier_offer"
+# Classifications that aren't customer mail, even though they're linked to
+# the same request_id as the customer's own messages:
+# - "carrier_offer" (application/email_intake_orchestrator.py's
+#   _handle_carrier_reply): a carrier's reply, living in a different
+#   physical mailbox (e.g. qinora.ai@ vs test.spedition@ - see
+#   workers/outlook_bridge.py's per-mailbox bridge instances). Picking one
+#   as "the message to reply to" would have the wrong bridge instance try
+#   to find it via Graph, fail, and silently fall back to sending a brand
+#   new, unthreaded email instead of a reply in the customer's own thread -
+#   reproduced live 2026-09-15.
+# - "carrier_offer_report" (application/email_intake_orchestrator.py's
+#   _handle_offer_report): qinora.ai@ reporting the winning carrier rate to
+#   test.spedition@ (see carrier_rfq_collector.py's module docstring) - not
+#   from the customer either. Picking it as "the customer" would send the
+#   customer's own quote back to qinora.ai@ instead - reproduced live
+#   2026-09-16.
+_NON_CUSTOMER_CLASSIFICATIONS = frozenset({"carrier_offer", "carrier_offer_report"})
 
 
 def latest_customer_email(
     history: list[InboundEmailRecord],
 ) -> InboundEmailRecord | None:
-    customer_messages = [row for row in history if row.classification != _CARRIER_CLASSIFICATION]
+    customer_messages = [
+        row for row in history if row.classification not in _NON_CUSTOMER_CLASSIFICATIONS
+    ]
     return customer_messages[-1] if customer_messages else None
+
+
+def first_customer_email(
+    history: list[InboundEmailRecord],
+) -> InboundEmailRecord | None:
+    """Like latest_customer_email(), but the earliest customer message
+    instead of the most recent - who the customer actually IS should be
+    read off the request-opening email, not "whichever customer-classified
+    row happens to be newest". The latter is fragile: any inbound email
+    that lands in the thread without landing in
+    _NON_CUSTOMER_CLASSIFICATIONS (an unanticipated auto-reply, a stray
+    bounce, one mailbox's own sent-copy getting picked up by another
+    bridge instance polling a different mailbox - all observed live
+    2026-09-16 in a two-mailbox setup) gets picked as "the customer" and
+    the customer's own quote is sent to it instead of to them.
+    application/carrier_rfq_collector.py uses this specifically because who
+    to quote must stay fixed at whoever opened the request, no matter what
+    else lands in the thread afterwards; application/quote_workflow.py and
+    application/booking_workflow.py still want the latest one, to reply
+    within the right sub-thread.
+    """
+    for row in history:
+        if row.classification not in _NON_CUSTOMER_CLASSIFICATIONS:
+            return row
+    return None
 
 
 def _format_quote_body(

@@ -49,7 +49,19 @@ services:
       retries: 3
       start_period: 5s
 
-  outbound-mailer:
+  # outbound-mailer (workers/outbound_mailer.py, RecordingOutboundMailer) is
+  # intentionally NOT defined here anymore - it's a no-op test double that
+  # marks outbound_reply_queue items "sent" without ever actually delivering
+  # them, and it drains the same queue as outlook-bridge below. Run
+  # alongside it, it silently swallows real customer-facing emails (quotes,
+  # booking confirmations) - reproduced live 2026-09-15/16. The real send
+  # path is workers/outlook_bridge.py (or, if the Outlook bridge isn't
+  # configured, integrations/gmail-intake-bridge/Code.gs) - see
+  # interfaces/http/routers/outbound.py's module docstring. Do not add this
+  # service back without also gating it so it can never run at the same
+  # time as outlook-bridge.
+
+  tracking-simulator:
     build:
       context: ./backend
     depends_on:
@@ -67,29 +79,6 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       QINORA_CUSTOMER_MAILBOX: ${QINORA_CUSTOMER_MAILBOX:-}
       QINORA_CARRIER_MAILBOX: ${QINORA_CARRIER_MAILBOX:-}
-    volumes:
-      - qinora_data:/app/data
-    # Each workers/*.py entrypoint runs one batch pass and exits (see its
-    # own `if __name__ == "__main__"` - designed to be invoked by an
-    # external scheduler, e.g. cron). Docker Compose services expect a
-    # long-running process, so loop it here rather than changing the
-    # script's own one-shot semantics that README.md's manual `python -m`
-    # instructions rely on.
-    entrypoint: sh -c
-    command:
-      - 'while true; do python -m qinora.workers.outbound_mailer; sleep 30; done'
-    # These containers don't serve HTTP, so the backend image's inherited
-    # HEALTHCHECK (a GET against :8000/ready) can never succeed.
-    healthcheck:
-      disable: true
-
-  tracking-simulator:
-    build:
-      context: ./backend
-    depends_on:
-      backend:
-        condition: service_healthy
-    environment: *worker_environment
     volumes:
       - qinora_data:/app/data
     entrypoint: sh -c

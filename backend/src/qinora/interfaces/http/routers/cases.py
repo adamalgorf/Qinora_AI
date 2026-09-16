@@ -8,6 +8,7 @@ from qinora.interfaces.http.dependencies import AUTH_CONTEXT, CONTAINER
 from qinora.interfaces.http.schemas import (
     CaseActivityItem,
     CaseDetailResponse,
+    CaseEmailItem,
     CaseListItem,
     ContactListItem,
     CreateCaseNotePayload,
@@ -58,6 +59,7 @@ async def case_detail(
         contact=ContactListItem(**detail.contact.__dict__) if detail.contact else None,
         notes=[InternalNoteItem(**note.__dict__) for note in detail.notes],
         activity=[CaseActivityItem(**entry) for entry in detail.activity],
+        emails=[CaseEmailItem(**entry) for entry in detail.emails],
     )
 
 

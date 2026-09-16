@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Cpu } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { AiInsightBanner } from "@/components/patterns/AiInsightBanner";
 import { PageShell } from "@/components/patterns/PageShell";
@@ -19,6 +19,7 @@ import {
   type AcceptQuoteResponse,
   type ApiProblem,
   type CaseDetailResponse,
+  type CaseEmailItem,
   type CreateInternalNotePayload,
   type InternalNoteItem,
   type QuoteReplyPayload,
@@ -28,6 +29,7 @@ import {
 
 export function CaseDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [replyMode, setReplyMode] = useState<"external" | "internal">("external");
   const [message, setMessage] = useState("");
@@ -119,7 +121,20 @@ export function CaseDetailPage() {
           <Card>
             <CardContent className="flex flex-col gap-3 p-5">
               <h2 className="text-sm font-semibold">AI-extraherade ruttfakta</h2>
-              <Field label="Sändare" value={data.case.customer} />
+              <Field
+                label="Sändare"
+                value={
+                  <button
+                    className="hover:underline"
+                    onClick={() =>
+                      navigate(`/customers/by-email/${encodeURIComponent(data.case.customer)}`)
+                    }
+                    type="button"
+                  >
+                    {data.case.customer}
+                  </button>
+                }
+              />
               <Field label="Rutt" value={data.case.lane} />
               <Field label="Godstyp" value={data.request_detail.request.mode} />
               <Field
@@ -153,6 +168,24 @@ export function CaseDetailPage() {
             heading="AI-Rekommendation"
             icon={Cpu}
           />
+          <Card>
+            <CardContent className="flex flex-col gap-4 p-5">
+              <h2 className="text-sm font-semibold">
+                E-postkonversation ({data.emails.length})
+              </h2>
+              {data.emails.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Inga mail kopplade till det här ärendet ännu.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {data.emails.map((email, i) => (
+                    <EmailThreadEntry email={email} key={`${email.timestamp}-${i}`} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardContent className="flex flex-col gap-4 p-5">
               <h2 className="text-sm font-semibold">Ärendehistorik och loggar</h2>
@@ -230,6 +263,49 @@ export function CaseDetailPage() {
         </Card>
       </div>
     </PageShell>
+  );
+}
+
+const EMAIL_KIND_LABELS: Record<CaseEmailItem["kind"], string> = {
+  customer: "Kund",
+  carrier: "Transportör",
+  quote: "Offert",
+  clarification: "Klargörande",
+  booking_confirmation: "Bokningsbekräftelse",
+};
+
+function EmailThreadEntry({ email }: { email: CaseEmailItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview =
+    email.body_text.length > 240 && !expanded
+      ? `${email.body_text.slice(0, 240)}…`
+      : email.body_text;
+
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={email.direction === "inbound" ? "outline" : "secondary"}>
+          {email.direction === "inbound" ? "Inkommande" : "Utgående"}
+        </Badge>
+        <Badge variant="outline">{EMAIL_KIND_LABELS[email.kind]}</Badge>
+        <span className="text-xs text-muted-foreground">{email.timestamp ?? "—"}</span>
+      </div>
+      <p className="mt-2 break-words text-xs text-muted-foreground">
+        Från: <span className="font-medium text-foreground">{email.sender}</span> · Till:{" "}
+        <span className="font-medium text-foreground">{email.recipient}</span>
+      </p>
+      <p className="mt-1 break-words font-medium">{email.subject}</p>
+      <p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{preview}</p>
+      {email.body_text.length > 240 ? (
+        <button
+          className="mt-1 text-xs font-medium text-primary hover:underline"
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          {expanded ? "Visa mindre" : "Visa mer"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

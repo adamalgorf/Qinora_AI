@@ -391,6 +391,29 @@ def _address(entry: dict | None) -> tuple[str, str]:
     return address, name
 
 
+def _repair_mojibake(text: str) -> str:
+    """Graph's outlook.body-content-type="text" conversion (see the `Prefer`
+    header in GraphClient.list_unread()) sometimes mis-decodes a message's
+    original UTF-8 bytes as Latin-1/cp1252 before re-encoding to UTF-8 for
+    the API response - every accented character then survives the trip as
+    two-or-more mangled characters (e.g. "Förfråga" -> "FÃ¶rfrÃ¥ga").
+    Reversing that exact mistake (encode what we received as Latin-1, decode
+    those bytes as UTF-8) restores the original text. Safe no-op on text
+    that was never mangled this way: genuinely correct UTF-8 containing
+    Swedish letters directly (e.g. "ö" = U+00F6) fails to re-decode as UTF-8
+    once encoded back to a single Latin-1 byte (0xF6 alone isn't valid
+    UTF-8), so the round trip raises and the original text is returned
+    unchanged - reproduced live 2026-09-16.
+    """
+    if not text:
+        return text
+    try:
+        repaired = text.encode("latin1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+    return repaired
+
+
 def build_webhook_payload(message: dict, headers: dict[str, str], mailbox: str) -> dict:
     sender, sender_name = _address(message.get("from"))
     recipients = message.get("toRecipients") or []
@@ -400,10 +423,10 @@ def build_webhook_payload(message: dict, headers: dict[str, str], mailbox: str) 
     body = (message.get("body") or {}).get("content") or ""
     return {
         "sender": sender,
-        "sender_name": sender_name,
+        "sender_name": _repair_mojibake(sender_name),
         "recipient": recipient,
-        "subject": message.get("subject") or "(no subject)",
-        "body_text": body[:BODY_LIMIT] or "(empty body)",
+        "subject": _repair_mojibake(message.get("subject") or "(no subject)"),
+        "body_text": _repair_mojibake(body[:BODY_LIMIT] or "(empty body)"),
         "message_id": message.get("internetMessageId") or headers.get("message-id"),
         "in_reply_to": headers.get("in-reply-to"),
         "references": headers.get("references"),

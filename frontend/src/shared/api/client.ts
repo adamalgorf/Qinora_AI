@@ -433,6 +433,16 @@ export type CaseActivityItem = {
   description: string;
 };
 
+export type CaseEmailItem = {
+  direction: "inbound" | "outbound";
+  kind: "customer" | "carrier" | "quote" | "clarification" | "booking_confirmation";
+  timestamp: string | null;
+  sender: string;
+  recipient: string;
+  subject: string;
+  body_text: string;
+};
+
 export type CaseDetailResponse = {
   case: CaseListItem;
   request_detail: RequestDetailResponse;
@@ -443,6 +453,7 @@ export type CaseDetailResponse = {
   contact: ContactListItem | null;
   notes: InternalNoteItem[];
   activity: CaseActivityItem[];
+  emails: CaseEmailItem[];
 };
 
 export type InternalNoteItem = {
