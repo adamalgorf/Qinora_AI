@@ -693,7 +693,6 @@ h1 {
   min-height: 64px;
   padding: 0 32px;
   border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
 }
 
 .page-shell-header h1 {
