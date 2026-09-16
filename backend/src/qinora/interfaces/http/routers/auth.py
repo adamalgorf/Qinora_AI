@@ -25,8 +25,12 @@ async def auth_config(container: ContainerDep = CONTAINER) -> AuthConfigResponse
 
 
 @router.get("/auth/me", response_model=AuthMeResponse)
-async def auth_me(context: AuthContext = AUTH_CONTEXT) -> AuthMeResponse:
-    return _to_auth_me_response(context)
+async def auth_me(
+    container: ContainerDep = CONTAINER,
+    context: AuthContext = AUTH_CONTEXT,
+) -> AuthMeResponse:
+    user = await container.user_repository.find_by_id(context.user_id)
+    return _to_auth_me_response(context, full_name=user.full_name if user else None)
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -58,7 +62,7 @@ async def login(
             expires_in_seconds=LOGIN_TOKEN_TTL_SECONDS,
         ),
         expires_in=LOGIN_TOKEN_TTL_SECONDS,
-        user=_to_auth_me_response(context),
+        user=_to_auth_me_response(context, full_name=user.full_name),
     )
 
 
@@ -113,9 +117,10 @@ async def create_dev_token(
     )
 
 
-def _to_auth_me_response(context: AuthContext) -> AuthMeResponse:
+def _to_auth_me_response(context: AuthContext, *, full_name: str | None = None) -> AuthMeResponse:
     return AuthMeResponse(
         user_id=context.user_id,
         tenant_id=context.tenant_id,
         roles=[role.value for role in sorted(context.roles, key=lambda role: role.value)],
+        full_name=full_name,
     )

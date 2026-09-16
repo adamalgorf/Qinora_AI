@@ -222,6 +222,7 @@ def test_auth_me_returns_server_side_context(client: TestClient) -> None:
         "user_id": "user-1",
         "tenant_id": "tenant-1",
         "roles": ["4pl_tower", "admin"],
+        "full_name": None,
     }
 
 
@@ -243,6 +244,7 @@ def test_auth_dev_token_can_authorize_me_request(client: TestClient) -> None:
         "user_id": "user-2",
         "tenant_id": "tenant-2",
         "roles": ["4pl_tower"],
+        "full_name": None,
     }
 
 

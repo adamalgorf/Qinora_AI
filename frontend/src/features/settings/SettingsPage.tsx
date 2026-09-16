@@ -231,7 +231,14 @@ export function SettingsPage() {
     [form.firstName, form.lastName]
       .filter(Boolean)
       .map((part) => part[0]?.toUpperCase())
-      .join("") || (authQuery.data?.user_id?.slice(0, 2).toUpperCase() ?? "Q");
+      .join("") ||
+    authQuery.data?.full_name
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") ||
+    "Q";
 
   function updateField<K extends keyof ProfileForm>(field: K, value: ProfileForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));

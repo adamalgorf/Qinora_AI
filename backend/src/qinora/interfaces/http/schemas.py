@@ -27,6 +27,7 @@ class AuthMeResponse(BaseModel):
     user_id: str
     tenant_id: str
     roles: list[str]
+    full_name: str | None = None
 
 
 class DevTokenRequest(BaseModel):
