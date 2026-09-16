@@ -10,6 +10,7 @@ from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
     CarrierOfferRecord,
+    CarrierOfferReportOutboundRecord,
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
@@ -615,6 +616,36 @@ class PostgresOperationalReadRepository:
                 order by created_at desc
                 """,
                 (self._database.tenant_id,),
+            )
+        ]
+
+    async def list_clarification_replies(self) -> list[ClarificationOutboundRecord]:
+        return [
+            _clarification_outbound_from_postgres_row(row)
+            for row in self._fetch_all(
+                """
+                select
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from public.clarification_outbound
+                where tenant_id = %s
+                order by created_at desc
+                """,
+                (self._database.tenant_id,),
+            )
+        ]
+
+    async def list_thread_emails_for_request(self, request_id: str) -> list[InboundEmailRecord]:
+        return [
+            _inbound_email_from_postgres_row(row)
+            for row in self._fetch_all(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from public.email_inbound
+                where tenant_id = %s and request_id = %s
+                order by created_at asc
+                """,
+                (self._database.tenant_id, request_id),
             )
         ]
 
@@ -2608,6 +2639,116 @@ def _carrier_rfq_outbound_from_postgres_row(row: dict[str, Any]) -> CarrierRfqOu
     return CarrierRfqOutboundRecord(
         id=str(row["id"]),
         carrier_rfq_id=str(row["carrier_rfq_id"]),
+        recipient=row["recipient"],
+        subject=row["subject"],
+        body_text=row["body_text"],
+        status=row["status"],
+        created_at=row["created_at"].isoformat(),
+        sent_at=row["sent_at"].isoformat() if row["sent_at"] else None,
+        error_message=row["error_message"],
+        sender_mailbox=row.get("sender_mailbox"),
+    )
+
+
+class PostgresCarrierOfferReportOutboundRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        request_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        sender_mailbox: str | None = None,
+    ) -> CarrierOfferReportOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.carrier_offer_report_outbound
+                  (tenant_id, request_id, recipient, subject, body_text, status,
+                   sender_mailbox)
+                values (%s, %s, %s, %s, %s, %s, %s)
+                returning
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                """,
+                (
+                    self._database.tenant_id,
+                    request_id,
+                    recipient,
+                    subject,
+                    body_text,
+                    "queued",
+                    sender_mailbox,
+                ),
+            )
+            row = cursor.fetchone()
+        return _carrier_offer_report_outbound_from_postgres_row(row)
+
+    async def next_queued(self, limit: int) -> list[CarrierOfferReportOutboundRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                from public.carrier_offer_report_outbound
+                where tenant_id = %s and status = %s
+                order by created_at
+                limit %s
+                """,
+                (self._database.tenant_id, "queued", limit),
+            )
+            rows = cursor.fetchall()
+        return [_carrier_offer_report_outbound_from_postgres_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> CarrierOfferReportOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_offer_report_outbound
+                set status = %s, sent_at = now(), error_message = null
+                where tenant_id = %s and id = %s
+                returning
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                """,
+                ("sent", self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier offer report outbound item not found: {item_id}")
+        return _carrier_offer_report_outbound_from_postgres_row(row)
+
+    async def mark_failed(
+        self, item_id: str, error_message: str
+    ) -> CarrierOfferReportOutboundRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update public.carrier_offer_report_outbound
+                set status = %s, error_message = %s
+                where tenant_id = %s and id = %s
+                returning
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                """,
+                ("failed", error_message, self._database.tenant_id, item_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise LookupError(f"Carrier offer report outbound item not found: {item_id}")
+        return _carrier_offer_report_outbound_from_postgres_row(row)
+
+
+def _carrier_offer_report_outbound_from_postgres_row(
+    row: dict[str, Any],
+) -> CarrierOfferReportOutboundRecord:
+    return CarrierOfferReportOutboundRecord(
+        id=str(row["id"]),
+        request_id=str(row["request_id"]),
         recipient=row["recipient"],
         subject=row["subject"],
         body_text=row["body_text"],

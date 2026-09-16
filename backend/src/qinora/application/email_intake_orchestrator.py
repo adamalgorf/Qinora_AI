@@ -86,6 +86,18 @@ QUOTE_ID_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches the subject line application/carrier_rfq_collector.py's
+# _build_offer_report_email generates, e.g. "QiNora Offert #a1b2c3d4-... -
+# transportörssvar" - the carrier-facing mailbox (e.g. qinora.ai@) reporting
+# the winning carrier rate to the customer-facing mailbox (e.g.
+# test.spedition@) once a sourcing batch is done. See
+# carrier_rfq_collector.py's module docstring for why this is a real email
+# hop between two mailboxes rather than one function finishing the job.
+OFFER_REPORT_RE = re.compile(
+    r"QiNora Offert #([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
+    re.IGNORECASE,
+)
+
 # An RFQ is still awaiting a reply in this status - see
 # application/ports.py's CarrierRfqRepository and migrations/0006_carrier_rfq.sql.
 OPEN_RFQ_STATUS = "sent"
@@ -127,6 +139,7 @@ class EmailIntakeOrchestrator:
         carrier_offer_agent: CarrierOfferParsingAgent,
         carrier_rfq_collector: CarrierRfqCollector,
         quote_reply_llm: QuoteReplyInterpretationLLM,
+        carrier_mailbox: str | None = None,
     ) -> None:
         self._agent_config = agent_config
         self._contact_matching = contact_matching
@@ -135,6 +148,12 @@ class EmailIntakeOrchestrator:
         self._operational_queries = operational_queries
         self._booking_workflow = booking_workflow
         self._task_repository = task_repository
+        # The carrier-facing mailbox (e.g. qinora.ai@sandahls.com) - lets
+        # this (customer-facing) orchestrator instance recognize an inbound
+        # offer-report email as coming from its own carrier desk rather than
+        # from a customer or an actual carrier. See _match_offer_report()
+        # and carrier_rfq_collector.py's module docstring.
+        self._carrier_mailbox = carrier_mailbox
         self._request_parsing_agent = request_parsing_agent
         self._pricing_engine = pricing_engine
         self._carrier_rfqs = carrier_rfqs
@@ -161,6 +180,10 @@ class EmailIntakeOrchestrator:
         carrier_rfq_match = await self._match_carrier_rfq(email)
         if carrier_rfq_match is not None:
             return await self._handle_carrier_reply(email_id, email, carrier_rfq_match)
+
+        offer_report_request_id = self._match_offer_report(email)
+        if offer_report_request_id is not None:
+            return await self._handle_offer_report(email_id, offer_report_request_id)
 
         match_result = await self._contact_matching.execute(
             MatchContactCommand(sender=email.sender, inbound_email_id=email_id)
@@ -332,6 +355,41 @@ class EmailIntakeOrchestrator:
 
         await self._email_threads.link_thread(email_id, request_id=rfq.request_id, quote_id=None)
         return await self._finish(email_id, "carrier_offer")
+
+    def _match_offer_report(self, email: InboundEmailRecord) -> str | None:
+        """True (returns the request_id) when this inbound email is the
+        carrier desk's rate report (application/carrier_rfq_collector.py's
+        finalize_batch()), not a customer or carrier message - requires both
+        the subject token AND the sender being our own configured carrier
+        mailbox, so a customer can't spoof this by guessing/quoting the
+        subject format.
+        """
+        if not self._carrier_mailbox:
+            return None
+        if email.sender.strip().lower() != self._carrier_mailbox.strip().lower():
+            return None
+        token_match = OFFER_REPORT_RE.search(email.subject)
+        return token_match.group(1) if token_match else None
+
+    async def _handle_offer_report(
+        self, email_id: str, request_id: str
+    ) -> HandleInboundEmailResult:
+        await self._email_threads.link_thread(email_id, request_id=request_id, quote_id=None)
+        # Mark the classification BEFORE finalizing the customer quote, not
+        # after (unlike every other branch here that uses self._finish()) -
+        # application/quote_workflow.py's latest_customer_email() (called
+        # from inside finalize_customer_quote() to pick who to quote) reads
+        # this row's classification from the database, and needs it to
+        # already say "carrier_offer_report" so it's excluded from the
+        # "customer" candidates. Left at self._finish()'s normal
+        # after-the-fact ordering, this row was still whatever the default
+        # classification was at insert time and got picked as "the
+        # customer" by mistake - its sender is qinora.ai@, not the customer
+        # - sending the customer's own quote back to qinora.ai instead.
+        # Reproduced live 2026-09-16.
+        await self._email_threads.mark_classification(email_id, "carrier_offer_report")
+        await self._carrier_rfq_collector.finalize_customer_quote(request_id)
+        return HandleInboundEmailResult(classification="carrier_offer_report")
 
     async def _book_accepted_quote(
         self, quote_id: str, request_id: str | None, *, recipient_email: str

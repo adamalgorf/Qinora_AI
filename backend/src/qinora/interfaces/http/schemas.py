@@ -547,7 +547,7 @@ class OutboundQueueItem(BaseModel):
     interfaces/http/routers/outbound.py.
     """
 
-    queue: Literal["quote", "carrier_rfq", "clarification"]
+    queue: Literal["quote", "carrier_rfq", "clarification", "carrier_offer_report"]
     id: str
     recipient: str
     subject: str
@@ -615,6 +615,16 @@ class CaseActivityItem(BaseModel):
     description: str
 
 
+class CaseEmailItem(BaseModel):
+    direction: Literal["inbound", "outbound"]
+    kind: Literal["customer", "carrier", "quote", "clarification", "booking_confirmation"]
+    timestamp: str | None
+    sender: str
+    recipient: str
+    subject: str
+    body_text: str
+
+
 class InternalNoteItem(BaseModel):
     id: str
     request_id: str
@@ -633,6 +643,7 @@ class CaseDetailResponse(BaseModel):
     contact: ContactListItem | None
     notes: list[InternalNoteItem]
     activity: list[CaseActivityItem]
+    emails: list[CaseEmailItem]
 
 
 class CreateCaseNotePayload(BaseModel):

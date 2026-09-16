@@ -44,7 +44,7 @@ function formatSla(slaDueAt: string | null): string {
 
 export function CasesPage() {
   const navigate = useNavigate();
-  const [queue, setQueue] = useState<Queue>("critical");
+  const [queue, setQueue] = useState<Queue>("ai");
   const query = useQuery({
     queryKey: ["cases"],
     queryFn: () => apiGet<CaseListItem[]>("/cases"),
@@ -109,7 +109,19 @@ export function CasesPage() {
                     {filtered.map((item) => (
                       <tr className="border-b border-border/30" key={item.id}>
                         <td className="py-3 font-mono font-semibold">{item.public_id}</td>
-                        <td className="py-3">{item.customer}</td>
+                        <td className="py-3">
+                          <button
+                            className="text-left hover:underline"
+                            onClick={() =>
+                              navigate(
+                                `/customers/by-email/${encodeURIComponent(item.customer)}`,
+                              )
+                            }
+                            type="button"
+                          >
+                            {item.customer}
+                          </button>
+                        </td>
                         <td className="py-3 text-muted-foreground">{item.category}</td>
                         <td className="py-3">
                           <Badge variant={slaTone(item.sla_due_at)}>

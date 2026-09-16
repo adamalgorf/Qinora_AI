@@ -112,6 +112,7 @@ class CaseDetailRecord:
     contact: ContactRecord | None
     notes: tuple[CaseNoteRecord, ...]
     activity: tuple[dict, ...]
+    emails: tuple[dict, ...]
 
 
 @dataclass(frozen=True)
@@ -323,6 +324,62 @@ class OperationalQueries:
 
         activity.sort(key=lambda item: item["timestamp"] or "")
 
+        # The full email conversation for this case - every inbound message
+        # (customer AND carrier, tagged so the UI can tell them apart) plus
+        # every outbound reply QiNora sent (quote, booking confirmation,
+        # clarification request). This must always be visible on a case -
+        # it's the actual record of what was said, not just QiNora's
+        # internal bookkeeping about it (which is what `activity` above is).
+        inbound_emails = await self._repository.list_thread_emails_for_request(request_id)
+        inbound_ids = {email.id for email in inbound_emails}
+
+        emails: list[dict] = [
+            {
+                "direction": "inbound",
+                "kind": "carrier" if email.classification == "carrier_offer" else "customer",
+                "timestamp": email.created_at,
+                "sender": email.sender,
+                "recipient": email.recipient,
+                "subject": email.subject,
+                "body_text": email.body_text,
+            }
+            for email in inbound_emails
+        ]
+
+        for reply in await self._repository.list_outbound_replies():
+            if reply.quote_id not in quote_ids:
+                continue
+            emails.append(
+                {
+                    "direction": "outbound",
+                    "kind": "booking_confirmation"
+                    if "bokning" in reply.subject.lower()
+                    else "quote",
+                    "timestamp": reply.sent_at or reply.created_at,
+                    "sender": reply.sender_mailbox or "Sandahls",
+                    "recipient": reply.recipient,
+                    "subject": reply.subject,
+                    "body_text": reply.body_text,
+                }
+            )
+
+        for clarification in await self._repository.list_clarification_replies():
+            if clarification.inbound_email_id not in inbound_ids:
+                continue
+            emails.append(
+                {
+                    "direction": "outbound",
+                    "kind": "clarification",
+                    "timestamp": clarification.sent_at or clarification.created_at,
+                    "sender": clarification.sender_mailbox or "Sandahls",
+                    "recipient": clarification.recipient,
+                    "subject": clarification.subject,
+                    "body_text": clarification.body_text,
+                }
+            )
+
+        emails.sort(key=lambda item: item["timestamp"] or "")
+
         return CaseDetailRecord(
             case=CaseRecord(
                 id=request_detail.request.id,
@@ -343,6 +400,7 @@ class OperationalQueries:
             contact=contact,
             notes=notes,
             activity=tuple(activity),
+            emails=tuple(emails),
         )
 
     async def list_automations(

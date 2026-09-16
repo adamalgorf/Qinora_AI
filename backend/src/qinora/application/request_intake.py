@@ -4,7 +4,11 @@ from datetime import datetime
 from qinora.application.ports import OperationalTaskWriteRepository, RequestWriteRepository
 from qinora.application.read_models import RequestRecord
 from qinora.domain import CargoLineInput, TransportMode, TransportRequestInput
-from qinora.domain.transport_request import DEFAULT_REQUIRED_FIELDS, validate_transport_request
+from qinora.domain.transport_request import (
+    DEFAULT_REQUIRED_FIELDS,
+    RequestValidationIssue,
+    validate_transport_request,
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,7 @@ class CreateRequestResult:
     complete: bool
     review_reason: str | None
     adr_un_numbers: tuple[str, ...]
+    issues: tuple[RequestValidationIssue, ...] = ()
 
 
 class CreateRequestUseCase:
@@ -77,6 +82,7 @@ class CreateRequestUseCase:
             complete=validation.complete,
             review_reason=review_reason,
             adr_un_numbers=tuple(finding.un_number for finding in validation.adr_findings),
+            issues=validation.issues,
         )
 
 
@@ -98,6 +104,7 @@ class UpdateRequestResult:
     complete: bool
     review_reason: str | None
     adr_un_numbers: tuple[str, ...]
+    issues: tuple[RequestValidationIssue, ...] = ()
 
 
 class UpdateRequestUseCase:
@@ -149,6 +156,7 @@ class UpdateRequestUseCase:
             complete=validation.complete,
             review_reason=review_reason,
             adr_un_numbers=tuple(finding.un_number for finding in validation.adr_findings),
+            issues=validation.issues,
         )
 
 

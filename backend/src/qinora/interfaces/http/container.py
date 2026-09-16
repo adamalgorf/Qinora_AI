@@ -31,6 +31,7 @@ from qinora.application.llm_ports import GraphExecutor
 from qinora.application.ports import (
     AgentDispatcher,
     CarrierOfferParsingLLM,
+    CarrierOfferReportOutboundRepository,
     CarrierRfqOutboundRepository,
     CarrierRfqRepository,
     CarrierWriteRepository,
@@ -63,6 +64,7 @@ from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
     PostgresAgentConfigRepository,
     PostgresAgentLogWriteRepository,
+    PostgresCarrierOfferReportOutboundRepository,
     PostgresCarrierOfferWriteRepository,
     PostgresCarrierRfqOutboundRepository,
     PostgresCarrierRfqRepository,
@@ -92,6 +94,7 @@ from qinora.infrastructure.settings import LLMProvider, PersistenceDriver, Setti
 from qinora.infrastructure.sqlite import (
     SQLiteAgentConfigRepository,
     SQLiteAgentLogWriteRepository,
+    SQLiteCarrierOfferReportOutboundRepository,
     SQLiteCarrierOfferWriteRepository,
     SQLiteCarrierRfqOutboundRepository,
     SQLiteCarrierRfqRepository,
@@ -173,6 +176,7 @@ class AppContainer:
     carrier_rfq_targeting: CarrierRfqTargeting
     carrier_rfq_repository: CarrierRfqRepository
     carrier_rfq_outbound_repository: CarrierRfqOutboundRepository
+    carrier_offer_report_outbound_repository: CarrierOfferReportOutboundRepository
     clarification_outbound_repository: ClarificationOutboundRepository
     carrier_write_repository: CarrierWriteRepository
     carrier_rfq_collector: CarrierRfqCollector
@@ -243,6 +247,9 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     rate_profile_repository = SQLiteRateProfileRepository(database)
     carrier_offer_repository = SQLiteCarrierOfferWriteRepository(database)
     carrier_rfq_outbound_repository = SQLiteCarrierRfqOutboundRepository(database)
+    carrier_offer_report_outbound_repository = SQLiteCarrierOfferReportOutboundRepository(
+        database
+    )
     clarification_outbound_repository = SQLiteClarificationOutboundRepository(database)
     carrier_rfq_targeting = CarrierRfqTargeting(operational_queries)
     pricing_engine = PricingEngine(
@@ -282,6 +289,9 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         task_repository,
         request_repository,
         settings.default_markup_percent,
+        carrier_offer_report_outbound=carrier_offer_report_outbound_repository,
+        carrier_mailbox=settings.carrier_mailbox,
+        customer_mailbox=settings.customer_mailbox,
     )
 
     email_intake_orchestrator = EmailIntakeOrchestrator(
@@ -298,6 +308,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_offer_agent,
         carrier_rfq_collector,
         build_quote_reply_interpretation_llm(settings),
+        carrier_mailbox=settings.carrier_mailbox,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)
@@ -363,6 +374,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_targeting=carrier_rfq_targeting,
         carrier_rfq_repository=carrier_rfq_repository,
         carrier_rfq_outbound_repository=carrier_rfq_outbound_repository,
+        carrier_offer_report_outbound_repository=carrier_offer_report_outbound_repository,
         clarification_outbound_repository=clarification_outbound_repository,
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,
@@ -432,6 +444,9 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     rate_profile_repository = PostgresRateProfileRepository(database)
     carrier_offer_repository = PostgresCarrierOfferWriteRepository(database)
     carrier_rfq_outbound_repository = PostgresCarrierRfqOutboundRepository(database)
+    carrier_offer_report_outbound_repository = PostgresCarrierOfferReportOutboundRepository(
+        database
+    )
     clarification_outbound_repository = PostgresClarificationOutboundRepository(database)
     carrier_rfq_targeting = CarrierRfqTargeting(operational_queries)
     pricing_engine = PricingEngine(
@@ -471,6 +486,9 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         task_repository,
         request_repository,
         settings.default_markup_percent,
+        carrier_offer_report_outbound=carrier_offer_report_outbound_repository,
+        carrier_mailbox=settings.carrier_mailbox,
+        customer_mailbox=settings.customer_mailbox,
     )
 
     email_intake_orchestrator = EmailIntakeOrchestrator(
@@ -487,6 +505,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_offer_agent,
         carrier_rfq_collector,
         build_quote_reply_interpretation_llm(settings),
+        carrier_mailbox=settings.carrier_mailbox,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)
@@ -552,6 +571,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_targeting=carrier_rfq_targeting,
         carrier_rfq_repository=carrier_rfq_repository,
         carrier_rfq_outbound_repository=carrier_rfq_outbound_repository,
+        carrier_offer_report_outbound_repository=carrier_offer_report_outbound_repository,
         clarification_outbound_repository=clarification_outbound_repository,
         carrier_write_repository=carrier_write_repository,
         carrier_rfq_collector=carrier_rfq_collector,

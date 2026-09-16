@@ -11,6 +11,7 @@ from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
     CarrierOfferRecord,
+    CarrierOfferReportOutboundRecord,
     CarrierRecord,
     CarrierRfqOutboundRecord,
     CarrierRfqRecord,
@@ -285,6 +286,19 @@ class SQLiteDatabase:
                   created_at text not null default current_timestamp,
                   sent_at text,
                   error_message text
+                );
+
+                create table if not exists carrier_offer_report_outbound (
+                  id text primary key,
+                  request_id text not null,
+                  recipient text not null,
+                  subject text not null,
+                  body_text text not null,
+                  status text not null default 'queued',
+                  created_at text not null default current_timestamp,
+                  sent_at text,
+                  error_message text,
+                  sender_mailbox text
                 );
 
                 create table if not exists clarification_outbound (
@@ -1162,6 +1176,34 @@ class SQLiteOperationalReadRepository:
                 from outbound_reply_queue
                 order by created_at desc
                 """
+            )
+        ]
+
+    async def list_clarification_replies(self) -> list[ClarificationOutboundRecord]:
+        return [
+            ClarificationOutboundRecord(**dict(row))
+            for row in self._fetch_all(
+                """
+                select
+                  id, inbound_email_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message
+                from clarification_outbound
+                order by created_at desc
+                """
+            )
+        ]
+
+    async def list_thread_emails_for_request(self, request_id: str) -> list[InboundEmailRecord]:
+        return [
+            _inbound_email_from_sqlite_row(row)
+            for row in self._fetch_all(
+                f"""
+                select {_EMAIL_THREAD_COLUMNS}
+                from email_inbound
+                where request_id = ?
+                order by created_at asc
+                """,
+                (request_id,),
             )
         ]
 
@@ -2903,6 +2945,93 @@ class SQLiteCarrierRfqOutboundRepository:
 
 def _carrier_rfq_outbound_from_sqlite_row(row: sqlite3.Row) -> CarrierRfqOutboundRecord:
     return CarrierRfqOutboundRecord(**dict(row))
+
+
+class SQLiteCarrierOfferReportOutboundRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def enqueue(
+        self,
+        *,
+        request_id: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        sender_mailbox: str | None = None,
+    ) -> CarrierOfferReportOutboundRecord:
+        item_id = str(uuid4())
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                insert into carrier_offer_report_outbound
+                  (id, request_id, recipient, subject, body_text, status, sender_mailbox)
+                values (?, ?, ?, ?, ?, 'queued', ?)
+                returning
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                """,
+                (item_id, request_id, recipient, subject, body_text, sender_mailbox),
+            ).fetchone()
+        return _carrier_offer_report_outbound_from_sqlite_row(row)
+
+    async def next_queued(self, limit: int) -> list[CarrierOfferReportOutboundRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                """
+                select
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                from carrier_offer_report_outbound
+                where status = 'queued'
+                order by created_at
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [_carrier_offer_report_outbound_from_sqlite_row(row) for row in rows]
+
+    async def mark_sent(self, item_id: str) -> CarrierOfferReportOutboundRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update carrier_offer_report_outbound
+                set status = 'sent', sent_at = current_timestamp, error_message = null
+                where id = ?
+                returning
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                """,
+                (item_id,),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Carrier offer report outbound item not found: {item_id}")
+        return _carrier_offer_report_outbound_from_sqlite_row(row)
+
+    async def mark_failed(
+        self, item_id: str, error_message: str
+    ) -> CarrierOfferReportOutboundRecord:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                """
+                update carrier_offer_report_outbound
+                set status = 'failed', error_message = ?
+                where id = ?
+                returning
+                  id, request_id, recipient, subject, body_text, status,
+                  created_at, sent_at, error_message, sender_mailbox
+                """,
+                (error_message, item_id),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"Carrier offer report outbound item not found: {item_id}")
+        return _carrier_offer_report_outbound_from_sqlite_row(row)
+
+
+def _carrier_offer_report_outbound_from_sqlite_row(
+    row: sqlite3.Row,
+) -> CarrierOfferReportOutboundRecord:
+    return CarrierOfferReportOutboundRecord(**dict(row))
 
 
 class SQLiteClarificationOutboundRepository:

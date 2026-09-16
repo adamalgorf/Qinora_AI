@@ -437,6 +437,33 @@ class CarrierRfqOutboundRecord:
 
 
 @dataclass(frozen=True)
+class CarrierOfferReportOutboundRecord:
+    """Mirrors CarrierRfqOutboundRecord's shape but keyed to the request the
+    winning carrier offer belongs to, sent from the carrier mailbox (e.g.
+    qinora.ai@sandahls.com) to the customer mailbox (e.g.
+    test.spedition@sandahls.com) - the explicit "carrier desk reports the
+    rate to the customer desk" email hop application/carrier_rfq_collector.py
+    triggers once a batch's cheapest offer is known, mirrored on the
+    receiving end by application/email_intake_orchestrator.py's offer-report
+    detection, which is what actually creates and sends the customer-facing
+    quote (see application/quote_workflow.py). Two real mailboxes, two real
+    emails, not one internal function call - see carrier_rfq_collector.py's
+    module docstring for why this hop exists at all.
+    """
+
+    id: str
+    request_id: str
+    recipient: str
+    subject: str
+    body_text: str
+    status: str
+    created_at: str
+    sent_at: str | None = None
+    error_message: str | None = None
+    sender_mailbox: str | None = None
+
+
+@dataclass(frozen=True)
 class ClarificationOutboundRecord:
     """Mirrors CarrierRfqOutboundRecord's shape but keyed to the inbound
     email that Parsek couldn't act on unassisted (missing required fields) -

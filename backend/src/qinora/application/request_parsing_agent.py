@@ -22,7 +22,7 @@ from qinora.application.request_intake import (
     UpdateRequestResult,
     UpdateRequestUseCase,
 )
-from qinora.domain.transport_request import DEFAULT_REQUIRED_FIELDS
+from qinora.domain.transport_request import DEFAULT_REQUIRED_FIELDS, RequestValidationIssue
 
 AGENT_KEY = "request_parsing_agent"
 AGENT_NAME = "Parsek"
@@ -134,29 +134,41 @@ class RequestParsingAgent:
                     entity_id=command.inbound_email_id or "unassigned",
                     reason="Not a transport request, escalated for manual review",
                 )
+        elif not needs_review and command.matched_request_id and self._update_request is not None:
+            # Trust application/thread_matching.py's deterministic match over
+            # Parsek's own "create" vs "update" call: thread_matching already
+            # knows this reply belongs to an existing request (message-id or
+            # subject-line correlation, not a guess), so update it in place
+            # rather than creating a duplicate - regardless of what draft.action
+            # says. The LLM has no visibility into matched_request_id, so its
+            # classification here is strictly less informed than ours;
+            # reproduced live 2026-09-16 as a duplicate REQ-#### created from a
+            # customer's own follow-up reply on an already-open thread.
+            request_result = await self._update_request.execute(
+                UpdateRequestCommand(
+                    request_id=command.matched_request_id,
+                    customer=command.customer,
+                    origin=draft.origin,
+                    destination=draft.destination,
+                    mode=draft.mode,
+                    cargo=_cargo_commands(draft),
+                    loading_time=draft.loading_time,
+                    unloading_time=draft.unloading_time,
+                ),
+                required_fields=required_fields,
+            )
         elif not needs_review and draft.action == "update":
-            if command.matched_request_id and self._update_request is not None:
-                request_result = await self._update_request.execute(
-                    UpdateRequestCommand(
-                        request_id=command.matched_request_id,
-                        customer=command.customer,
-                        origin=draft.origin,
-                        destination=draft.destination,
-                        mode=draft.mode,
-                        cargo=_cargo_commands(draft),
-                        loading_time=draft.loading_time,
-                        unloading_time=draft.unloading_time,
-                    ),
-                    required_fields=required_fields,
+            # Parsek believes this continues an existing request, but
+            # thread_matching couldn't find one - genuinely ambiguous (unlike
+            # the branch above, which has a deterministic match), so this
+            # still goes to a human rather than guessing either way.
+            needs_review = True
+            if self._task_repository is not None:
+                await self._task_repository.create_task(
+                    entity_type="email_inbound",
+                    entity_id=command.inbound_email_id or "unassigned",
+                    reason="Classified as an update but no matching request was found",
                 )
-            else:
-                needs_review = True
-                if self._task_repository is not None:
-                    await self._task_repository.create_task(
-                        entity_type="email_inbound",
-                        entity_id=command.inbound_email_id or "unassigned",
-                        reason="Classified as an update but no matching request was found",
-                    )
         elif not needs_review:
             request_result = await self._create_request.execute(
                 CreateRequestCommand(
@@ -207,7 +219,27 @@ class RequestParsingAgent:
             and command.inbound_email_id
             and command.sender_email
         ):
-            await self._send_clarification_request(command, draft)
+            await self._send_clarification_request(command, draft, draft.missing_fields)
+        # request_result is not None here means CreateRequestUseCase/
+        # UpdateRequestUseCase (application/request_intake.py) ran its own
+        # domain-level validate_transport_request check - stricter than, and
+        # independent from, Parsek's own draft.missing_fields above (e.g. it
+        # also requires a loading/unloading time). When THAT check finds the
+        # request still incomplete, create_request.execute()/
+        # update_request.execute() already opened an internal Control Tower
+        # task, but nothing tells the customer - without this, the thread
+        # just goes silent from their side even though they're waiting on a
+        # reply. Reproduced live 2026-09-16.
+        elif (
+            request_result is not None
+            and not request_result.complete
+            and self._clarification_outbound is not None
+            and command.inbound_email_id
+            and command.sender_email
+        ):
+            missing_fields = _missing_fields_from_issues(request_result.issues)
+            if missing_fields:
+                await self._send_clarification_request(command, draft, missing_fields)
 
         return ParseFreeTextRequestResult(
             draft=draft,
@@ -218,9 +250,14 @@ class RequestParsingAgent:
         )
 
     async def _send_clarification_request(
-        self, command: ParseFreeTextRequestCommand, draft: ParsedTransportRequestDraft
+        self,
+        command: ParseFreeTextRequestCommand,
+        draft: ParsedTransportRequestDraft,
+        missing_fields: tuple[str, ...],
     ) -> None:
-        labels = [MISSING_FIELD_LABELS_SV.get(field, field) for field in draft.missing_fields]
+        labels = dict.fromkeys(
+            MISSING_FIELD_LABELS_SV.get(field, field) for field in missing_fields
+        )
         bullet_list = "\n".join(f"- {label}" for label in labels)
 
         original_subject = command.subject or "din förfrågan"
@@ -254,6 +291,31 @@ class RequestParsingAgent:
             in_reply_to_message_id=command.message_id,
             sender_mailbox=self._customer_mailbox,
         )
+
+
+def _missing_fields_from_issues(
+    issues: tuple[RequestValidationIssue, ...],
+) -> tuple[str, ...]:
+    """Normalizes domain/transport_request.py's per-cargo-line issue fields
+    (e.g. "cargo.0.weight_kg", "cargo.1.length_cm") down to the same small
+    set of keys MISSING_FIELD_LABELS_SV/Parsek's own missing_fields use, so
+    both clarification-email code paths render identical Swedish labels
+    instead of leaking a raw internal field path to the customer.
+    """
+    normalized: list[str] = []
+    for issue in issues:
+        field = issue.field
+        if field == "loading_time":
+            normalized.append("loading_time")
+        elif field == "cargo":
+            normalized.append("cargo")
+        elif field.startswith("cargo.") and field.endswith("weight_kg"):
+            normalized.append("cargo.weight_kg")
+        elif field.startswith("cargo.") and field.endswith(("length_cm", "width_cm", "height_cm")):
+            normalized.append("cargo.dimensions")
+        else:
+            normalized.append(field)
+    return tuple(dict.fromkeys(normalized))
 
 
 def _cargo_commands(draft: ParsedTransportRequestDraft) -> tuple[CargoLineCommand, ...]:
