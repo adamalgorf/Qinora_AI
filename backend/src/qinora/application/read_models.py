@@ -200,6 +200,16 @@ class InvoiceRecord:
 
 
 @dataclass(frozen=True)
+class UserRecord:
+    id: str
+    email: str
+    full_name: str | None
+    roles: tuple[str, ...]
+    is_active: bool
+    password_hash: str
+
+
+@dataclass(frozen=True)
 class CarrierRecord:
     id: str
     display_name: str

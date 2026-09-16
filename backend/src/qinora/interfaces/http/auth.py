@@ -28,7 +28,7 @@ async def get_auth_context(
                 detail=str(error),
             ) from error
 
-    if settings.app_password is not None:
+    if settings.require_auth:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",

@@ -47,7 +47,37 @@ class AuthConfigResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    email: EmailStr
     password: str = Field(min_length=1)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+
+
+class UserListItem(BaseModel):
+    id: str
+    email: str
+    full_name: str | None
+    roles: list[str]
+    is_active: bool
+
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    full_name: str | None = None
+    roles: list[str] = Field(min_length=1)
+    temporary_password: str = Field(min_length=8)
+
+
+class UpdateUserRequest(BaseModel):
+    roles: list[str] | None = None
+    is_active: bool | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    temporary_password: str = Field(min_length=8)
 
 
 class KpiItem(BaseModel):

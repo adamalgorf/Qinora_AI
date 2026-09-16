@@ -17,6 +17,7 @@ from qinora.interfaces.http.routers.requests import router as requests_router
 from qinora.interfaces.http.routers.rfq import router as rfq_router
 from qinora.interfaces.http.routers.search import router as search_router
 from qinora.interfaces.http.routers.shipments import router as shipments_router
+from qinora.interfaces.http.routers.users import router as users_router
 from qinora.interfaces.http.routers.webhooks import router as webhooks_router
 
 routers = [
@@ -40,4 +41,5 @@ routers = [
     cases_router,
     automations_router,
     analytics_router,
+    users_router,
 ]

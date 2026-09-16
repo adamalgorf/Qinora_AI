@@ -47,7 +47,37 @@ export type AuthConfig = {
 };
 
 export type LoginPayload = {
+  email: string;
   password: string;
+};
+
+export type ChangePasswordPayload = {
+  current_password: string;
+  new_password: string;
+};
+
+export type UserListItem = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  roles: string[];
+  is_active: boolean;
+};
+
+export type CreateUserPayload = {
+  email: string;
+  full_name?: string;
+  roles: string[];
+  temporary_password: string;
+};
+
+export type UpdateUserPayload = {
+  roles?: string[];
+  is_active?: boolean;
+};
+
+export type ResetPasswordPayload = {
+  temporary_password: string;
 };
 
 export type RequestListItem = {
@@ -503,6 +533,32 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<TResponse, TPayload>(path: string, payload: TPayload): Promise<TResponse> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await toApiProblem(response);
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+export async function apiPostVoid<TPayload>(path: string, payload: TPayload): Promise<void> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await toApiProblem(response);
+  }
+}
+
+export async function apiPatch<TResponse, TPayload>(path: string, payload: TPayload): Promise<TResponse> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify(payload),
   });

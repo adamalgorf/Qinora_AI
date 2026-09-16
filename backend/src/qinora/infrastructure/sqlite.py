@@ -39,6 +39,7 @@ from qinora.application.read_models import (
     ShipmentEventRecord,
     ShipmentRecord,
     StaleRequestRecord,
+    UserRecord,
 )
 from qinora.domain import (
     CurrencyCode,
@@ -322,6 +323,23 @@ class SQLiteDatabase:
                   author text not null,
                   body_text text not null,
                   created_at text not null default current_timestamp
+                );
+
+                create table if not exists users (
+                  id text primary key,
+                  email text not null unique,
+                  full_name text,
+                  password_hash text,
+                  is_active integer not null default 1,
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists user_roles (
+                  id text primary key,
+                  user_id text not null references users(id) on delete cascade,
+                  role text not null,
+                  created_at text not null default current_timestamp,
+                  unique (user_id, role)
                 );
                 """
             )
@@ -2684,6 +2702,111 @@ class SQLiteCarrierWriteRepository:
             sample_size=row["sample_size"],
             email=row["email"],
         )
+
+
+class SQLiteUserRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def find_by_email(self, email: str) -> UserRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                "select * from users where email = ?", (email,)
+            ).fetchone()
+            if row is None:
+                return None
+            roles = _fetch_user_roles(connection, row["id"])
+        return _user_from_sqlite_row(row, roles)
+
+    async def find_by_id(self, user_id: str) -> UserRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                "select * from users where id = ?", (user_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            roles = _fetch_user_roles(connection, row["id"])
+        return _user_from_sqlite_row(row, roles)
+
+    async def list_users(self) -> tuple[UserRecord, ...]:
+        with self._database.connect() as connection:
+            rows = connection.execute("select * from users order by created_at").fetchall()
+            return tuple(
+                _user_from_sqlite_row(row, _fetch_user_roles(connection, row["id"]))
+                for row in rows
+            )
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        full_name: str | None,
+        password_hash: str,
+        roles: tuple[str, ...],
+    ) -> UserRecord:
+        user_id = str(uuid4())
+        with self._database.connect() as connection:
+            connection.execute(
+                """
+                insert into users (id, email, full_name, password_hash, is_active)
+                values (?, ?, ?, ?, 1)
+                """,
+                (user_id, email, full_name, password_hash),
+            )
+            for role in roles:
+                connection.execute(
+                    "insert into user_roles (id, user_id, role) values (?, ?, ?)",
+                    (str(uuid4()), user_id, role),
+                )
+        return UserRecord(
+            id=user_id,
+            email=email,
+            full_name=full_name,
+            roles=roles,
+            is_active=True,
+            password_hash=password_hash,
+        )
+
+    async def set_roles(self, user_id: str, roles: tuple[str, ...]) -> None:
+        with self._database.connect() as connection:
+            connection.execute("delete from user_roles where user_id = ?", (user_id,))
+            for role in roles:
+                connection.execute(
+                    "insert into user_roles (id, user_id, role) values (?, ?, ?)",
+                    (str(uuid4()), user_id, role),
+                )
+
+    async def set_active(self, user_id: str, is_active: bool) -> None:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update users set is_active = ? where id = ?",
+                (1 if is_active else 0, user_id),
+            )
+
+    async def set_password(self, user_id: str, password_hash: str) -> None:
+        with self._database.connect() as connection:
+            connection.execute(
+                "update users set password_hash = ? where id = ?",
+                (password_hash, user_id),
+            )
+
+
+def _fetch_user_roles(connection: sqlite3.Connection, user_id: str) -> tuple[str, ...]:
+    rows = connection.execute(
+        "select role from user_roles where user_id = ? order by role", (user_id,)
+    ).fetchall()
+    return tuple(row["role"] for row in rows)
+
+
+def _user_from_sqlite_row(row: sqlite3.Row, roles: tuple[str, ...]) -> UserRecord:
+    return UserRecord(
+        id=row["id"],
+        email=row["email"],
+        full_name=row["full_name"],
+        roles=roles,
+        is_active=bool(row["is_active"]),
+        password_hash=row["password_hash"] or "",
+    )
 
 
 def _carrier_rfq_from_sqlite_row(row: sqlite3.Row) -> CarrierRfqRecord:

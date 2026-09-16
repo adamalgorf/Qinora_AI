@@ -32,6 +32,7 @@ from qinora.application.read_models import (
     ShipmentEventRecord,
     ShipmentRecord,
     StaleRequestRecord,
+    UserRecord,
 )
 from qinora.domain import Quote, TransportRequestInput
 
@@ -294,6 +295,36 @@ class CaseNoteRepository(Protocol):
     """
 
     async def create_note(self, request_id: str, *, author: str, body_text: str) -> CaseNoteRecord:
+        pass
+
+
+class UserRepository(Protocol):
+    async def find_by_email(self, email: str) -> UserRecord | None:
+        pass
+
+    async def find_by_id(self, user_id: str) -> UserRecord | None:
+        pass
+
+    async def list_users(self) -> tuple[UserRecord, ...]:
+        pass
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        full_name: str | None,
+        password_hash: str,
+        roles: tuple[str, ...],
+    ) -> UserRecord:
+        pass
+
+    async def set_roles(self, user_id: str, roles: tuple[str, ...]) -> None:
+        pass
+
+    async def set_active(self, user_id: str, is_active: bool) -> None:
+        pass
+
+    async def set_password(self, user_id: str, password_hash: str) -> None:
         pass
 
 

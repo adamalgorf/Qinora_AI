@@ -18,7 +18,7 @@ import { Logo } from "./Logo";
 type LoginScreenProps = {
   error: string | null;
   isSubmitting: boolean;
-  onSubmit: (password: string, rememberMe: boolean) => void;
+  onSubmit: (email: string, password: string, rememberMe: boolean) => void;
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -37,7 +37,7 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
     event.preventDefault();
     if (!canSubmit) return;
     setLastLoginEmail(email.trim());
-    onSubmit(password, rememberMe);
+    onSubmit(email.trim(), password, rememberMe);
   }
 
   return (

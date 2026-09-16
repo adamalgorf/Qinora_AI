@@ -133,8 +133,8 @@ export function AppShell() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: ({ password }: { password: string; rememberMe: boolean }) =>
-      apiPost<TokenResponse, LoginPayload>("/auth/login", { password }),
+    mutationFn: ({ email, password }: { email: string; password: string; rememberMe: boolean }) =>
+      apiPost<TokenResponse, LoginPayload>("/auth/login", { email, password }),
     onSuccess: (session, variables) => {
       setAuthToken(session.access_token, variables.rememberMe);
       queryClient.setQueryData(["auth-me", true], session.user);
@@ -188,9 +188,11 @@ export function AppShell() {
   if (loginRequired && !authQuery.data) {
     return (
       <LoginScreen
-        error={loginMutation.isError ? "Fel lösenord." : null}
+        error={loginMutation.isError ? "Fel e-post eller lösenord." : null}
         isSubmitting={loginMutation.isPending}
-        onSubmit={(password, rememberMe) => loginMutation.mutate({ password, rememberMe })}
+        onSubmit={(email, password, rememberMe) =>
+          loginMutation.mutate({ email, password, rememberMe })
+        }
       />
     );
   }

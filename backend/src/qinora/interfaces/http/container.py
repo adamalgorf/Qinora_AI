@@ -43,6 +43,7 @@ from qinora.application.ports import (
     RequestParsingLLM,
     RequestWriteRepository,
     ShipmentWriteRepository,
+    UserRepository,
 )
 from qinora.application.pricing_engine import PricingEngine
 from qinora.application.thread_matching import ThreadMatchingUseCase
@@ -84,6 +85,7 @@ from qinora.infrastructure.postgres import (
     PostgresShipmentEventRepository,
     PostgresShipmentWriteRepository,
     PostgresStaleRequestRepository,
+    PostgresUserRepository,
     PostgresWebhookEventRepository,
 )
 from qinora.infrastructure.settings import LLMProvider, PersistenceDriver, Settings
@@ -112,6 +114,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteShipmentEventRepository,
     SQLiteShipmentWriteRepository,
     SQLiteStaleRequestRepository,
+    SQLiteUserRepository,
     SQLiteWebhookEventRepository,
 )
 
@@ -180,6 +183,7 @@ class AppContainer:
     document_intake_service: DocumentIntakeService
     case_note_repository: CaseNoteRepository
     case_notes_service: CaseNotesService
+    user_repository: UserRepository
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -369,6 +373,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         document_intake_service=document_intake_service,
         case_note_repository=case_note_repository,
         case_notes_service=case_notes_service,
+        user_repository=SQLiteUserRepository(database),
     )
 
 
@@ -557,4 +562,5 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         document_intake_service=document_intake_service,
         case_note_repository=case_note_repository,
         case_notes_service=case_notes_service,
+        user_repository=PostgresUserRepository(database),
     )
