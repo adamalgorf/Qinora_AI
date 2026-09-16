@@ -23,7 +23,7 @@ class Settings:
     database_url: str | None
     postgres_tenant_id: str
     cors_allowed_origins: tuple[str, ...]
-    app_password: str | None
+    require_auth: bool
     llm_provider: LLMProvider
     openai_api_key: str | None
     openai_model: str
@@ -33,11 +33,18 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        persistence_driver = PersistenceDriver(os.getenv("QINORA_PERSISTENCE", "sqlite"))
+        require_auth_override = os.getenv("QINORA_REQUIRE_AUTH")
+        require_auth = (
+            _parse_bool(require_auth_override)
+            if require_auth_override is not None
+            else persistence_driver is PersistenceDriver.POSTGRES
+        )
         return cls(
             email_webhook_secret=os.getenv("EMAIL_WEBHOOK_SECRET", "dev-secret"),
             sqlite_path=Path(os.getenv("QINORA_SQLITE_PATH", "data/qinora.dev.sqlite3")),
             auth_token_secret=os.getenv("QINORA_AUTH_TOKEN_SECRET", "dev-auth-secret"),
-            persistence_driver=PersistenceDriver(os.getenv("QINORA_PERSISTENCE", "sqlite")),
+            persistence_driver=persistence_driver,
             database_url=os.getenv("DATABASE_URL"),
             postgres_tenant_id=os.getenv(
                 "QINORA_POSTGRES_TENANT_ID",
@@ -48,7 +55,7 @@ class Settings:
                 for origin in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
                 if origin.strip()
             ),
-            app_password=os.getenv("QINORA_APP_PASSWORD") or None,
+            require_auth=require_auth,
             llm_provider=LLMProvider(os.getenv("LLM_PROVIDER", "stub")),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -62,3 +69,7 @@ class Settings:
             customer_mailbox=os.getenv("QINORA_CUSTOMER_MAILBOX") or None,
             carrier_mailbox=os.getenv("QINORA_CARRIER_MAILBOX") or None,
         )
+
+
+def _parse_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}

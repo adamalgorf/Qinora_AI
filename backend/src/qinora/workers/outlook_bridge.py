@@ -2,8 +2,9 @@
 
 The Microsoft Graph counterpart of integrations/gmail-intake-bridge/Code.gs.
 Where Code.gs runs *inside* a Google mailbox as an Apps Script, this runs as
-a normal QiNora worker (ECS scheduled task in AWS - infra/aws/ecs_workers.tf -
-or a looping docker-compose service locally) and talks to the Sandahls
+a normal QiNora worker (Cloud Run scheduled job on GCP - infra/gcp/main.tf's
+outlook_bridge module - or a looping docker-compose service locally) and
+talks to the Sandahls
 Outlook mailboxes through Microsoft Graph instead.
 
 One pass (``python -m qinora.workers.outlook_bridge``) does exactly what one
@@ -537,7 +538,10 @@ def device_code_login() -> None:
         )
         payload = json.loads(body)
         if status == 200:
-            print("\nSigned in. Store this as OUTLOOK_REFRESH_TOKEN (Secrets Manager in AWS):\n")
+            print(
+                "\nSigned in. Store this as OUTLOOK_REFRESH_TOKEN "
+                "(qinora-outlook-refresh-token in Secret Manager):\n"
+            )
             print(payload["refresh_token"])
             return
         if payload.get("error") in {"authorization_pending", "slow_down"}:

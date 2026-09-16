@@ -38,6 +38,7 @@ from qinora.application.read_models import (
     ShipmentEventRecord,
     ShipmentRecord,
     StaleRequestRecord,
+    UserRecord,
 )
 from qinora.domain import (
     CurrencyCode,
@@ -2354,6 +2355,149 @@ class PostgresCarrierWriteRepository:
             sample_size=0,
             email=email,
         )
+
+
+class PostgresUserRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def find_by_email(self, email: str) -> UserRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, email, full_name, password_hash, is_active
+                from public.users
+                where tenant_id = %s and email = %s
+                """,
+                (self._database.tenant_id, email),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            roles = _fetch_user_roles(cursor, self._database.tenant_id, row["id"])
+        return _user_from_postgres_row(row, roles)
+
+    async def find_by_id(self, user_id: str) -> UserRecord | None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, email, full_name, password_hash, is_active
+                from public.users
+                where tenant_id = %s and id = %s
+                """,
+                (self._database.tenant_id, user_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            roles = _fetch_user_roles(cursor, self._database.tenant_id, row["id"])
+        return _user_from_postgres_row(row, roles)
+
+    async def list_users(self) -> tuple[UserRecord, ...]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select id, email, full_name, password_hash, is_active
+                from public.users
+                where tenant_id = %s
+                order by created_at
+                """,
+                (self._database.tenant_id,),
+            )
+            rows = cursor.fetchall()
+            return tuple(
+                _user_from_postgres_row(
+                    row, _fetch_user_roles(cursor, self._database.tenant_id, row["id"])
+                )
+                for row in rows
+            )
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        full_name: str | None,
+        password_hash: str,
+        roles: tuple[str, ...],
+    ) -> UserRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.users (id, tenant_id, email, full_name, password_hash, is_active)
+                values (gen_random_uuid(), %s, %s, %s, %s, true)
+                returning id
+                """,
+                (self._database.tenant_id, email, full_name, password_hash),
+            )
+            user_id = str(cursor.fetchone()["id"])
+            for role in roles:
+                cursor.execute(
+                    """
+                    insert into public.user_roles (tenant_id, user_id, role)
+                    values (%s, %s, %s)
+                    """,
+                    (self._database.tenant_id, user_id, role),
+                )
+        return UserRecord(
+            id=user_id,
+            email=email,
+            full_name=full_name,
+            roles=roles,
+            is_active=True,
+            password_hash=password_hash,
+        )
+
+    async def set_roles(self, user_id: str, roles: tuple[str, ...]) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "delete from public.user_roles where tenant_id = %s and user_id = %s",
+                (self._database.tenant_id, user_id),
+            )
+            for role in roles:
+                cursor.execute(
+                    """
+                    insert into public.user_roles (tenant_id, user_id, role)
+                    values (%s, %s, %s)
+                    """,
+                    (self._database.tenant_id, user_id, role),
+                )
+
+    async def set_active(self, user_id: str, is_active: bool) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "update public.users set is_active = %s where tenant_id = %s and id = %s",
+                (is_active, self._database.tenant_id, user_id),
+            )
+
+    async def set_password(self, user_id: str, password_hash: str) -> None:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "update public.users set password_hash = %s where tenant_id = %s and id = %s",
+                (password_hash, self._database.tenant_id, user_id),
+            )
+
+
+def _fetch_user_roles(cursor: Any, tenant_id: str, user_id: str) -> tuple[str, ...]:
+    cursor.execute(
+        """
+        select role from public.user_roles
+        where tenant_id = %s and user_id = %s
+        order by role
+        """,
+        (tenant_id, user_id),
+    )
+    return tuple(row["role"] for row in cursor.fetchall())
+
+
+def _user_from_postgres_row(row: dict[str, Any], roles: tuple[str, ...]) -> UserRecord:
+    return UserRecord(
+        id=str(row["id"]),
+        email=row["email"],
+        full_name=row["full_name"],
+        roles=roles,
+        is_active=bool(row["is_active"]),
+        password_hash=row["password_hash"] or "",
+    )
 
 
 def _carrier_rfq_from_postgres_row(row: dict[str, Any]) -> CarrierRfqRecord:

@@ -110,15 +110,6 @@ variable "auth_token_secret" {
   sensitive = true
 }
 
-# When set, gates the app behind /auth/login instead of the unauthenticated
-# /auth/dev-token auto-login path (see backend/src/qinora/interfaces/http
-# /routers/auth.py) - required for any environment reachable by the public
-# internet.
-variable "app_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "postgres_tenant_id" {
   type    = string
   default = "00000000-0000-0000-0000-000000000001"

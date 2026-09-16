@@ -47,7 +47,7 @@ def test_postgres_container_requires_database_url(tmp_path: Path) -> None:
         database_url=None,
         postgres_tenant_id="11111111-1111-1111-1111-111111111111",
         cors_allowed_origins=("*",),
-        app_password=None,
+        require_auth=True,
         llm_provider=LLMProvider.STUB,
         openai_api_key=None,
         openai_model="gpt-4o-mini",

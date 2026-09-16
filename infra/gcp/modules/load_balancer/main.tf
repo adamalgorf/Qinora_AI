@@ -54,7 +54,13 @@ resource "google_compute_security_policy" "cloud_armor" {
     priority = 1000
     match {
       expr {
-        expression = "evaluatePreconfiguredExpr('sqli-stable')"
+        # id942421-sqli ("SQL Operator Anomaly Detection") false-positives on
+        # any dense run of -/./= characters, which is exactly what a JWT
+        # bearer token looks like - it was blocking every authenticated GET
+        # (tasks, dashboard/summary, auth/config) for real users in
+        # production. Excluded by ID rather than lowering sensitivity
+        # site-wide so the rest of sqli-stable still applies.
+        expression = "evaluatePreconfiguredExpr('sqli-stable', ['owasp-crs-v030001-id942421-sqli'])"
       }
     }
     description = "Block SQL injection attempts"
