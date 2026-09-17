@@ -263,19 +263,26 @@ class EmailIntakeOrchestrator:
                         )
                         return await self._finish(email_id, "accepted")
                 elif status in CLOSED_QUOTE_STATUSES:
+                    # Still notify a human (a reply on a finished quote is
+                    # worth a look), but don't block on one: the quote is
+                    # done (accepted/rejected/expired/converted), so this
+                    # reply can't be an edit to it - treat it as a fresh
+                    # inquiry instead of reopening something finished.
+                    # Clearing request_id/quote_id here (rather than
+                    # returning early) means the rest of this method falls
+                    # through to Parsek exactly as it would for a genuinely
+                    # new email. User's explicit call 2026-09-17: automate
+                    # rather than stall on a human for this too.
                     await self._escalate("quote", quote_id)
-                    await self._email_threads.link_thread(
-                        email_id, request_id=request_id, quote_id=quote_id
-                    )
-                    return await self._finish(email_id, "closed_thread")
+                    request_id = None
+                    quote_id = None
 
-            shipment = await self._find_shipment_for_quote(quote_id)
-            if shipment is not None and shipment.status in CLOSED_SHIPMENT_STATUSES:
-                await self._escalate("shipment", shipment.id)
-                await self._email_threads.link_thread(
-                    email_id, request_id=request_id, quote_id=quote_id
-                )
-                return await self._finish(email_id, "closed_thread")
+            if quote_id:
+                shipment = await self._find_shipment_for_quote(quote_id)
+                if shipment is not None and shipment.status in CLOSED_SHIPMENT_STATUSES:
+                    await self._escalate("shipment", shipment.id)
+                    request_id = None
+                    quote_id = None
 
         if request_id:
             request_detail = await self._operational_queries.get_request_detail(request_id)
@@ -284,10 +291,8 @@ class EmailIntakeOrchestrator:
                 and request_detail.request.status in CLOSED_REQUEST_STATUSES
             ):
                 await self._escalate("transport_request", request_id)
-                await self._email_threads.link_thread(
-                    email_id, request_id=request_id, quote_id=quote_id
-                )
-                return await self._finish(email_id, "closed_thread")
+                request_id = None
+                quote_id = None
 
         history = (
             await self._email_threads.list_thread_history(

@@ -169,6 +169,60 @@ def test_high_confidence_complete_draft_creates_request() -> None:
     assert agent_logs.logs[0].agent_key == AGENT_KEY
 
 
+def test_update_with_no_matched_request_creates_new_one_instead_of_escalating() -> None:
+    # User's explicit call 2026-09-17: Parsek believing this is a follow-up
+    # ("update") but the caller having no confirmed matched_request_id
+    # (thread_matching found nothing) used to force a human to sort out
+    # which request this belongs to. Create a new request instead - worst
+    # case is an extra request a human merges later, which beats leaving
+    # the customer waiting on a human to notice and resolve the ambiguity.
+    draft = ParsedTransportRequestDraft(
+        mode="ftl",
+        origin="Gothenburg",
+        destination="Malmo",
+        cargo=(ParsedCargoLine("Pallets", 4, 800.0, 120, 100, 150),),
+        loading_time=None,
+        unloading_time=None,
+        confidence=0.9,
+        missing_fields=(),
+        action="update",
+    )
+    request_repo = FakeRequestWriteRepository()
+    create_request = CreateRequestUseCase(request_repo, FakeOperationalTaskWriteRepository())
+    agent_logs = FakeAgentLogWriteRepository()
+    agent_config = AgentConfigService(
+        FakeAgentConfigRepository(
+            configs=[
+                AgentConfigRecord(
+                    agent_key=AGENT_KEY,
+                    agent_name="Parsek",
+                    is_enabled=True,
+                    auto_mode=AgentAutoMode.GUARDED_AUTO.value,
+                    min_confidence=0.74,
+                )
+            ]
+        )
+    )
+    agent = RequestParsingAgent(
+        FakeRequestParsingLLM(draft),
+        create_request,
+        agent_logs,
+        agent_config,
+    )
+
+    async def run():
+        return await agent.execute(
+            # No matched_request_id - thread_matching found nothing.
+            ParseFreeTextRequestCommand(customer="Acme AB", raw_text="following up on my request")
+        )
+
+    result = anyio.run(run)
+
+    assert result.needs_human_review is False
+    assert result.request_result is not None
+    assert len(request_repo.created) == 1
+
+
 def test_low_confidence_draft_is_flagged_not_created() -> None:
     draft = ParsedTransportRequestDraft(
         mode="ftl",
@@ -302,13 +356,14 @@ def test_missing_fields_queues_clarification_email_to_sender() -> None:
     assert item["body_text"].startswith("Hej Adam!")
 
 
-def test_low_confidence_complete_draft_sends_holding_acknowledgment() -> None:
-    # Reproduced live 2026-09-17: a fully complete, unambiguous request
-    # (nothing in missing_fields) whose confidence still landed under the
-    # auto-act threshold got zero reply at all - not even a bullet-list
-    # clarification, since there's nothing to list as missing. Every
-    # inbound email must get SOME reply (see the caller's docstring), so
-    # this case now gets a holding acknowledgment instead of silence.
+def test_low_confidence_but_complete_draft_still_auto_creates() -> None:
+    # User's explicit call 2026-09-17: a fully complete, unambiguous
+    # request (nothing in missing_fields) should proceed automatically
+    # even if the confidence score alone lands under the usual auto-act
+    # threshold - there's nothing actually blocking automation here, only
+    # a fuzzy number. The confidence bar exists to catch genuinely
+    # incomplete/uncertain extractions (which still go through the
+    # missing-fields clarification path below), not to gate a complete one.
     draft = ParsedTransportRequestDraft(
         mode="ftl",
         origin="Gothenburg",
@@ -358,15 +413,21 @@ def test_low_confidence_complete_draft_sends_holding_acknowledgment() -> None:
 
     result = anyio.run(run)
 
-    assert result.request_result is None
-    assert result.needs_human_review is True
+    # Created automatically despite confidence=0.5 < the 0.74 threshold -
+    # nothing in Parsek's own missing_fields was blocking it.
+    assert result.request_result is not None
+    assert result.needs_human_review is False
+    assert len(request_repo.created) == 1
+    # The draft's own loading_time is None though, which the stricter
+    # domain-level validate_transport_request() (not Parsek's own
+    # missing_fields) still requires - so this still isn't 100% silent:
+    # exactly one more automated clarification round for that specific
+    # gap, same as any other real incomplete request.
     assert len(clarifications.enqueued) == 1
     item = clarifications.enqueued[0]
     assert item["inbound_email_id"] == "email-3"
     assert item["recipient"] == "customer@example.com"
-    assert item["subject"] == "Re: Fraktforfraga"
-    assert item["body_text"].startswith("Hej Adam!")
-    assert "återkommer med en offert" in item["body_text"].lower()
+    assert "lastningstid" in item["body_text"].lower()
 
 
 def test_not_relevant_email_does_not_queue_clarification() -> None:

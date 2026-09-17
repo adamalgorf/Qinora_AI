@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
-from qinora.application.agent_config import AgentConfigService, should_auto_act
+from qinora.application.agent_config import (
+    AgentConfigService,
+    is_agent_enabled_for_auto,
+    should_auto_act,
+)
 from qinora.application.greeting import greeting
 from qinora.application.ports import (
     AgentLogWriteRepository,
@@ -67,22 +71,28 @@ class ParseFreeTextRequestResult:
 class RequestParsingAgent:
     """Reads a customer's free-text RFQ/booking email (or a full thread of
     them) and proposes a structured TransportRequestInput. Auto-creates or
-    auto-updates the request only when the "Parsek" agent config (see
-    application/agent_config.py) is enabled with auto_mode/min_confidence
-    that clear the draft's own confidence - otherwise the draft is logged
-    for a human to review instead, matching the human-in-the-loop principle
-    for assisted-mode agents.
+    auto-updates the request whenever the "Parsek" agent config (see
+    application/agent_config.py) is enabled and not set to manual mode -
+    the min_confidence bar only applies while something is still actually
+    missing from the extraction (draft.missing_fields), since a merely-low
+    confidence score on an otherwise-complete draft isn't a reason to make
+    a human do the work instead. Only a genuinely incomplete/uncertain
+    extraction, or an admin's own choice to require manual review, ever
+    routes to a human - matching the "automate, don't escalate unless
+    actually blocked" principle. See execute()'s can_auto_act branch.
 
     This class is the *only* place application code talks to the LLM, via
     the RequestParsingLLM port. It has no idea OpenAI exists.
 
     Parsek's own classify step (see infrastructure/llm/request_parsing.py)
     decides whether a thread is a new request ("create"), a follow-up on a
-    request already on file ("update" - only actionable when the caller,
-    typically the email intake orchestrator, also supplies
-    matched_request_id from application/thread_matching.py), or not a
-    transport request at all ("not_relevant" - escalated as an operational
-    task instead of ever becoming a request).
+    request already on file ("update" - creates a new request instead if
+    the caller, typically the email intake orchestrator, can't supply a
+    confirmed matched_request_id from application/thread_matching.py -
+    see execute()'s final branch), or not a transport request at all
+    ("not_relevant" - escalated as an operational task instead of ever
+    becoming a request, the one case that still always goes to a human,
+    since auto-replying to spam/bounces/out-of-office risks mail loops).
     """
 
     def __init__(
@@ -112,7 +122,18 @@ class RequestParsingAgent:
     async def execute(self, command: ParseFreeTextRequestCommand) -> ParseFreeTextRequestResult:
         draft = await self._llm.parse(raw_text=command.raw_text)
         config = await self._agent_config.get_config(AGENT_KEY)
-        can_auto_act = should_auto_act(config, draft.confidence)
+        if draft.missing_fields:
+            can_auto_act = should_auto_act(config, draft.confidence)
+        else:
+            # Nothing is actually missing from the extraction - don't let a
+            # merely-low confidence score alone force a human review. Still
+            # respect an admin's own governance choice (agent disabled, or
+            # explicitly set to manual mode) - just not the fuzzy confidence
+            # bar, which only exists to catch incomplete/uncertain
+            # extractions in the first place. User's explicit call
+            # 2026-09-17: tasks should be automated, not escalated to a
+            # human when automation isn't actually blocked on anything.
+            can_auto_act = is_agent_enabled_for_auto(config)
         needs_review = not can_auto_act or bool(draft.missing_fields)
         required_fields = _required_fields_from_config(config)
 
@@ -157,19 +178,15 @@ class RequestParsingAgent:
                 ),
                 required_fields=required_fields,
             )
-        elif not needs_review and draft.action == "update":
-            # Parsek believes this continues an existing request, but
-            # thread_matching couldn't find one - genuinely ambiguous (unlike
-            # the branch above, which has a deterministic match), so this
-            # still goes to a human rather than guessing either way.
-            needs_review = True
-            if self._task_repository is not None:
-                await self._task_repository.create_task(
-                    entity_type="email_inbound",
-                    entity_id=command.inbound_email_id or "unassigned",
-                    reason="Classified as an update but no matching request was found",
-                )
         elif not needs_review:
+            # Covers both a genuinely new request (draft.action == "create")
+            # and Parsek believing this continues an existing one but
+            # thread_matching finding no confirmed match (draft.action ==
+            # "update" with no matched_request_id) - rather than blocking on
+            # a human to sort out which request this belongs to, create a
+            # new one. Worst case is an extra request a human merges later;
+            # leaving the customer waiting on a human to notice and resolve
+            # the ambiguity is worse. User's explicit call 2026-09-17.
             request_result = await self._create_request.execute(
                 CreateRequestCommand(
                     customer=command.customer,

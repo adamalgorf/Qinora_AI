@@ -30,6 +30,20 @@ DEFAULT_AGENT_CONFIGS = (
 )
 
 
+def is_agent_enabled_for_auto(config: AgentConfigRecord | None) -> bool:
+    """The governance half of should_auto_act(), below - deliberate admin
+    choices (the agent is disabled, or explicitly set to "manual") - split
+    out on its own so a caller that wants to bypass the *confidence* gate
+    for some other reason (e.g. request_parsing_agent.py proceeding on a
+    fully-extracted draft regardless of a fuzzy confidence score - see its
+    execute()) still respects these, rather than accidentally overriding
+    an admin's own choice to require a human for this agent entirely.
+    """
+    if config is None or not config.is_enabled:
+        return False
+    return config.auto_mode != AgentAutoMode.MANUAL.value
+
+
 def should_auto_act(config: AgentConfigRecord | None, confidence: float) -> bool:
     """Whether an AI agent should act automatically, or flag its result for
     human review, given its configured auto_mode/min_confidence.
@@ -41,9 +55,7 @@ def should_auto_act(config: AgentConfigRecord | None, confidence: float) -> bool
       pick, not a separate code path.
     - Missing config (agent not found, or disabled) never auto-acts.
     """
-    if config is None or not config.is_enabled:
-        return False
-    if config.auto_mode == AgentAutoMode.MANUAL.value:
+    if config is None or not is_agent_enabled_for_auto(config):
         return False
     return confidence >= config.min_confidence
 

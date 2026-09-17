@@ -820,8 +820,19 @@ def test_acceptance_shortcut_books_shipment_without_calling_llm() -> None:
     assert llm.calls == 0
 
 
-def test_closed_thread_escalates_instead_of_auto_processing() -> None:
-    email = _email("mail-3", subject="Re: Old request", body_text="Any update?")
+def test_closed_thread_is_escalated_for_visibility_but_still_automated() -> None:
+    # A reply on an already-finished request (converted/booked) can't be an
+    # edit to it, but that's no reason to make a human handle the reply -
+    # escalate the old request for visibility (someone should know it got a
+    # reply), and ALSO let it flow through as a genuinely new request
+    # automatically, same as any other clear inbound email. User's explicit
+    # call 2026-09-17: automate rather than stall on a human for this too.
+    email = _email(
+        "mail-3",
+        sender="ops@northvolt.example",
+        subject="Re: Old request",
+        body_text="500kg pallets Gothenburg to Malmo, pickup 2026-06-01",
+    )
     parsek_config = _parsek_config()
     thread_match = ThreadMatchResult(
         request_id="req-2", quote_id=None, matched_email_id="mail-old2", tier=2
@@ -842,6 +853,35 @@ def test_closed_thread_escalates_instead_of_auto_processing() -> None:
             cargo_lines=(),
         )
     }
+    draft = ParsedTransportRequestDraft(
+        mode="ltl",
+        origin="Gothenburg",
+        destination="Malmo",
+        cargo=(ParsedCargoLine("Pallets", 4, 500.0, 120, 100, 150),),
+        loading_time=datetime(2026, 6, 1, 10, tzinfo=UTC),
+        unloading_time=None,
+        confidence=0.9,
+        missing_fields=(),
+        action="create",
+    )
+    rate_profile = RateProfileRecord(
+        id="rate-1",
+        mode="ltl",
+        origin=None,
+        destination=None,
+        base_price=100,
+        price_per_kg=2,
+        currency="SEK",
+    )
+    created_request = RequestRecord(
+        id="req-new",
+        public_id="REQ-0100",
+        customer="ops@northvolt.example",
+        lane="Gothenburg -> Malmo",
+        mode="ltl",
+        status="parsed",
+        weight_kg=500,
+    )
 
     (
         orchestrator,
@@ -849,7 +889,7 @@ def test_closed_thread_escalates_instead_of_auto_processing() -> None:
         _contacts,
         task_repository,
         _shipment_repository,
-        _quote_repository,
+        quote_repository,
         llm,
         request_repository,
         *_,
@@ -858,11 +898,15 @@ def test_closed_thread_escalates_instead_of_auto_processing() -> None:
         parsek_config=parsek_config,
         thread_match=thread_match,
         request_details=request_details,
+        llm_draft=draft,
+        rate_profile=rate_profile,
+        requests=[created_request],
     )
 
     result = anyio.run(lambda: orchestrator.handle("mail-3"))
 
-    assert result.classification == "closed_thread"
+    assert result.classification == "transport_request"
+    assert llm.calls == 1
     assert task_repository.created == [
         {
             "entity_type": "transport_request",
@@ -870,9 +914,11 @@ def test_closed_thread_escalates_instead_of_auto_processing() -> None:
             "reason": "granska och svara manuellt",
         }
     ]
-    assert ("mail-3", "req-2", None) in email_threads.linked
-    assert llm.calls == 0
-    assert request_repository.created == []
+    # Not linked to the closed request - it became its own new one instead.
+    assert ("mail-3", "req-2", None) not in email_threads.linked
+    assert request_repository.created[0].id == "req-new"
+    assert ("mail-3", "req-new", None) in email_threads.linked
+    assert len(quote_repository.quotes) == 1
 
 
 def test_new_thread_creates_request_and_prices_it() -> None:
