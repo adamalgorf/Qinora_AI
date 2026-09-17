@@ -43,7 +43,13 @@ reply, a bounce/delivery-failure notice, or similar - in this case the other \
 fields may be left empty/default.
 
 Then extract the structured request:
-- mode must be exactly one of: ftl, ltl, ocean, air, rail, intermodal.
+- mode must be exactly one of: ftl, ltl, ocean, air, rail, intermodal - this \
+is a closed set, so map the customer's own words onto it rather than reusing \
+their wording (e.g. "road"/"lastbil"/"väg" is a transport mode family, not a \
+value on its own - infer ftl vs ltl from context: a single full trailer/full \
+truck load is "ftl", anything smaller (a few pallets, part-load) is "ltl", and \
+default to "ltl" if the load size doesn't make it clear which one). Likewise \
+map "boat"/"sjöfrakt" to "ocean", "flyg"/"plane" to "air", "tåg" to "rail".
 - Only extract facts explicitly present or unambiguously implied by the text. \
 Never invent weights, dimensions, dates, or addresses.
 - If a weight or dimensions is only ever given for the shipment as a whole (not \
@@ -77,7 +83,7 @@ class _TransportRequestSchema(BaseModel):
         description="Whether this thread is a new request, an update to an existing "
         "one, or not a transport request at all"
     )
-    mode: str = Field(description="One of: ftl, ltl, ocean, air, rail, intermodal")
+    mode: Literal["ftl", "ltl", "ocean", "air", "rail", "intermodal"]
     origin: str
     destination: str
     cargo: list[_CargoLineSchema] = Field(default_factory=list)
