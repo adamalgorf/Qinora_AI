@@ -23,9 +23,11 @@ either - there's nothing automatic left to try at that point.
 from dataclasses import dataclass
 
 from qinora.application.carrier_rfq import CarrierRfqTargeting, SelectRfqTargetsCommand
+from qinora.application.greeting import greeting
 from qinora.application.ports import (
     CarrierRfqOutboundRepository,
     CarrierRfqRepository,
+    ClarificationOutboundRepository,
     OperationalTaskWriteRepository,
     RateProfileRepository,
     RequestWriteRepository,
@@ -51,6 +53,13 @@ class PriceAndQuoteCommand:
     total_weight_kg: float
     contact: ContactRecord | None
     recipient_email: str
+    # Only needed for the no-rate-profile/no-carriers escalation path below
+    # to send the customer a holding acknowledgment instead of silence -
+    # None/empty is fine everywhere else.
+    inbound_email_id: str | None = None
+    subject: str = ""
+    sender_name: str | None = None
+    message_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +101,8 @@ class PricingEngine:
         carrier_rfq_outbound: CarrierRfqOutboundRepository,
         request_repository: RequestWriteRepository,
         carrier_mailbox: str | None = None,
+        clarification_outbound: ClarificationOutboundRepository | None = None,
+        customer_mailbox: str | None = None,
     ) -> None:
         self._rate_profiles = rate_profiles
         self._quote_workflow = quote_workflow
@@ -106,6 +117,12 @@ class PricingEngine:
         # is running - see workers/outlook_bridge.py. None means "any
         # bridge instance may send it" (single-mailbox deployments).
         self._carrier_mailbox = carrier_mailbox
+        # Sends the customer a holding acknowledgment when there's no rate
+        # profile AND no carrier to RFQ either - see _start_carrier_sourcing
+        # below. None disables it (falls back to the old silent-escalation
+        # behavior, e.g. in tests that don't care about it).
+        self._clarification_outbound = clarification_outbound
+        self._customer_mailbox = customer_mailbox
 
     async def price_and_quote(self, command: PriceAndQuoteCommand) -> PricingResult:
         profile = await self._rate_profiles.find_matching(
@@ -147,6 +164,18 @@ class PricingEngine:
                 entity_id=command.request_id,
                 reason=NO_CARRIERS_REASON,
             )
+            # The request was understood fine - there's just nothing left
+            # to price it against automatically. Without this, the customer
+            # got total silence even though their request was successfully
+            # parsed and created, only surfacing internally as a Control
+            # Tower task - every inbound email must get SOME reply.
+            # Reproduced live 2026-09-17.
+            if (
+                self._clarification_outbound is not None
+                and command.inbound_email_id
+                and command.recipient_email
+            ):
+                await self._send_no_carrier_acknowledgment(command)
             return PricingResult(quote=None, outbound_reply=None, priced=False)
 
         rfqs = await self._carrier_rfqs.create_batch(
@@ -174,6 +203,30 @@ class PricingEngine:
             outbound_reply=None,
             priced=False,
             rfq_batch=tuple(rfqs),
+        )
+
+    async def _send_no_carrier_acknowledgment(self, command: PriceAndQuoteCommand) -> None:
+        original_subject = command.subject or "din förfrågan"
+        subject = original_subject
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+
+        body_text = (
+            f"{greeting(command.sender_name, command.recipient_email)}\n\n"
+            f'Tack för din förfrågan angående "{original_subject}". Vi har tagit emot '
+            "den och återkommer med en offert så snart som möjligt.\n\n"
+            "Med vänlig hälsning,\nSandahls"
+        )
+
+        assert self._clarification_outbound is not None
+        assert command.inbound_email_id is not None
+        await self._clarification_outbound.enqueue(
+            inbound_email_id=command.inbound_email_id,
+            recipient=command.recipient_email,
+            subject=subject,
+            body_text=body_text,
+            in_reply_to_message_id=command.message_id,
+            sender_mailbox=self._customer_mailbox,
         )
 
 

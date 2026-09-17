@@ -262,6 +262,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_outbound_repository,
         request_repository,
         carrier_mailbox=settings.carrier_mailbox,
+        clarification_outbound=clarification_outbound_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
 
     request_parsing_agent = RequestParsingAgent(
@@ -459,6 +461,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_outbound_repository,
         request_repository,
         carrier_mailbox=settings.carrier_mailbox,
+        clarification_outbound=clarification_outbound_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
 
     request_parsing_agent = RequestParsingAgent(

@@ -273,6 +273,41 @@ class FakeCarrierRfqOutboundRepository:
 
 
 @dataclass
+class FakeClarificationOutboundRepository:
+    enqueued: list = field(default_factory=list)
+
+    async def enqueue(
+        self,
+        *,
+        inbound_email_id,
+        recipient,
+        subject,
+        body_text,
+        in_reply_to_message_id=None,
+        sender_mailbox=None,
+    ):
+        item = {
+            "inbound_email_id": inbound_email_id,
+            "recipient": recipient,
+            "subject": subject,
+            "body_text": body_text,
+            "in_reply_to_message_id": in_reply_to_message_id,
+            "sender_mailbox": sender_mailbox,
+        }
+        self.enqueued.append(item)
+        return item
+
+    async def next_queued(self, limit):
+        raise NotImplementedError
+
+    async def mark_sent(self, item_id):
+        raise NotImplementedError
+
+    async def mark_failed(self, item_id, error_message):
+        raise NotImplementedError
+
+
+@dataclass
 class FakeRequestWriteRepository:
     status_updates: list = field(default_factory=list)
 
@@ -468,6 +503,76 @@ def test_missing_rate_profile_and_no_carriers_escalates_to_task() -> None:
     assert task_repository.created == [
         {"entity_type": "transport_request", "entity_id": "req-1", "reason": NO_CARRIERS_REASON}
     ]
+    # No clarification_outbound wired in this test - old silent-escalation
+    # behavior is preserved, not a crash.
+
+
+def test_missing_rate_profile_and_no_carriers_sends_holding_acknowledgment() -> None:
+    # Reproduced live 2026-09-17: a request Parsek understood completely
+    # (created successfully, nothing missing) got zero reply to the
+    # customer when pricing had nothing automatic left to try - only an
+    # internal Control Tower task. Every inbound email must get SOME
+    # reply, so this now sends a holding acknowledgment instead of
+    # silence, same as request_parsing_agent.py's low-confidence gap.
+    request = RequestRecord(
+        id="req-1",
+        public_id="REQ-0001",
+        customer="Acme",
+        lane="Norrkoping -> Oslo",
+        mode="ltl",
+        status="parsed",
+        weight_kg=120,
+    )
+    quote_workflow, quote_repository, outbound_repository = _quote_workflow(request)
+    task_repository = FakeOperationalTaskWriteRepository()
+    clarifications = FakeClarificationOutboundRepository()
+    engine = PricingEngine(
+        FakeRateProfileRepository(None),
+        quote_workflow,
+        task_repository,
+        default_markup_percent=15,
+        carrier_rfq_targeting=FakeCarrierRfqTargeting(targets=[]),
+        carrier_rfqs=FakeCarrierRfqRepository(),
+        carrier_rfq_outbound=FakeCarrierRfqOutboundRepository(),
+        request_repository=FakeRequestWriteRepository(),
+        clarification_outbound=clarifications,
+        customer_mailbox="test.spedition@sandahls.com",
+    )
+
+    async def run():
+        return await engine.price_and_quote(
+            PriceAndQuoteCommand(
+                request_id="req-1",
+                mode="ltl",
+                origin="Norrkoping",
+                destination="Oslo",
+                total_weight_kg=120,
+                contact=None,
+                recipient_email="farah@qinora.org",
+                inbound_email_id="email-1",
+                subject="Förfråga",
+                sender_name="Farah",
+                message_id="<msg-1@example.com>",
+            )
+        )
+
+    result = anyio.run(run)
+
+    assert result.priced is False
+    assert result.quote is None
+    assert quote_repository.quotes == {}
+    assert outbound_repository.enqueued == []
+    assert task_repository.created == [
+        {"entity_type": "transport_request", "entity_id": "req-1", "reason": NO_CARRIERS_REASON}
+    ]
+    assert len(clarifications.enqueued) == 1
+    item = clarifications.enqueued[0]
+    assert item["inbound_email_id"] == "email-1"
+    assert item["recipient"] == "farah@qinora.org"
+    assert item["subject"] == "Re: Förfråga"
+    assert item["in_reply_to_message_id"] == "<msg-1@example.com>"
+    assert item["sender_mailbox"] == "test.spedition@sandahls.com"
+    assert item["body_text"].startswith("Hej Farah!")
 
 
 def test_missing_rate_profile_with_carriers_starts_rfq_sourcing() -> None:

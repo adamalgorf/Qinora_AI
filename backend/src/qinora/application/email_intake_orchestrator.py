@@ -299,6 +299,10 @@ class EmailIntakeOrchestrator:
                 total_weight_kg=result.request_result.request.weight_kg,
                 contact=contact,
                 recipient_email=email.sender,
+                inbound_email_id=email_id,
+                subject=email.subject,
+                sender_name=email.sender_name,
+                message_id=email.message_id,
             )
         )
         return await self._finish(email_id, "transport_request")
