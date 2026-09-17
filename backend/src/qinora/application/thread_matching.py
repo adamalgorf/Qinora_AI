@@ -127,16 +127,31 @@ class ThreadMatchingUseCase:
         if not subject_matches:
             return None
 
+        # Tier 2/3 is a much weaker signal than tier 1's message-id match -
+        # a short, generic subject (e.g. "förfråga", just the Swedish word
+        # for "inquiry") can trivially coincide across two completely
+        # unrelated requests from the same sender. Only trust it against a
+        # candidate that's already a real, tracked conversation (linked to
+        # a request/quote) - an unlinked candidate is itself just another
+        # unprocessed inquiry, not reliable prior context. Without this,
+        # two unrelated shipments sharing a generic subject got merged into
+        # one combined_text for Parsek, corrupting the parse of a perfectly
+        # clear second request - reproduced live 2026-09-17.
+        linked_matches = [row for row in subject_matches if row.request_id or row.quote_id]
+        if not linked_matches:
+            return None
+
         cutoff = datetime.now(UTC) - _TIER_2_WINDOW
-        for row in subject_matches:
+        for row in linked_matches:
             created_at = _parse_created_at(row.created_at)
             if created_at is not None and created_at >= cutoff:
                 return ThreadMatchResult(row.request_id, row.quote_id, row.id, 2)
 
-        # Tier 3 fallback: most recent subject match regardless of age.
-        # `candidates` is already ordered created_at desc by the repository,
-        # so the first subject match here is the most recent one.
-        row = subject_matches[0]
+        # Tier 3 fallback: most recent linked subject match regardless of
+        # age. `candidates` is already ordered created_at desc by the
+        # repository, so the first linked subject match here is the most
+        # recent one.
+        row = linked_matches[0]
         return ThreadMatchResult(row.request_id, row.quote_id, row.id, 3)
 
 

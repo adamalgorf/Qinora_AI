@@ -292,6 +292,98 @@ def test_excludes_the_email_being_processed_from_tier_1_message_id_candidates() 
     assert result.matched_email_id == "mail-1"
 
 
+def test_tier_2_ignores_an_unlinked_same_subject_candidate() -> None:
+    # A generic one-word subject (here, the Swedish word for "inquiry")
+    # from the same sender can trivially coincide across two completely
+    # unrelated requests. If the only same-subject candidate never became
+    # a real request (request_id/quote_id both None - itself just another
+    # unprocessed inquiry, not a tracked conversation), tier 2 must not
+    # match to it - doing so previously merged two unrelated shipments'
+    # text into one Parsek call. Reproduced live 2026-09-17.
+    unlinked_unrelated = _email(
+        "mail-1",
+        subject="Förfråga",
+        request_id=None,
+        quote_id=None,
+        created_at=(datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
+    )
+    repository = FakeEmailThreadRepository(domain_candidates=[unlinked_unrelated])
+    matcher = ThreadMatchingUseCase(repository)
+
+    result = anyio.run(
+        lambda: matcher.match(
+            email_id="mail-new",
+            sender="logistics@volvo.example",
+            subject="Förfråga",
+            message_id=None,
+            in_reply_to=None,
+            references=None,
+        )
+    )
+
+    assert result is None
+
+
+def test_tier_2_prefers_a_linked_candidate_over_an_unlinked_same_subject_one() -> None:
+    unlinked_unrelated = _email(
+        "mail-unlinked",
+        subject="Förfråga",
+        request_id=None,
+        quote_id=None,
+        created_at=(datetime.now(UTC) - timedelta(minutes=5)).isoformat(),
+    )
+    linked_real_thread = _email(
+        "mail-linked",
+        subject="Förfråga",
+        request_id="req-9",
+        created_at=(datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
+    )
+    repository = FakeEmailThreadRepository(
+        domain_candidates=[unlinked_unrelated, linked_real_thread]
+    )
+    matcher = ThreadMatchingUseCase(repository)
+
+    result = anyio.run(
+        lambda: matcher.match(
+            email_id="mail-new",
+            sender="logistics@volvo.example",
+            subject="Förfråga",
+            message_id=None,
+            in_reply_to=None,
+            references=None,
+        )
+    )
+
+    assert result is not None
+    assert result.request_id == "req-9"
+    assert result.matched_email_id == "mail-linked"
+
+
+def test_tier_3_ignores_an_unlinked_same_subject_candidate() -> None:
+    old_unlinked = _email(
+        "mail-1",
+        subject="Förfråga",
+        request_id=None,
+        quote_id=None,
+        created_at=(datetime.now(UTC) - timedelta(days=400)).isoformat(),
+    )
+    repository = FakeEmailThreadRepository(domain_candidates=[old_unlinked])
+    matcher = ThreadMatchingUseCase(repository)
+
+    result = anyio.run(
+        lambda: matcher.match(
+            email_id="mail-new",
+            sender="logistics@volvo.example",
+            subject="Förfråga",
+            message_id=None,
+            in_reply_to=None,
+            references=None,
+        )
+    )
+
+    assert result is None
+
+
 def test_no_candidates_returns_none() -> None:
     repository = FakeEmailThreadRepository()
     matcher = ThreadMatchingUseCase(repository)
