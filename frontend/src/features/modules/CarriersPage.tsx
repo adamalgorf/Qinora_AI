@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { PageShell } from "@/components/patterns/PageShell";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +23,6 @@ import {
 } from "@/shared/api/client";
 
 import { DataTable } from "./DataTable";
-import { ModuleScaffold } from "./ModuleScaffold";
 
 const MODE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "ftl", label: "FTL" },
@@ -84,26 +85,36 @@ export function CarriersPage() {
   }
 
   return (
-    <ModuleScaffold
-      badge="Carrier Intelligence"
-      description="Transportörskatalog för denna klient som driver behörighet, poängsättning och tillförlitlighetsrankning."
-      title="Transportörer"
-    >
-      <div className="mb-4 flex justify-end">
-        <Button onClick={() => setAddOpen(true)}>Lägg till transportör</Button>
-      </div>
-      <DataTable
-        columns={[
-          { key: "display_name", label: "Transportör" },
-          { key: "modes", label: "Transportsätt", render: (value) => (value as string[]).join(", ") },
-          { key: "lane_score", label: "Sträckpoäng", align: "right", mono: true },
-          { key: "performance_score", label: "Prestanda", align: "right", mono: true },
-          { key: "preferred", label: "Föredragen", render: (value) => (value ? "Ja" : "Nej") },
-        ]}
-        highlightId={searchParams.get("highlight") ?? undefined}
-        loading={query.isLoading}
-        rows={query.data}
-      />
+    <PageShell subtitle="Katalog & Tillförlitlighetsrankning" title="Transportörer">
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Transportörskatalog</h2>
+              <p className="text-sm text-muted-foreground">
+                Behörighet, poängsättning och tillförlitlighetsrankning per transportör.
+              </p>
+            </div>
+            <Button onClick={() => setAddOpen(true)}>Lägg till transportör</Button>
+          </div>
+          <DataTable
+            columns={[
+              { key: "display_name", label: "Transportör" },
+              {
+                key: "modes",
+                label: "Transportsätt",
+                render: (value) => (value as string[]).join(", "),
+              },
+              { key: "lane_score", label: "Sträckpoäng", align: "right", mono: true },
+              { key: "performance_score", label: "Prestanda", align: "right", mono: true },
+              { key: "preferred", label: "Föredragen", render: (value) => (value ? "Ja" : "Nej") },
+            ]}
+            highlightId={searchParams.get("highlight") ?? undefined}
+            loading={query.isLoading}
+            rows={query.data}
+          />
+        </CardContent>
+      </Card>
 
       <Dialog
         open={addOpen}
@@ -221,6 +232,6 @@ export function CarriersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ModuleScaffold>
+    </PageShell>
   );
 }
