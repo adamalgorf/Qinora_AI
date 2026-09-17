@@ -206,20 +206,30 @@ class RequestParsingAgent:
             confidence=draft.confidence,
         )
 
-        # A genuine "text was too vague/incomplete" outcome (as opposed to
-        # not_relevant, or the update-with-no-matching-request case, which
-        # has already been escalated as a task above) - ask the customer
-        # for exactly what's missing instead of leaving the thread to go
-        # stale until someone reviews the Inbox by hand.
+        # Every inbound email must get SOME reply - not_relevant is the only
+        # deliberate exception (auto-replying to spam/bounces/out-of-office
+        # risks mail loops). Every other case that leaves request_result
+        # None (missing fields, an "update" Parsek couldn't match to an
+        # existing request, or - most easily missed - a fully-extracted
+        # draft that just isn't confident enough to auto-act on) previously
+        # left the customer with total silence until a human happened to
+        # open the Inbox review queue. Ask for exactly what's missing when
+        # something concretely is; otherwise send a holding acknowledgment
+        # rather than nothing, so the customer at least knows their message
+        # arrived and is being looked at. Reproduced live 2026-09-17: a
+        # fully complete, unambiguous request landed in silent manual
+        # review with zero communication back to the sender.
         if (
             request_result is None
             and not not_relevant
-            and draft.missing_fields
             and self._clarification_outbound is not None
             and command.inbound_email_id
             and command.sender_email
         ):
-            await self._send_clarification_request(command, draft, draft.missing_fields)
+            if draft.missing_fields:
+                await self._send_clarification_request(command, draft, draft.missing_fields)
+            else:
+                await self._send_holding_acknowledgment(command)
         # request_result is not None here means CreateRequestUseCase/
         # UpdateRequestUseCase (application/request_intake.py) ran its own
         # domain-level validate_transport_request check - stricter than, and
@@ -278,6 +288,41 @@ class RequestParsingAgent:
             f"{bullet_list}\n\n"
             "Vänligen svara på detta mejl med den saknade informationen så "
             "återkommer vi med en offert.\n\n"
+            "Med vänlig hälsning,\nSandahls"
+        )
+
+        assert self._clarification_outbound is not None
+        assert command.inbound_email_id is not None
+        await self._clarification_outbound.enqueue(
+            inbound_email_id=command.inbound_email_id,
+            recipient=command.sender_email,
+            subject=subject,
+            body_text=body_text,
+            in_reply_to_message_id=command.message_id,
+            sender_mailbox=self._customer_mailbox,
+        )
+
+    async def _send_holding_acknowledgment(
+        self,
+        command: ParseFreeTextRequestCommand,
+    ) -> None:
+        """Sent instead of a clarification request when there's nothing
+        concrete left to ask for - Parsek extracted the request fully but
+        just isn't confident enough to auto-act on it, or classified it as
+        an update it couldn't match to an existing request. There's no
+        missing_fields bullet list to show here, only a plain acknowledgment
+        that the message arrived and a human will follow up - see the
+        caller's docstring for why sending nothing at all isn't acceptable.
+        """
+        original_subject = command.subject or "din förfrågan"
+        subject = original_subject
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+
+        body_text = (
+            f"{greeting(command.sender_name, command.sender_email)}\n\n"
+            f'Tack för din förfrågan angående "{original_subject}". Vi har tagit emot '
+            "den och återkommer med en offert så snart som möjligt.\n\n"
             "Med vänlig hälsning,\nSandahls"
         )
 

@@ -302,6 +302,73 @@ def test_missing_fields_queues_clarification_email_to_sender() -> None:
     assert item["body_text"].startswith("Hej Adam!")
 
 
+def test_low_confidence_complete_draft_sends_holding_acknowledgment() -> None:
+    # Reproduced live 2026-09-17: a fully complete, unambiguous request
+    # (nothing in missing_fields) whose confidence still landed under the
+    # auto-act threshold got zero reply at all - not even a bullet-list
+    # clarification, since there's nothing to list as missing. Every
+    # inbound email must get SOME reply (see the caller's docstring), so
+    # this case now gets a holding acknowledgment instead of silence.
+    draft = ParsedTransportRequestDraft(
+        mode="ftl",
+        origin="Gothenburg",
+        destination="Malmo",
+        cargo=(ParsedCargoLine("Pallets", 4, 800.0, 120, 100, 150),),
+        loading_time=None,
+        unloading_time=None,
+        confidence=0.5,
+        missing_fields=(),
+    )
+    request_repo = FakeRequestWriteRepository()
+    create_request = CreateRequestUseCase(request_repo, FakeOperationalTaskWriteRepository())
+    agent_logs = FakeAgentLogWriteRepository()
+    agent_config = AgentConfigService(
+        FakeAgentConfigRepository(
+            configs=[
+                AgentConfigRecord(
+                    agent_key=AGENT_KEY,
+                    agent_name="Parsek",
+                    is_enabled=True,
+                    auto_mode=AgentAutoMode.GUARDED_AUTO.value,
+                    min_confidence=0.74,
+                )
+            ]
+        )
+    )
+    clarifications = FakeClarificationOutboundRepository()
+    agent = RequestParsingAgent(
+        FakeRequestParsingLLM(draft),
+        create_request,
+        agent_logs,
+        agent_config,
+        clarification_outbound=clarifications,
+    )
+
+    async def run():
+        return await agent.execute(
+            ParseFreeTextRequestCommand(
+                customer="Acme AB",
+                raw_text="a bit ambiguous but actually complete",
+                inbound_email_id="email-3",
+                sender_email="customer@example.com",
+                sender_name="Adam Algorf",
+                subject="Fraktforfraga",
+            )
+        )
+
+    result = anyio.run(run)
+
+    assert result.request_result is None
+    assert result.needs_human_review is True
+    assert len(clarifications.enqueued) == 1
+    item = clarifications.enqueued[0]
+    assert item["inbound_email_id"] == "email-3"
+    assert item["recipient"] == "customer@example.com"
+    assert item["subject"] == "Re: Fraktforfraga"
+    assert item["body_text"].startswith("Hej Adam!")
+    assert "återkommer med en offert" in item["body_text"].lower()
+
+
 def test_not_relevant_email_does_not_queue_clarification() -> None:
     draft = ParsedTransportRequestDraft(
         mode="ftl",
