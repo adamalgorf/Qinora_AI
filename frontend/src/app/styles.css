@@ -9,19 +9,23 @@
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 175 84% 32%;
+  /* Primary brand blue, matched to the qinora.se marketing site's actual
+     token (rgb(36,116,245) ≈ hsl(217 91% 55%)) - the app's own design
+     language has to be this, not the teal an earlier mockup pass used. */
+  --primary: 217 91% 55%;
   --primary-foreground: 0 0% 100%;
   --secondary: 210 30% 93%;
   --secondary-foreground: 222 47% 11%;
   --muted: 210 30% 95%;
   --muted-foreground: 215 16% 47%;
-  --accent: 175 70% 41%;
+  /* Secondary/teal accent, snapped to qinora.se's own --accent value. */
+  --accent: 165 60% 45%;
   --accent-foreground: 0 0% 100%;
   --destructive: 347 77% 50%;
   --destructive-foreground: 0 0% 100%;
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 175 84% 32%;
+  --ring: 217 91% 55%;
   --radius: 0.5rem;
   --shadow-soft: 0 24px 80px rgb(0 0 0 / 0.12);
 
@@ -34,16 +38,17 @@
 
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-heading: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
 
   /* The sidebar stays a dark navy in both themes - only its shade changes. */
   --sidebar: hsl(222 45% 8%);
   --sidebar-foreground: hsl(215 16% 55%);
-  --sidebar-primary: hsl(175 70% 45%);
+  --sidebar-primary: hsl(217 85% 60%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(219 37% 14%);
   --sidebar-accent-foreground: hsl(0 0% 100%);
   --sidebar-border: hsl(219 30% 18%);
-  --sidebar-ring: hsl(175 70% 45%);
+  --sidebar-ring: hsl(217 85% 60%);
 }
 
 .dark {
@@ -53,19 +58,19 @@
   --card-foreground: 210 20% 92%;
   --popover: 222 40% 12%;
   --popover-foreground: 210 20% 92%;
-  --primary: 175 70% 45%;
+  --primary: 217 85% 62%;
   --primary-foreground: 0 0% 100%;
   --secondary: 222 25% 18%;
   --secondary-foreground: 210 16% 85%;
   --muted: 222 25% 15%;
   --muted-foreground: 215 16% 60%;
-  --accent: 175 60% 50%;
+  --accent: 165 55% 50%;
   --accent-foreground: 0 0% 100%;
   --destructive: 347 63% 42%;
   --destructive-foreground: 0 0% 100%;
   --border: 222 25% 20%;
   --input: 222 25% 20%;
-  --ring: 175 70% 45%;
+  --ring: 217 85% 62%;
 
   --success: 160 70% 40%;
   --success-foreground: 0 0% 100%;
@@ -74,12 +79,12 @@
 
   --sidebar: hsl(222 40% 6%);
   --sidebar-foreground: hsl(215 16% 60%);
-  --sidebar-primary: hsl(175 70% 45%);
+  --sidebar-primary: hsl(217 85% 62%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(219 32% 16%);
   --sidebar-accent-foreground: hsl(0 0% 100%);
   --sidebar-border: hsl(219 25% 16%);
-  --sidebar-ring: hsl(175 70% 45%);
+  --sidebar-ring: hsl(217 85% 62%);
 }
 
 @theme inline {
@@ -233,8 +238,9 @@ button {
 h1 {
   margin: 0;
   max-width: 720px;
+  font-family: var(--font-heading);
   font-size: clamp(1.5rem, 2.2vw, 2rem);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
@@ -700,7 +706,7 @@ h1 {
   min-width: 0;
   overflow: hidden;
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

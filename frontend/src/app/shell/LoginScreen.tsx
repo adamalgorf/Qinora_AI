@@ -54,7 +54,7 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
       <Card className="w-full max-w-md">
         <CardContent className="flex flex-col gap-6 p-8">
           <div className="flex flex-col items-center gap-3 text-center">
-            <span className="flex size-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+            <span className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
               <Truck aria-hidden="true" className="size-7" />
             </span>
             <div>
@@ -125,7 +125,7 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
               />
               <div className="flex justify-end">
                 <button
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="text-sm font-medium text-primary hover:underline"
                   onClick={() =>
                     setNotice("Återställning av lösenord är inte tillgängligt ännu. Kontakta din administratör.")
                   }
@@ -139,7 +139,7 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
             <Button
-              className="w-full bg-blue-600 text-white hover:bg-blue-700"
+              className="w-full"
               disabled={!canSubmit}
               type="submit"
             >
@@ -150,7 +150,7 @@ export function LoginScreen({ error, isSubmitting, onSubmit }: LoginScreenProps)
           <p className="text-center text-sm text-muted-foreground">
             Har du inget konto?{" "}
             <button
-              className="font-medium text-blue-600 hover:underline"
+              className="font-medium text-primary hover:underline"
               onClick={() =>
                 setNotice("Nya konton skapas av din administratör under Inställningar → Användare.")
               }
