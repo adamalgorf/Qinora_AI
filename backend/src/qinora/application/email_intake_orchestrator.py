@@ -26,6 +26,7 @@ infrastructure/email_dispatch.py for the adapter that invokes `handle()`.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -38,9 +39,11 @@ from qinora.application.carrier_offer_agent import (
 from qinora.application.carrier_rfq_collector import CarrierRfqCollector
 from qinora.application.contact_matching import ContactMatchingUseCase, MatchContactCommand
 from qinora.application.email_routing import is_loop, resolve_tenant
+from qinora.application.greeting import greeting
 from qinora.application.operational_queries import OperationalQueries
 from qinora.application.ports import (
     CarrierRfqRepository,
+    ClarificationOutboundRepository,
     EmailThreadRepository,
     OperationalTaskWriteRepository,
     QuoteReplyInterpretationLLM,
@@ -59,9 +62,12 @@ from qinora.application.request_parsing_agent import (
 from qinora.application.thread_matching import ThreadMatchingUseCase, ThreadMatchResult
 from qinora.domain.shipment_status import ShipmentStatus
 
+log = logging.getLogger("qinora.email_intake_orchestrator")
+
 PARSEK_AGENT_KEY = "request_parsing_agent"
 
 MANUAL_REVIEW_REASON = "granska och svara manuellt"
+CRASH_REVIEW_REASON = "automatisk hantering misslyckades - granska manuellt"
 
 # Matches the subject line application/pricing_engine.py's _build_rfq_email
 # generates, e.g. "QiNora RFQ #A1B2C3D4 - Stockholm -> Hamburg, ltl" - also
@@ -140,6 +146,8 @@ class EmailIntakeOrchestrator:
         carrier_rfq_collector: CarrierRfqCollector,
         quote_reply_llm: QuoteReplyInterpretationLLM,
         carrier_mailbox: str | None = None,
+        clarification_outbound: ClarificationOutboundRepository | None = None,
+        customer_mailbox: str | None = None,
     ) -> None:
         self._agent_config = agent_config
         self._contact_matching = contact_matching
@@ -160,8 +168,38 @@ class EmailIntakeOrchestrator:
         self._carrier_offer_agent = carrier_offer_agent
         self._carrier_rfq_collector = carrier_rfq_collector
         self._quote_reply_llm = quote_reply_llm
+        # Used only by handle()'s top-level crash safety net, below - lets a
+        # customer whose email crashed automated processing still get a
+        # reply telling them it's being looked at manually, same as
+        # request_parsing_agent.py/pricing_engine.py's holding
+        # acknowledgments for their own (non-crash) silent-outcome gaps.
+        self._clarification_outbound = clarification_outbound
+        self._customer_mailbox = customer_mailbox
 
     async def handle(self, email_id: str) -> HandleInboundEmailResult:
+        """Top-level entry point - see _handle() for the real pipeline.
+
+        Every step below this point is wrapped in one last-resort net: an
+        unhandled exception ANYWHERE in the pipeline (a corrupted secret, an
+        LLM returning a value outside a closed set, or whatever the next
+        unforeseen bug turns out to be - three unrelated examples, all hit
+        live in production 2026-09-16/17) crashes this call synchronously.
+        By the time that happens, EmailWebhookUseCase.save()/record() has
+        already committed, so the email is permanently "already handled"
+        for idempotency purposes even though nothing actually replied to
+        it - nothing retries it, and the sender is left in silence
+        indefinitely. Every individual bug behind today's incidents is
+        fixed, but the NEXT unknown one would hit this exact same failure
+        mode. Catching it here - log it, escalate it, still try to tell the
+        customer - means a future bug degrades to "this one case needs a
+        human," not "this one case is silently lost forever."
+        """
+        try:
+            return await self._handle(email_id)
+        except Exception as exc:  # noqa: BLE001 - see docstring above
+            return await self._handle_crash(email_id, exc)
+
+    async def _handle(self, email_id: str) -> HandleInboundEmailResult:
         email = await self._email_threads.get(email_id)
         if email is None:
             return HandleInboundEmailResult(classification="unknown")
@@ -429,6 +467,69 @@ class EmailIntakeOrchestrator:
     async def _finish(self, email_id: str, classification: str) -> HandleInboundEmailResult:
         await self._email_threads.mark_classification(email_id, classification)
         return HandleInboundEmailResult(classification=classification)
+
+    async def _handle_crash(self, email_id: str, exc: Exception) -> HandleInboundEmailResult:
+        """handle()'s top-level safety net - see its docstring for why this
+        exists. Every step here is individually best-effort (its own
+        try/except): a bug in the *recovery* path must never itself
+        propagate and defeat the whole point of this being a safety net.
+        """
+        log.error("Unhandled exception processing email %s", email_id, exc_info=exc)
+
+        try:
+            await self._task_repository.create_task(
+                entity_type="email_inbound",
+                entity_id=email_id,
+                priority="high",
+                reason=f"{CRASH_REVIEW_REASON} ({type(exc).__name__}: {exc})",
+            )
+        except Exception:  # noqa: BLE001 - escalating must not itself crash the net
+            log.error("Failed to create crash-escalation task for %s", email_id, exc_info=True)
+
+        try:
+            await self._email_threads.mark_classification(email_id, "error")
+        except Exception:  # noqa: BLE001
+            log.error("Failed to mark %s as errored", email_id, exc_info=True)
+
+        try:
+            email = await self._email_threads.get(email_id)
+        except Exception:  # noqa: BLE001
+            email = None
+
+        if email is not None and self._clarification_outbound is not None and email.sender:
+            try:
+                await self._send_crash_acknowledgment(email)
+            except Exception:  # noqa: BLE001
+                log.error(
+                    "Failed to send crash acknowledgment for %s", email_id, exc_info=True
+                )
+
+        return HandleInboundEmailResult(classification="error")
+
+    async def _send_crash_acknowledgment(self, email: InboundEmailRecord) -> None:
+        original_subject = email.subject or "din förfrågan"
+        subject = original_subject
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+
+        body_text = (
+            f"{greeting(email.sender_name, email.sender)}\n\n"
+            f'Tack för ditt mail angående "{original_subject}". Vi har tagit emot det, '
+            "men stötte på ett tekniskt problem när vi behandlade det automatiskt. "
+            "En av våra medarbetare tittar på det manuellt och återkommer så snart "
+            "som möjligt.\n\n"
+            "Med vänlig hälsning,\nSandahls"
+        )
+
+        assert self._clarification_outbound is not None
+        await self._clarification_outbound.enqueue(
+            inbound_email_id=email.id,
+            recipient=email.sender,
+            subject=subject,
+            body_text=body_text,
+            in_reply_to_message_id=email.message_id,
+            sender_mailbox=self._customer_mailbox,
+        )
 
 
 def _build_combined_text(history: list[InboundEmailRecord], email: InboundEmailRecord) -> str:

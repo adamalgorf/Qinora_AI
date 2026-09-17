@@ -311,6 +311,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_collector,
         build_quote_reply_interpretation_llm(settings),
         carrier_mailbox=settings.carrier_mailbox,
+        clarification_outbound=clarification_outbound_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)
@@ -510,6 +512,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_collector,
         build_quote_reply_interpretation_llm(settings),
         carrier_mailbox=settings.carrier_mailbox,
+        clarification_outbound=clarification_outbound_repository,
+        customer_mailbox=settings.customer_mailbox,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)

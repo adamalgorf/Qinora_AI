@@ -35,6 +35,7 @@ const TABS: Array<{ value: InboxTab; label: string }> = [
 function suggestedAction(classification: string): string {
   const c = classification.toLowerCase();
   if (c === "invoice") return "Granska faktura";
+  if (c === "error") return "Automatisk hantering misslyckades - granska manuellt";
   if (c === "pending" || c === "unknown") return "Bearbeta";
   return "Öppna ärende";
 }
@@ -43,7 +44,10 @@ function matchesTab(item: InboxListItem, tab: InboxTab): boolean {
   if (tab === "alla") return true;
   const classification = item.classification.toLowerCase();
   if (tab === "kritiska") {
-    return ["urgent", "critical", "complaint", "tull", "customs"].some((needle) =>
+    // "error" = automated processing crashed on this one (see
+    // email_intake_orchestrator.py's top-level safety net) - always
+    // urgent, not just a normal AI-behandlas-nu item.
+    return ["urgent", "critical", "complaint", "tull", "customs", "error"].some((needle) =>
       classification.includes(needle),
     );
   }

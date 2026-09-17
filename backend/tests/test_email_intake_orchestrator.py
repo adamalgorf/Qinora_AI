@@ -46,9 +46,47 @@ from qinora.infrastructure.llm.quote_reply_interpretation import StubQuoteReplyI
 @dataclass
 class FakeThreadMatcher:
     result: ThreadMatchResult | None = None
+    raise_exc: Exception | None = None
 
     async def match(self, **kwargs):
+        if self.raise_exc is not None:
+            raise self.raise_exc
         return self.result
+
+
+@dataclass
+class FakeClarificationOutboundRepository:
+    enqueued: list = field(default_factory=list)
+
+    async def enqueue(
+        self,
+        *,
+        inbound_email_id,
+        recipient,
+        subject,
+        body_text,
+        in_reply_to_message_id=None,
+        sender_mailbox=None,
+    ):
+        item = {
+            "inbound_email_id": inbound_email_id,
+            "recipient": recipient,
+            "subject": subject,
+            "body_text": body_text,
+            "in_reply_to_message_id": in_reply_to_message_id,
+            "sender_mailbox": sender_mailbox,
+        }
+        self.enqueued.append(item)
+        return item
+
+    async def next_queued(self, limit):
+        raise NotImplementedError
+
+    async def mark_sent(self, item_id):
+        raise NotImplementedError
+
+    async def mark_failed(self, item_id, error_message):
+        raise NotImplementedError
 
 
 @dataclass
@@ -572,6 +610,9 @@ def _build_orchestrator(
     carrier_offer_draft: ParsedCarrierOfferDraft | None = None,
     carrier_offer_agent_config: AgentConfigRecord | None = None,
     carrier_mailbox: str | None = None,
+    thread_match_raises: Exception | None = None,
+    clarification_outbound: FakeClarificationOutboundRepository | None = None,
+    customer_mailbox: str | None = None,
 ):
     email_threads = FakeEmailThreadRepository(emails={email.id: email})
     contacts = FakeContactReadRepository(contact=contact)
@@ -662,7 +703,7 @@ def _build_orchestrator(
     orchestrator = EmailIntakeOrchestrator(
         agent_config,
         contact_matching,
-        FakeThreadMatcher(thread_match),
+        FakeThreadMatcher(thread_match, raise_exc=thread_match_raises),
         email_threads,
         operational_queries,
         booking_workflow,
@@ -674,6 +715,8 @@ def _build_orchestrator(
         carrier_rfq_collector,
         StubQuoteReplyInterpretationLLM(),
         carrier_mailbox=carrier_mailbox,
+        clarification_outbound=clarification_outbound,
+        customer_mailbox=customer_mailbox,
     )
     return (
         orchestrator,
@@ -1185,3 +1228,80 @@ def test_offer_report_from_unconfigured_sender_is_not_matched() -> None:
     anyio.run(lambda: orchestrator.handle("mail-10"))
 
     assert carrier_rfq_collector.finalized_customer_quotes == []
+
+
+def test_unhandled_exception_is_caught_classified_and_acknowledged() -> None:
+    # The actual safety net this locks in: whatever bug trips this next -
+    # today it was a corrupted secret and an LLM value outside a closed
+    # set, tomorrow it'll be something nobody has thought of yet - must
+    # never again mean the sender gets permanent silence. See handle()'s
+    # own docstring for the full incident history this fixes.
+    email = _email(
+        "mail-11",
+        sender="customer@example.com",
+        subject="Fraktforfragan",
+        body_text="Kan jag få ett pris?",
+    )
+    parsek_config = _parsek_config()
+    boom = RuntimeError("simulated unforeseen bug")
+    clarifications = FakeClarificationOutboundRepository()
+
+    (
+        orchestrator,
+        email_threads,
+        _contacts,
+        task_repository,
+        *_,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        thread_match_raises=boom,
+        clarification_outbound=clarifications,
+        customer_mailbox="test.spedition@sandahls.com",
+    )
+
+    result = anyio.run(lambda: orchestrator.handle("mail-11"))
+
+    # The exception never propagates - handle() always returns normally.
+    assert result.classification == "error"
+    assert email_threads.classifications["mail-11"] == "error"
+    assert len(task_repository.created) == 1
+    task = task_repository.created[0]
+    assert task["entity_type"] == "email_inbound"
+    assert task["entity_id"] == "mail-11"
+    assert "RuntimeError" in task["reason"]
+    assert "simulated unforeseen bug" in task["reason"]
+    assert len(clarifications.enqueued) == 1
+    ack = clarifications.enqueued[0]
+    assert ack["inbound_email_id"] == "mail-11"
+    assert ack["recipient"] == "customer@example.com"
+    assert ack["subject"] == "Re: Fraktforfragan"
+    assert ack["sender_mailbox"] == "test.spedition@sandahls.com"
+    assert "tekniskt problem" in ack["body_text"].lower()
+
+
+def test_unhandled_exception_without_clarification_outbound_still_recovers() -> None:
+    # clarification_outbound is optional (None in most deployments today) -
+    # the crash-safety net's escalation/classification must still work even
+    # when there's nowhere to send a customer acknowledgment.
+    email = _email("mail-12", sender="customer@example.com")
+    parsek_config = _parsek_config()
+    boom = RuntimeError("simulated unforeseen bug")
+
+    (
+        orchestrator,
+        email_threads,
+        _contacts,
+        task_repository,
+        *_,
+    ) = _build_orchestrator(
+        email=email,
+        parsek_config=parsek_config,
+        thread_match_raises=boom,
+    )
+
+    result = anyio.run(lambda: orchestrator.handle("mail-12"))
+
+    assert result.classification == "error"
+    assert email_threads.classifications["mail-12"] == "error"
+    assert len(task_repository.created) == 1
