@@ -113,23 +113,6 @@ export type RequestDetailResponse = {
   cargo_lines: RequestCargoLineItem[];
 };
 
-export type CreateRequestPayload = {
-  customer: string;
-  origin: string;
-  destination: string;
-  mode: "ftl" | "ltl" | "ocean" | "air" | "rail" | "intermodal";
-  loading_time?: string;
-  unloading_time?: string;
-  cargo: Array<{
-    description: string;
-    quantity?: number;
-    weight_kg?: number;
-    length_cm?: number;
-    width_cm?: number;
-    height_cm?: number;
-  }>;
-};
-
 export type ParseFreeTextRequestPayload = {
   customer: string;
   raw_text: string;
@@ -140,13 +123,6 @@ export type ParseFreeTextRequestResponse = {
   needs_human_review: boolean;
   request: RequestListItem | null;
   agent_confidence: number;
-};
-
-export type CreateRequestResponse = {
-  request: RequestListItem;
-  complete: boolean;
-  review_reason: string | null;
-  adr_un_numbers: string[];
 };
 
 export type QuoteListItem = {
@@ -173,12 +149,6 @@ export type QuoteAcceptanceEventItem = {
   event_type: string;
   detail: string;
   created_at: string;
-};
-
-export type QuoteDetailResponse = {
-  quote: QuoteListItem;
-  line_items: QuoteLineItem[];
-  acceptance_events: QuoteAcceptanceEventItem[];
 };
 
 export type SearchResultItem = {
@@ -230,17 +200,6 @@ export type QuoteReplyResponse = {
   shipment: ShipmentListItem | null;
 };
 
-export type ProcessOutboundQueueResponse = {
-  sent: OutboundReplyItem[];
-  failed: OutboundReplyItem[];
-};
-
-export type CreateQuotePayload = {
-  request_id: string;
-  customer_price: number;
-  currency: string;
-};
-
 export type AcceptQuotePayload = {
   mode: string;
   total_weight_kg: number;
@@ -275,30 +234,6 @@ export type InvoiceListItem = {
   currency: string;
   status: string;
   discrepancy_amount: number;
-};
-
-export type CreateInvoicePayload = {
-  invoice_amount: number;
-  max_discrepancy?: number;
-};
-
-export type CreateInvoiceResponse = {
-  invoice: InvoiceListItem;
-  shipment_status: string;
-};
-
-export type RunTrackingSimulatorResponse = {
-  delivered: ShipmentListItem[];
-  invoices: InvoiceListItem[];
-};
-
-export type UpdateShipmentStatusPayload = {
-  status: string;
-};
-
-export type OverrideShipmentPayload = {
-  status: string;
-  reason: string;
 };
 
 export type CarrierListItem = {
@@ -360,14 +295,6 @@ export type InboxDetailResponse = {
   body_text: string;
 };
 
-export type AgentLogListItem = {
-  agent_key: string;
-  agent_name: string;
-  step: string;
-  entity_id: string;
-  confidence: number;
-};
-
 export type AgentConfigItem = {
   agent_key: string;
   agent_name: string;
@@ -392,15 +319,6 @@ export type OperationalTaskItem = {
   created_at: string;
 };
 
-export type ShipmentEventItem = {
-  id: string;
-  shipment_id: string;
-  from_status: string | null;
-  to_status: string;
-  reason: string | null;
-  created_at: string;
-};
-
 // --- Documents ---
 
 export type DocumentListItem = {
@@ -416,11 +334,6 @@ export type DocumentListItem = {
   shipment_id: string | null;
   contact_id: string | null;
   created_at: string;
-};
-
-export type DocumentDetailResponse = {
-  document: DocumentListItem;
-  extracted_fields: Record<string, unknown>;
 };
 
 // --- Cases ---

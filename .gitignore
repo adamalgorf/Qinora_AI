@@ -3,6 +3,9 @@ dist/
 coverage/
 __pycache__/
 .pytest_cache/
+.ruff_cache/
+.venv_test/
+.venv/
 backend/.tmp/
 *.py[cod]
 *.tsbuildinfo

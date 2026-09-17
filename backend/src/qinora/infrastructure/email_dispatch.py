@@ -1,10 +1,7 @@
 """The real AgentDispatcher (application/ports.py) implementation. Wires
 the "email.received" event - fired by EmailWebhookUseCase right after it
 saves the inbound row - to application/email_intake_orchestrator.py.
-
-RecordingAgentDispatcher (infrastructure/in_memory.py) remains the
-no-op/test double; this is the one actually installed in
-interfaces/http/container.py.
+This is the dispatcher actually installed in interfaces/http/container.py.
 """
 
 from qinora.application.email_intake_orchestrator import EmailIntakeOrchestrator

@@ -56,9 +56,7 @@ class EmailWebhookUseCase:
         await self._webhook_events.record(command.idempotency_key, "email.received")
         # The real AgentDispatcher (infrastructure/email_dispatch.py) runs
         # the full intake pipeline synchronously here, including contact
-        # matching - see application/email_intake_orchestrator.py. Tests
-        # that don't care about the pipeline use RecordingAgentDispatcher
-        # (infrastructure/in_memory.py) instead.
+        # matching - see application/email_intake_orchestrator.py.
         await self._dispatcher.dispatch(event_type="email.received", entity_id=inbound_email_id)
 
         return EmailWebhookResult(accepted=True, inbound_email_id=inbound_email_id)
