@@ -215,10 +215,7 @@ export function AppShell() {
       <Sidebar collapsible="icon">
         <SidebarHeader className="gap-8 px-4 py-6">
           <div className="flex flex-col gap-1 group-data-[collapsible=icon]:hidden">
-            <span
-              className="text-[20px] font-bold leading-none text-white"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
+            <span className="text-[20px] font-bold leading-none tracking-tight text-white">
               Qinora
             </span>
             <span className="text-[11px] text-sidebar-foreground/70">
