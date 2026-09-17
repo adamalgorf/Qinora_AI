@@ -255,8 +255,15 @@ class EmailIntakeOrchestrator:
                     )
                     intent = interpretation.intent
                     if intent is QuoteReplyIntent.ACCEPTED:
+                        # Prefer this method's own already-resolved request_id
+                        # (from thread_matching earlier in this method) over
+                        # quote_detail.quote.request_id - reproduced live
+                        # 2026-09-17: a quote's own request_id ended up
+                        # unset, which silently broke picking the carrier
+                        # that actually won the RFQ and skipped the booking
+                        # confirmation email entirely.
                         await self._book_accepted_quote(
-                            quote_id, quote_detail.quote.request_id, recipient_email=email.sender
+                            quote_id, request_id, recipient_email=email.sender
                         )
                         await self._email_threads.link_thread(
                             email_id, request_id=request_id, quote_id=quote_id
@@ -455,6 +462,7 @@ class EmailIntakeOrchestrator:
                 mode=mode,
                 total_weight_kg=total_weight_kg,
                 recipient_email=recipient_email,
+                request_id=request_id,
             )
         )
 

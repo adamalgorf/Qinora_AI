@@ -220,6 +220,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     carrier_rfq_repository = SQLiteCarrierRfqRepository(database)
     carrier_write_repository = SQLiteCarrierWriteRepository(database)
     email_thread_repository = SQLiteEmailThreadRepository(database)
+    carrier_rfq_outbound_repository = SQLiteCarrierRfqOutboundRepository(database)
 
     booking_workflow = BookingWorkflow(
         quote_repository,
@@ -229,6 +230,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         outbound_repository,
         email_thread_repository,
         customer_mailbox=settings.customer_mailbox,
+        carrier_rfq_outbound=carrier_rfq_outbound_repository,
+        carrier_mailbox=settings.carrier_mailbox,
     )
 
     request_repository = SQLiteRequestWriteRepository(database)
@@ -246,7 +249,6 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
 
     rate_profile_repository = SQLiteRateProfileRepository(database)
     carrier_offer_repository = SQLiteCarrierOfferWriteRepository(database)
-    carrier_rfq_outbound_repository = SQLiteCarrierRfqOutboundRepository(database)
     carrier_offer_report_outbound_repository = SQLiteCarrierOfferReportOutboundRepository(
         database
     )
@@ -421,6 +423,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     carrier_rfq_repository = PostgresCarrierRfqRepository(database)
     carrier_write_repository = PostgresCarrierWriteRepository(database)
     email_thread_repository = PostgresEmailThreadRepository(database)
+    carrier_rfq_outbound_repository = PostgresCarrierRfqOutboundRepository(database)
 
     booking_workflow = BookingWorkflow(
         quote_repository,
@@ -430,6 +433,8 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         outbound_repository,
         email_thread_repository,
         customer_mailbox=settings.customer_mailbox,
+        carrier_rfq_outbound=carrier_rfq_outbound_repository,
+        carrier_mailbox=settings.carrier_mailbox,
     )
 
     request_repository = PostgresRequestWriteRepository(database)
@@ -447,7 +452,6 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
 
     rate_profile_repository = PostgresRateProfileRepository(database)
     carrier_offer_repository = PostgresCarrierOfferWriteRepository(database)
-    carrier_rfq_outbound_repository = PostgresCarrierRfqOutboundRepository(database)
     carrier_offer_report_outbound_repository = PostgresCarrierOfferReportOutboundRepository(
         database
     )
