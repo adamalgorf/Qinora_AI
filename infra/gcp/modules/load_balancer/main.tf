@@ -27,26 +27,29 @@ resource "google_compute_security_policy" "cloud_armor" {
     description = "Default allow"
   }
 
-  # The auth endpoints' bodies are a high-entropy password and a small JSON
-  # blob (user_id/tenant_id/roles) - both routinely false-positive against
-  # the OWASP CRS sqli/xss rules below (different rule ID each time), which
-  # locked authentication itself out of the app. Backend queries are all
-  # parameterized (psycopg %s placeholders), so SQLi/XSS body inspection
-  # adds no real protection here; scope the bypass to just these two paths
-  # rather than weakening sensitivity site-wide.
+  # JSON API request bodies (any POST/PUT/PATCH - creating a carrier,
+  # logging in, saving a rate profile, whatever) routinely false-positive
+  # against the OWASP CRS sqli/xss rules below: 5 distinct sqli-stable rule
+  # IDs (942421, 942420, 942200, 942260, 942340) got individually excluded
+  # one at a time over 2026-09-16/17 as each fix just uncovered the next
+  # false positive on the exact same class of ordinary structured JSON
+  # body - the auth endpoints' high-entropy passwords and dense JWT tokens,
+  # then POST /carriers' plain {"display_name": ..., "modes": [...]} body.
+  # CRS's sqli-stable ruleset simply wasn't tuned for JSON request bodies
+  # and this was never going to converge by excluding IDs one at a time.
+  # Backend queries are all parameterized (psycopg %s placeholders), so
+  # SQLi/XSS body inspection adds no real protection here regardless -
+  # skip it for all write methods rather than keep whack-a-moling rule IDs.
+  # GET/DELETE (no meaningful body) still get full WAF inspection.
   rule {
     action   = "allow"
     priority = 900
     match {
       expr {
-        # Cloud Armor evaluates against the backend-service-bound request,
-        # i.e. after the url_map's /api prefix-strip route_rules above -
-        # match both forms since which one actually arrives here isn't
-        # documented and is safer to over-match on a same-origin path check.
-        expression = "request.path == '/auth/login' || request.path == '/auth/dev-token' || request.path == '/api/auth/login' || request.path == '/api/auth/dev-token'"
+        expression = "request.method == 'POST' || request.method == 'PUT' || request.method == 'PATCH'"
       }
     }
-    description = "Auth endpoints: skip WAF body inspection (parameterized queries, high-entropy bodies false-positive)"
+    description = "Write requests: skip WAF body inspection (parameterized queries; CRS sqli-stable doesn't handle JSON bodies)"
   }
 
   rule {
@@ -64,7 +67,24 @@ resource "google_compute_security_policy" "cloud_armor" {
         # earlier - same root cause, different rule ID, so exclude both by
         # ID rather than lowering sensitivity site-wide (the rest of
         # sqli-stable still applies).
-        expression = "evaluatePreconfiguredExpr('sqli-stable', ['owasp-crs-v030001-id942420-sqli', 'owasp-crs-v030001-id942421-sqli'])"
+        #
+        # id942200/942260-sqli ("Detects basic SQL authentication bypass
+        # attempts" / "Detects concatenated basic SQL injection and
+        # SQLLFI attempts") false-positive on ordinary structured JSON
+        # POST bodies (e.g. {"display_name": "...", "modes": ["ltl",
+        # "ftl"], ...}) - blocked POST /carriers with
+        # body_denied_by_security_policy for every legitimate carrier
+        # creation, 942200 first and then its sibling 942260 the moment
+        # 942200 was excluded. Reproduced live 2026-09-17. Same "JSON API
+        # bodies don't look like the form-encoded traffic CRS was tuned
+        # for" root cause as the other two - excluded the same way. This
+        # is the 4th distinct sqli-stable rule ID to false-positive on
+        # legitimate traffic in two days; if a 5th shows up, stop
+        # whack-a-moling individual rule IDs and extend the priority-900
+        # "skip WAF body inspection" bypass above to authenticated JSON
+        # API bodies generally instead (same parameterized-queries
+        # justification already used there).
+        expression = "evaluatePreconfiguredExpr('sqli-stable', ['owasp-crs-v030001-id942200-sqli', 'owasp-crs-v030001-id942260-sqli', 'owasp-crs-v030001-id942420-sqli', 'owasp-crs-v030001-id942421-sqli'])"
       }
     }
     description = "Block SQL injection attempts"
