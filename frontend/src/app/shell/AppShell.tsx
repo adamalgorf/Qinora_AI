@@ -8,6 +8,7 @@ import {
   Mail,
   Search,
   Settings,
+  Truck,
   Users,
   Workflow,
 } from "lucide-react";
@@ -73,6 +74,7 @@ const navItems = [
   { label: "Automatiseringar", href: "/automations", icon: Workflow },
   { label: "Dokument", href: "/documents", icon: FileText },
   { label: "Kunder", href: "/customers", icon: Users },
+  { label: "Transportörer", href: "/carriers", icon: Truck },
   { label: "Analys", href: "/analytics", icon: BarChart3 },
 ];
 

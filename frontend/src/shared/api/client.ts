@@ -310,6 +310,17 @@ export type CarrierListItem = {
   preferred: boolean;
 };
 
+export type CarrierCreatePayload = {
+  display_name: string;
+  modes: string[];
+  aliases?: string[];
+  email?: string;
+  lane_score?: number;
+  max_weight_kg?: number;
+  performance_score?: number;
+  preferred?: boolean;
+};
+
 export type ContactListItem = {
   id: string;
   public_id: string;
