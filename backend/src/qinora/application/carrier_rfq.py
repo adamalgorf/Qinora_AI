@@ -22,7 +22,15 @@ from qinora.domain import (
     parse_transport_modes,
 )
 
-DEFAULT_MAX_RFQ_TARGETS = 3
+# Every eligible carrier with an email on file gets RFQ'd by default - not
+# just the top few by score. A cap made sense when picking one winner, but
+# this pass is explicitly "ask everyone who could plausibly do the job and
+# let the best price win" (see finalize_batch() in carrier_rfq_collector.py).
+# 200 is a practical ceiling against a runaway carrier list, not a real cap -
+# no real deployment has anywhere close to that many carriers for one mode.
+# Callers that genuinely want a smaller RFQ batch can still override
+# max_targets explicitly.
+DEFAULT_MAX_RFQ_TARGETS = 200
 
 
 @dataclass(frozen=True)
