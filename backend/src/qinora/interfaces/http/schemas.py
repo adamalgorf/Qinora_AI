@@ -440,6 +440,36 @@ class ContactListItem(BaseModel):
     annual_volume_estimate: float | None = None
 
 
+class ContactCreateRequest(BaseModel):
+    display_name: str = Field(min_length=1)
+    email: str | None = None
+    domain: str | None = None
+    default_markup_percent: float = 0.0
+    default_incoterms: str | None = None
+    payment_terms: str | None = None
+    segment: str | None = None
+    customer_since: str | None = Field(default=None, description="YYYY-MM-DD")
+    sla_tolerance_hours: float | None = None
+    account_owner: str | None = None
+    health_status: str = "good"
+    contract_note: str | None = None
+    customs_contact_name: str | None = None
+    customs_contact_email: str | None = None
+    annual_volume_estimate: float | None = None
+
+
+class ContactImportIssue(BaseModel):
+    row: int
+    display_name: str | None
+    reason: str
+
+
+class ContactImportResponse(BaseModel):
+    created: list[ContactListItem]
+    skipped: list[ContactImportIssue]
+    errors: list[ContactImportIssue]
+
+
 class CustomerDetailResponse(ContactListItem):
     active_jobs: int
     active_route: str | None = None

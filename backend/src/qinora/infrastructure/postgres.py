@@ -6,6 +6,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from qinora.application import DEFAULT_AGENT_CONFIGS
+from qinora.application.customer_import import CustomerInput
 from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
@@ -2331,6 +2332,68 @@ class PostgresCarrierRfqRepository:
             )
             row = cursor.fetchone()
         return _carrier_rfq_from_postgres_row(row) if row else None
+
+
+class PostgresContactWriteRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_contact(self, customer: CustomerInput) -> ContactRecord:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            public_id = _next_public_id(cursor, "public.contacts", "CNT", self._database.tenant_id)
+            cursor.execute(
+                """
+                insert into public.contacts
+                  (
+                    tenant_id, public_id, name, email, domain, default_markup_percent,
+                    default_incoterms, payment_terms, is_active, segment, customer_since,
+                    sla_tolerance_hours, account_owner, health_status, contract_note,
+                    customs_contact_name, customs_contact_email, annual_volume_estimate
+                  )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                returning id
+                """,
+                (
+                    self._database.tenant_id,
+                    public_id,
+                    customer.display_name,
+                    customer.email,
+                    customer.domain,
+                    customer.default_markup_percent,
+                    customer.default_incoterms,
+                    customer.payment_terms,
+                    customer.segment,
+                    customer.customer_since,
+                    customer.sla_tolerance_hours,
+                    customer.account_owner,
+                    customer.health_status,
+                    customer.contract_note,
+                    customer.customs_contact_name,
+                    customer.customs_contact_email,
+                    customer.annual_volume_estimate,
+                ),
+            )
+            contact_id = str(cursor.fetchone()["id"])
+
+        return ContactRecord(
+            id=contact_id,
+            public_id=public_id,
+            display_name=customer.display_name,
+            email=customer.email,
+            domain=customer.domain,
+            default_markup_percent=customer.default_markup_percent,
+            default_incoterms=customer.default_incoterms,
+            payment_terms=customer.payment_terms,
+            segment=customer.segment,
+            customer_since=customer.customer_since,
+            sla_tolerance_hours=customer.sla_tolerance_hours,
+            account_owner=customer.account_owner,
+            health_status=customer.health_status,
+            contract_note=customer.contract_note,
+            customs_contact_name=customer.customs_contact_name,
+            customs_contact_email=customer.customs_contact_email,
+            annual_volume_estimate=customer.annual_volume_estimate,
+        )
 
 
 class PostgresCarrierWriteRepository:

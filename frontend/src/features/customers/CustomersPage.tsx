@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Plus, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { PageShell } from "@/components/patterns/PageShell";
@@ -10,8 +11,13 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DataTable } from "@/features/modules/DataTable";
 import { apiGet, type ContactListItem, type CustomerDetailResponse } from "@/shared/api/client";
 
+import { AddCustomerDialog } from "./AddCustomerDialog";
+import { ImportCustomersDialog } from "./ImportCustomersDialog";
+
 export function CustomersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const query = useQuery({
     queryKey: ["contacts"],
     queryFn: () => apiGet<ContactListItem[]>("/contacts"),
@@ -35,7 +41,19 @@ export function CustomersPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardContent className="p-5">
-            <h2 className="mb-4 text-base font-semibold">Aktiva kundkonton</h2>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Aktiva kundkonton</h2>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => setImportOpen(true)}>
+                  <Upload aria-hidden="true" />
+                  Importera CSV
+                </Button>
+                <Button onClick={() => setAddOpen(true)}>
+                  <Plus aria-hidden="true" />
+                  Lägg till kund
+                </Button>
+              </div>
+            </div>
             <DataTable
               columns={[
                 { key: "display_name", label: "Kundnamn" },
@@ -102,6 +120,13 @@ export function CustomersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AddCustomerDialog
+        open={addOpen}
+        onCreated={(contact) => setSelectedId(contact.id)}
+        onOpenChange={setAddOpen}
+      />
+      <ImportCustomersDialog open={importOpen} onOpenChange={setImportOpen} />
     </PageShell>
   );
 }

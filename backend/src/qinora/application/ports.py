@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from qinora.application.read_models import (
     AgentConfigRecord,
@@ -36,6 +36,9 @@ from qinora.application.read_models import (
     UserRecord,
 )
 from qinora.domain import Quote, TransportRequestInput
+
+if TYPE_CHECKING:
+    from qinora.application.customer_import import CustomerInput
 
 
 class WebhookEventRepository(Protocol):
@@ -352,6 +355,11 @@ class CarrierWriteRepository(Protocol):
         performance_score: float | None = None,
         preferred: bool = False,
     ) -> CarrierRecord:
+        pass
+
+
+class ContactWriteRepository(Protocol):
+    async def create_contact(self, customer: "CustomerInput") -> ContactRecord:
         pass
 
 

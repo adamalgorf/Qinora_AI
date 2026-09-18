@@ -276,6 +276,36 @@ export type ContactListItem = {
   annual_volume_estimate: number | null;
 };
 
+export type ContactCreatePayload = {
+  display_name: string;
+  email?: string;
+  domain?: string;
+  default_markup_percent?: number;
+  default_incoterms?: string;
+  payment_terms?: string;
+  segment?: string;
+  customer_since?: string;
+  sla_tolerance_hours?: number;
+  account_owner?: string;
+  health_status?: ContactListItem["health_status"];
+  contract_note?: string;
+  customs_contact_name?: string;
+  customs_contact_email?: string;
+  annual_volume_estimate?: number;
+};
+
+export type ContactImportIssue = {
+  row: number;
+  display_name: string | null;
+  reason: string;
+};
+
+export type ContactImportResponse = {
+  created: ContactListItem[];
+  skipped: ContactImportIssue[];
+  errors: ContactImportIssue[];
+};
+
 export type CustomerDetailResponse = ContactListItem & {
   active_jobs: number;
   active_route: string | null;

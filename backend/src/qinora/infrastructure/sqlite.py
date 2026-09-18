@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from qinora.application import DEFAULT_AGENT_CONFIGS
+from qinora.application.customer_import import CustomerInput
 from qinora.application.read_models import (
     AgentConfigRecord,
     AgentLogRecord,
@@ -1337,6 +1338,48 @@ class SQLiteContactReadRepository:
             ).fetchone()
 
         return ContactRecord(**dict(row)) if row else None
+
+
+class SQLiteContactWriteRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_contact(self, customer: CustomerInput) -> ContactRecord:
+        with self._database.connect() as connection:
+            contact_id = str(uuid4())
+            public_id = _next_public_id(connection, "contacts", "CNT")
+            connection.execute(
+                """
+                insert into contacts
+                  (
+                    id, public_id, display_name, email, domain, default_markup_percent,
+                    default_incoterms, payment_terms, is_active, segment, customer_since,
+                    sla_tolerance_hours, account_owner, health_status, contract_note,
+                    customs_contact_name, customs_contact_email, annual_volume_estimate
+                  )
+                values (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    contact_id,
+                    public_id,
+                    customer.display_name,
+                    customer.email,
+                    customer.domain,
+                    customer.default_markup_percent,
+                    customer.default_incoterms,
+                    customer.payment_terms,
+                    customer.segment,
+                    customer.customer_since,
+                    customer.sla_tolerance_hours,
+                    customer.account_owner,
+                    customer.health_status,
+                    customer.contract_note,
+                    customer.customs_contact_name,
+                    customer.customs_contact_email,
+                    customer.annual_volume_estimate,
+                ),
+            )
+        return _contact_record_from_input(contact_id, public_id, customer)
 
 
 class SQLiteDocumentRepository:
@@ -3170,6 +3213,30 @@ def _average_response_minutes_sqlite(rows: list[sqlite3.Row]) -> float | None:
     if not diffs:
         return None
     return sum(diffs) / len(diffs)
+
+
+def _contact_record_from_input(
+    contact_id: str, public_id: str, customer: CustomerInput
+) -> ContactRecord:
+    return ContactRecord(
+        id=contact_id,
+        public_id=public_id,
+        display_name=customer.display_name,
+        email=customer.email,
+        domain=customer.domain,
+        default_markup_percent=customer.default_markup_percent,
+        default_incoterms=customer.default_incoterms,
+        payment_terms=customer.payment_terms,
+        segment=customer.segment,
+        customer_since=customer.customer_since,
+        sla_tolerance_hours=customer.sla_tolerance_hours,
+        account_owner=customer.account_owner,
+        health_status=customer.health_status,
+        contract_note=customer.contract_note,
+        customs_contact_name=customer.customs_contact_name,
+        customs_contact_email=customer.customs_contact_email,
+        annual_volume_estimate=customer.annual_volume_estimate,
+    )
 
 
 def _count(connection: sqlite3.Connection, table: str) -> int:

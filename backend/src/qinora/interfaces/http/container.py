@@ -26,6 +26,7 @@ from qinora.application import (
     TrackingSimulator,
     UpdateRequestUseCase,
 )
+from qinora.application.customer_import import CustomerImportService
 from qinora.application.email_intake_orchestrator import EmailIntakeOrchestrator
 from qinora.application.llm_ports import GraphExecutor
 from qinora.application.ports import (
@@ -72,6 +73,7 @@ from qinora.infrastructure.postgres import (
     PostgresCaseNoteRepository,
     PostgresClarificationOutboundRepository,
     PostgresContactReadRepository,
+    PostgresContactWriteRepository,
     PostgresDatabase,
     PostgresDocumentRepository,
     PostgresEmailThreadRepository,
@@ -102,6 +104,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteCaseNoteRepository,
     SQLiteClarificationOutboundRepository,
     SQLiteContactReadRepository,
+    SQLiteContactWriteRepository,
     SQLiteDatabase,
     SQLiteDocumentRepository,
     SQLiteEmailThreadRepository,
@@ -179,6 +182,7 @@ class AppContainer:
     carrier_offer_report_outbound_repository: CarrierOfferReportOutboundRepository
     clarification_outbound_repository: ClarificationOutboundRepository
     carrier_write_repository: CarrierWriteRepository
+    customer_import_service: CustomerImportService
     carrier_rfq_collector: CarrierRfqCollector
     email_intake_orchestrator: EmailIntakeOrchestrator
     graph_executor: GraphExecutor
@@ -219,6 +223,10 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
 
     carrier_rfq_repository = SQLiteCarrierRfqRepository(database)
     carrier_write_repository = SQLiteCarrierWriteRepository(database)
+    customer_import_service = CustomerImportService(
+        SQLiteContactWriteRepository(database),
+        operational_queries.list_contacts,
+    )
     email_thread_repository = SQLiteEmailThreadRepository(database)
     carrier_rfq_outbound_repository = SQLiteCarrierRfqOutboundRepository(database)
 
@@ -383,6 +391,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_offer_report_outbound_repository=carrier_offer_report_outbound_repository,
         clarification_outbound_repository=clarification_outbound_repository,
         carrier_write_repository=carrier_write_repository,
+        customer_import_service=customer_import_service,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
         graph_executor=graph_executor,
@@ -422,6 +431,10 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
 
     carrier_rfq_repository = PostgresCarrierRfqRepository(database)
     carrier_write_repository = PostgresCarrierWriteRepository(database)
+    customer_import_service = CustomerImportService(
+        PostgresContactWriteRepository(database),
+        operational_queries.list_contacts,
+    )
     email_thread_repository = PostgresEmailThreadRepository(database)
     carrier_rfq_outbound_repository = PostgresCarrierRfqOutboundRepository(database)
 
@@ -586,6 +599,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_offer_report_outbound_repository=carrier_offer_report_outbound_repository,
         clarification_outbound_repository=clarification_outbound_repository,
         carrier_write_repository=carrier_write_repository,
+        customer_import_service=customer_import_service,
         carrier_rfq_collector=carrier_rfq_collector,
         email_intake_orchestrator=email_intake_orchestrator,
         graph_executor=graph_executor,
