@@ -106,7 +106,7 @@ async def parse_free_text_request(
     container: AppContainer = CONTAINER,
     context: AuthContext = AUTH_CONTEXT,
 ) -> ParseFreeTextRequestResponse:
-    """Runs the "Parsek" agent over free text (e.g. an RFQ email body) and,
+    """Runs the "Nora" agent over free text (e.g. an RFQ email body) and,
     if confident enough, creates the transport request. Low-confidence or
     incomplete drafts are logged for human review instead of auto-created.
     """
@@ -147,7 +147,7 @@ async def parse_carrier_offer(
     container: AppContainer = CONTAINER,
     context: AuthContext = AUTH_CONTEXT,
 ) -> ParseCarrierOfferResponse:
-    """Runs the "Remy Rates" agent over a carrier's free-text reply (e.g. a
+    """Runs the "Quinn" agent over a carrier's free-text reply (e.g. a
     rate-request email) and, if confident enough, saves it as a structured
     offer against the request. Low-confidence or incomplete drafts are
     logged for human review instead of auto-saved.

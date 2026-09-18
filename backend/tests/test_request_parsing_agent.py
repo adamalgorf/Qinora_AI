@@ -128,7 +128,7 @@ def _agent(
             configs=[
                 AgentConfigRecord(
                     agent_key=AGENT_KEY,
-                    agent_name="Parsek",
+                    agent_name="Nora",
                     is_enabled=is_enabled,
                     auto_mode=auto_mode.value,
                     min_confidence=min_confidence,
@@ -170,7 +170,7 @@ def test_high_confidence_complete_draft_creates_request() -> None:
 
 
 def test_update_with_no_matched_request_creates_new_one_instead_of_escalating() -> None:
-    # User's explicit call 2026-09-17: Parsek believing this is a follow-up
+    # User's explicit call 2026-09-17: Nora believing this is a follow-up
     # ("update") but the caller having no confirmed matched_request_id
     # (thread_matching found nothing) used to force a human to sort out
     # which request this belongs to. Create a new request instead - worst
@@ -195,7 +195,7 @@ def test_update_with_no_matched_request_creates_new_one_instead_of_escalating() 
             configs=[
                 AgentConfigRecord(
                     agent_key=AGENT_KEY,
-                    agent_name="Parsek",
+                    agent_name="Nora",
                     is_enabled=True,
                     auto_mode=AgentAutoMode.GUARDED_AUTO.value,
                     min_confidence=0.74,
@@ -315,7 +315,7 @@ def test_missing_fields_queues_clarification_email_to_sender() -> None:
             configs=[
                 AgentConfigRecord(
                     agent_key=AGENT_KEY,
-                    agent_name="Parsek",
+                    agent_name="Nora",
                     is_enabled=True,
                     auto_mode=AgentAutoMode.GUARDED_AUTO.value,
                     min_confidence=0.74,
@@ -382,7 +382,7 @@ def test_low_confidence_but_complete_draft_still_auto_creates() -> None:
             configs=[
                 AgentConfigRecord(
                     agent_key=AGENT_KEY,
-                    agent_name="Parsek",
+                    agent_name="Nora",
                     is_enabled=True,
                     auto_mode=AgentAutoMode.GUARDED_AUTO.value,
                     min_confidence=0.74,
@@ -414,12 +414,12 @@ def test_low_confidence_but_complete_draft_still_auto_creates() -> None:
     result = anyio.run(run)
 
     # Created automatically despite confidence=0.5 < the 0.74 threshold -
-    # nothing in Parsek's own missing_fields was blocking it.
+    # nothing in Nora's own missing_fields was blocking it.
     assert result.request_result is not None
     assert result.needs_human_review is False
     assert len(request_repo.created) == 1
     # The draft's own loading_time is None though, which the stricter
-    # domain-level validate_transport_request() (not Parsek's own
+    # domain-level validate_transport_request() (not Nora's own
     # missing_fields) still requires - so this still isn't 100% silent:
     # exactly one more automated clarification round for that specific
     # gap, same as any other real incomplete request.
@@ -450,7 +450,7 @@ def test_not_relevant_email_does_not_queue_clarification() -> None:
             configs=[
                 AgentConfigRecord(
                     agent_key=AGENT_KEY,
-                    agent_name="Parsek",
+                    agent_name="Nora",
                     is_enabled=True,
                     auto_mode=AgentAutoMode.GUARDED_AUTO.value,
                     min_confidence=0.74,

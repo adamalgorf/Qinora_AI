@@ -1,5 +1,6 @@
 from qinora.application.agent_config import (
     DEFAULT_AGENT_CONFIGS,
+    LEGACY_AGENT_NAMES,
     AgentAutoMode,
     AgentConfigService,
     UpdateAgentConfigCommand,
@@ -135,6 +136,7 @@ __all__ = [
     "CreateQuoteCommand",
     "ContactMatchingUseCase",
     "DEFAULT_AGENT_CONFIGS",
+    "LEGACY_AGENT_NAMES",
     "DemoFlowResult",
     "DemoFlowUseCase",
     "UnsupportedDocumentError",

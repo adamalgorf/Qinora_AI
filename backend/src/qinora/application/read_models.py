@@ -466,7 +466,7 @@ class CarrierOfferReportOutboundRecord:
 @dataclass(frozen=True)
 class ClarificationOutboundRecord:
     """Mirrors CarrierRfqOutboundRecord's shape but keyed to the inbound
-    email that Parsek couldn't act on unassisted (missing required fields) -
+    email that Nora couldn't act on unassisted (missing required fields) -
     a separate queue/table for the same reason carrier_rfq_outbound is: it
     isn't tied to a quote, so it can't reuse outbound_reply_queue.
     """

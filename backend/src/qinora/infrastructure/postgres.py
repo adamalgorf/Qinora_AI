@@ -5,7 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from qinora.application import DEFAULT_AGENT_CONFIGS
+from qinora.application import DEFAULT_AGENT_CONFIGS, LEGACY_AGENT_NAMES
 from qinora.application.customer_import import CustomerInput
 from qinora.application.read_models import (
     AgentConfigRecord,
@@ -94,6 +94,26 @@ class PostgresDatabase:
                         ),
                     ),
                 )
+                cursor.execute(
+                    """
+                    update public.agent_configs
+                    set config = jsonb_set(
+                      coalesce(config, '{}'::jsonb), '{agent_name}', to_jsonb(%s::text)
+                    )
+                    where tenant_id = %s
+                      and agent_key = %s
+                      and config->>'agent_name' is distinct from %s
+                    """,
+                    (config.agent_name, self.tenant_id, config.agent_key, config.agent_name),
+                )
+            cursor.executemany(
+                """
+                update public.agent_logs
+                set agent_name = %s
+                where tenant_id = %s and agent_name = %s
+                """,
+                [(new, self.tenant_id, old) for old, new in LEGACY_AGENT_NAMES.items()],
+            )
 
 
 class PostgresWebhookEventRepository:

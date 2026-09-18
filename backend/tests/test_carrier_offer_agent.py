@@ -100,7 +100,7 @@ def _agent(
             configs=[
                 AgentConfigRecord(
                     agent_key=AGENT_KEY,
-                    agent_name="Remy Rates",
+                    agent_name="Quinn",
                     is_enabled=True,
                     auto_mode=auto_mode.value,
                     min_confidence=min_confidence,

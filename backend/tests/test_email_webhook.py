@@ -98,7 +98,7 @@ def test_email_webhook_matches_sender_to_crm_contact(client: TestClient) -> None
     assert response.status_code == 202
     logs = client.get("/agents/logs").json()
     match_log = next(item for item in logs if item["agent_key"] == "customer_match_agent")
-    assert match_log["agent_name"] == "Miles Match"
+    assert match_log["agent_name"] == "Nora"
     assert match_log["entity_id"] == "CNT-0001"
     assert "Volvo Parts" in match_log["step"]
 
@@ -125,7 +125,7 @@ def test_email_webhook_with_default_stub_llm_always_escalates_instead_of_auto_cr
     client: TestClient,
 ) -> None:
     """The intake orchestrator (application/email_intake_orchestrator.py)
-    hands unmatched threads to Parsek (application/request_parsing_agent.py).
+    hands unmatched threads to Nora (application/request_parsing_agent.py).
     With LLM_PROVIDER unset, the deterministic StubRequestParsingLLM always
     reports confidence 0.0 with every field missing, so the email is
     flagged for human review rather than silently creating a transport
@@ -155,7 +155,7 @@ def test_email_webhook_with_default_stub_llm_always_escalates_instead_of_auto_cr
 
 
 def test_email_webhook_rejects_own_mail_as_a_loop(client: TestClient) -> None:
-    """Configure Parsek's own_addresses (application/email_routing.py) via
+    """Configure Nora's own_addresses (application/email_routing.py) via
     the agent-config repository directly - the Admin UI only exposes
     auto_mode/min_confidence today (Phase 2 keeps the wider config editable
     through the same jsonb column, not a new endpoint) - then confirm the

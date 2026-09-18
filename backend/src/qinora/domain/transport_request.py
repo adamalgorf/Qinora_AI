@@ -54,7 +54,7 @@ MODES_REQUIRING_DIMENSIONS = {TransportMode.FTL, TransportMode.LTL, TransportMod
 UN_NUMBER_PATTERN = re.compile(r"\bUN\s?(\d{4})\b", re.IGNORECASE)
 
 # The 3 checks validate_transport_request has always run, now individually
-# toggleable per tenant via Parsek's own agent_configs.config["required_fields"]
+# toggleable per tenant via Nora's own agent_configs.config["required_fields"]
 # (see application/request_parsing_agent.py). This default preserves today's
 # hardcoded behaviour exactly for every tenant that hasn't customized it.
 DEFAULT_REQUIRED_FIELDS: frozenset[str] = frozenset({"weight", "dimensions", "times"})

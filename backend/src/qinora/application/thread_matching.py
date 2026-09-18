@@ -135,7 +135,7 @@ class ThreadMatchingUseCase:
         # a request/quote) - an unlinked candidate is itself just another
         # unprocessed inquiry, not reliable prior context. Without this,
         # two unrelated shipments sharing a generic subject got merged into
-        # one combined_text for Parsek, corrupting the parse of a perfectly
+        # one combined_text for Nora, corrupting the parse of a perfectly
         # clear second request - reproduced live 2026-09-17.
         linked_matches = [row for row in subject_matches if row.request_id or row.quote_id]
         if not linked_matches:

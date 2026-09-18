@@ -36,7 +36,7 @@ class ContactMatchingUseCase:
         )
         agent_log = await self._agent_logs.record(
             agent_key="customer_match_agent",
-            agent_name="Miles Match",
+            agent_name="Nora",
             step=step,
             entity_id=contact.public_id if contact else command.inbound_email_id,
             confidence=confidence,

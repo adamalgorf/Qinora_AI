@@ -1,4 +1,4 @@
-"""Implementations of the QuoteReplyInterpretationLLM port ("Rex Response").
+"""Implementations of the QuoteReplyInterpretationLLM port ("Orion").
 
 StubQuoteReplyInterpretationLLM reuses the original deterministic keyword
 matcher as a no-credentials fallback (see application/quote_response_workflow
@@ -15,7 +15,7 @@ from qinora.application.read_models import QuoteReplyIntent, QuoteReplyInterpret
 from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, require_openai_api_key
 from qinora.infrastructure.settings import Settings
 
-SYSTEM_PROMPT = """You are Rex Response, an assistant that reads a customer's free-text \
+SYSTEM_PROMPT = """You are Orion, an assistant that reads a customer's free-text \
 reply to a freight quote for the Qinora logistics platform and classifies their intent.
 
 Rules:

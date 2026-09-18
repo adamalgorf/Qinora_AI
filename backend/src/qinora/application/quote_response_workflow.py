@@ -11,7 +11,7 @@ from qinora.application.ports import (
 from qinora.application.read_models import QuoteRecord, QuoteReplyIntent, QuoteResponseEventRecord
 
 AGENT_KEY = "quote_response_agent"
-AGENT_NAME = "Rex Response"
+AGENT_NAME = "Orion"
 
 
 @dataclass(frozen=True)

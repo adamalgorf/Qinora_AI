@@ -1,4 +1,4 @@
-"""Implementations of the CarrierOfferParsingLLM port ("Remy Rates").
+"""Implementations of the CarrierOfferParsingLLM port ("Quinn").
 
 StubCarrierOfferParsingLLM is a deterministic, no-credentials fallback: it
 always reports low confidence with every field missing, which routes
@@ -13,7 +13,7 @@ from qinora.application.read_models import ParsedCarrierOfferDraft
 from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, require_openai_api_key
 from qinora.infrastructure.settings import Settings
 
-SYSTEM_PROMPT = """You are Remy Rates, an assistant that reads a carrier's (subcontractor's) \
+SYSTEM_PROMPT = """You are Quinn, an assistant that reads a carrier's (subcontractor's) \
 free-text reply to a booking/rate request and extracts a structured offer for the \
 Qinora logistics platform.
 

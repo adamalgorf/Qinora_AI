@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from qinora.application import DEFAULT_AGENT_CONFIGS
+from qinora.application import DEFAULT_AGENT_CONFIGS, LEGACY_AGENT_NAMES
 from qinora.application.customer_import import CustomerInput
 from qinora.application.read_models import (
     AgentConfigRecord,
@@ -729,6 +729,14 @@ class SQLiteDatabase:
                     ),
                 ),
             )
+            connection.execute(
+                "update agent_configs set agent_name = ? where agent_key = ?",
+                (config.agent_name, config.agent_key),
+            )
+        connection.executemany(
+            "update agent_logs set agent_name = ? where agent_name = ?",
+            [(new, old) for old, new in LEGACY_AGENT_NAMES.items()],
+        )
 
     def _seed_quote_line_items(self, connection: sqlite3.Connection) -> None:
         rows = connection.execute(

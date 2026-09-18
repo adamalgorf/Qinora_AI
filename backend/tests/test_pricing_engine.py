@@ -508,7 +508,7 @@ def test_missing_rate_profile_and_no_carriers_escalates_to_task() -> None:
 
 
 def test_missing_rate_profile_and_no_carriers_sends_holding_acknowledgment() -> None:
-    # Reproduced live 2026-09-17: a request Parsek understood completely
+    # Reproduced live 2026-09-17: a request Nora understood completely
     # (created successfully, nothing missing) got zero reply to the
     # customer when pricing had nothing automatic left to try - only an
     # internal Control Tower task. Every inbound email must get SOME

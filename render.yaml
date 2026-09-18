@@ -21,8 +21,8 @@ services:
       - key: LLM_PROVIDER
         value: openai
       # Paste your OpenAI API key here (Render dashboard -> qinora-backend
-      # -> Environment). Enables the 3 real agents (Parsek, Remy Rates,
-      # Rex Response); leave LLM_PROVIDER at "stub" instead if you want to
+      # -> Environment). Enables the 3 real agents (Nora, Quinn,
+      # Orion); leave LLM_PROVIDER at "stub" instead if you want to
       # skip this.
       - key: OPENAI_API_KEY
         sync: false

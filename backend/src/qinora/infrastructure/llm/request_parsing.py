@@ -1,4 +1,4 @@
-"""Implementations of the RequestParsingLLM port ("Parsek").
+"""Implementations of the RequestParsingLLM port ("Nora").
 
 StubRequestParsingLLM is a deterministic, no-credentials fallback: it
 always reports low confidence with every field missing, which routes
@@ -17,7 +17,7 @@ from qinora.application.read_models import ParsedCargoLine, ParsedTransportReque
 from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, require_openai_api_key
 from qinora.infrastructure.settings import Settings
 
-SYSTEM_PROMPT = """You are Parsek, a transport-request parsing assistant for the \
+SYSTEM_PROMPT = """You are Nora, a transport-request parsing assistant for the \
 Qinora logistics platform. You read the full text of an email thread (which may \
 be a single message, or a customer's original request plus one or more follow-up \
 replies, oldest first) and extract a structured transport request.

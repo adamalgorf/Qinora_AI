@@ -5,7 +5,7 @@ EmailWebhookUseCase) through the full automated intake pipeline:
   2. Tenant resolution - a safety/quality gate, see application/email_routing.py.
   3. Carrier RFQ reply routing - a reply carrying a live RFQ correlation
      token (or from a carrier's registered email with an open RFQ) is a
-     carrier's rate quote, not a customer email - handed to Remy Rates
+     carrier's rate quote, not a customer email - handed to Quinn
      (application/carrier_offer_agent.py) and never reaches the steps below.
      See application/pricing_engine.py / application/carrier_rfq_collector.py
      for where the RFQ itself came from.
@@ -15,7 +15,7 @@ EmailWebhookUseCase) through the full automated intake pipeline:
      books the shipment directly, no LLM call.
   7. Closed-thread gate - a reply on an already-closed quote/request/shipment
      is never auto-processed, only escalated for a human to handle.
-  8. Otherwise, hand the full thread history to Parsek (extended with a
+  8. Otherwise, hand the full thread history to Nora (extended with a
      classify + create/update/not_relevant step - see
      application/request_parsing_agent.py) and, for a complete request,
      price it and queue the quote (application/pricing_engine.py).
@@ -277,7 +277,7 @@ class EmailIntakeOrchestrator:
                     # inquiry instead of reopening something finished.
                     # Clearing request_id/quote_id here (rather than
                     # returning early) means the rest of this method falls
-                    # through to Parsek exactly as it would for a genuinely
+                    # through to Nora exactly as it would for a genuinely
                     # new email. User's explicit call 2026-09-17: automate
                     # rather than stall on a human for this too.
                     await self._escalate("quote", quote_id)
@@ -361,11 +361,11 @@ class EmailIntakeOrchestrator:
         self, thread_match: ThreadMatchResult | None, email: InboundEmailRecord
     ) -> list[InboundEmailRecord]:
         """A reply on a thread whose earlier message never became a request
-        (e.g. Parsek flagged it for a clarification instead - see
+        (e.g. Nora flagged it for a clarification instead - see
         request_parsing_agent.py's needs_review gate) has no request_id/
         quote_id to look up history by, so list_thread_history returns
         nothing. Fall back to the single anchor email thread_matching
-        already resolved, so Parsek still sees the original request details
+        already resolved, so Nora still sees the original request details
         (origin/destination/cargo) alongside this reply's answer, instead of
         just the reply text in isolation - which is otherwise low-confidence
         or unparseable on its own.

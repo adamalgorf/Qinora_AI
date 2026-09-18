@@ -5,7 +5,7 @@ same extract -> compare -> recommend node sequence without calling any
 model, and always reports zero confidence so it can never be mistaken for a
 real analysis. OpenAIGraphExecutor is the real thing - the same three
 sequential structured OpenAI calls as the other agents in this package
-(Parsek, Remy Rates, Rex Response), no extra framework required.
+(Nora, Quinn, Orion), no extra framework required.
 """
 
 from __future__ import annotations

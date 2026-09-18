@@ -299,7 +299,7 @@ def test_tier_2_ignores_an_unlinked_same_subject_candidate() -> None:
     # a real request (request_id/quote_id both None - itself just another
     # unprocessed inquiry, not a tracked conversation), tier 2 must not
     # match to it - doing so previously merged two unrelated shipments'
-    # text into one Parsek call. Reproduced live 2026-09-17.
+    # text into one Nora call. Reproduced live 2026-09-17.
     unlinked_unrelated = _email(
         "mail-1",
         subject="Förfråga",

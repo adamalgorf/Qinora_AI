@@ -24,10 +24,21 @@ class DefaultAgentConfig:
 # row here - there's nothing to gate. Only the 3 steps that actually read
 # unstructured human text get a real agent with a confidence threshold.
 DEFAULT_AGENT_CONFIGS = (
-    DefaultAgentConfig("request_parsing_agent", "Parsek", AgentAutoMode.GUARDED_AUTO, 0.74),
-    DefaultAgentConfig("carrier_offer_agent", "Remy Rates", AgentAutoMode.GUARDED_AUTO, 0.7),
-    DefaultAgentConfig("quote_response_agent", "Rex Response", AgentAutoMode.GUARDED_AUTO, 0.7),
+    DefaultAgentConfig("request_parsing_agent", "Nora", AgentAutoMode.GUARDED_AUTO, 0.74),
+    DefaultAgentConfig("carrier_offer_agent", "Quinn", AgentAutoMode.GUARDED_AUTO, 0.7),
+    DefaultAgentConfig("quote_response_agent", "Orion", AgentAutoMode.GUARDED_AUTO, 0.7),
 )
+
+# Names used before the agents were aligned with qinora.se (Nora = intake &
+# validation, Quinn = offer & booking, Orion = orchestration & follow-up).
+# Database initialization renames stored configs and historical agent_logs
+# rows still carrying one of these, so the UI never shows the old names.
+LEGACY_AGENT_NAMES = {
+    "Parsek": "Nora",
+    "Miles Match": "Nora",
+    "Remy Rates": "Quinn",
+    "Rex Response": "Orion",
+}
 
 
 def is_agent_enabled_for_auto(config: AgentConfigRecord | None) -> bool:

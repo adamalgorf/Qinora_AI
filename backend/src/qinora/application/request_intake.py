@@ -109,7 +109,7 @@ class UpdateRequestResult:
 
 class UpdateRequestUseCase:
     """Mirrors CreateRequestUseCase, but rewrites an existing transport
-    request in place - used when Parsek's classify step (see
+    request in place - used when Nora's classify step (see
     application/request_parsing_agent.py) decides a follow-up email refines
     a request already matched via application/thread_matching.py, rather
     than describing a brand-new one.

@@ -8,7 +8,7 @@ the reasoning is never a black box.
 ## How it fits the existing architecture
 
 This follows the same ports-and-adapters shape as the rest of `qinora`
-(compare Parsek/Remy Rates/Rex Response, the existing OpenAI-backed agents):
+(compare Nora/Quinn/Orion, the existing OpenAI-backed agents):
 
 | Layer | File | Role |
 |---|---|---|
@@ -25,7 +25,7 @@ has no idea whether it's talking to the stub or to OpenAI.
 ## Configuration
 
 This reuses the **same** `LLM_PROVIDER`/`OPENAI_API_KEY`/`OPENAI_MODEL`
-settings as Parsek, Remy Rates, and Rex Response - there's no separate
+settings as Nora, Quinn, and Orion - there's no separate
 provider switch or extra credential for this feature:
 
 ```

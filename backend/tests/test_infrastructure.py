@@ -186,3 +186,31 @@ def test_request_record_case_fields_default_and_round_trip(tmp_path: Path) -> No
     assert detail.request.priority == "normal"
     assert detail.request.assignee is None
     assert detail.request.sla_due_at is None
+
+
+def test_sqlite_initialize_renames_legacy_agent_names(tmp_path: Path) -> None:
+    sqlite_path = tmp_path / "legacy.sqlite3"
+    database = SQLiteDatabase(sqlite_path)
+    with database.connect() as connection:
+        connection.execute(
+            "update agent_configs set agent_name = 'Parsek' "
+            "where agent_key = 'request_parsing_agent'"
+        )
+        connection.execute(
+            "insert into agent_logs (id, agent_key, agent_name, step, entity_id, confidence) "
+            "values ('log-legacy', 'customer_match_agent', 'Miles Match', 'x', 'y', 0.9)"
+        )
+
+    database = SQLiteDatabase(sqlite_path)
+
+    with database.connect() as connection:
+        names = dict(connection.execute("select agent_key, agent_name from agent_configs"))
+        log_name = connection.execute(
+            "select agent_name from agent_logs where id = 'log-legacy'"
+        ).fetchone()[0]
+    assert names == {
+        "request_parsing_agent": "Nora",
+        "carrier_offer_agent": "Quinn",
+        "quote_response_agent": "Orion",
+    }
+    assert log_name == "Nora"

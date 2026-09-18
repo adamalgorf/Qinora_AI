@@ -1,15 +1,15 @@
 flowchart TD
     A[Inbound Email] -->|HMAC + idempotency-key| B[email-webhook]
     B --> C[Nora Intake<br/>classify intent + language]
-    C --> D[Miles Match<br/>sender -> CRM contact]
-    D --> E[Parsek<br/>extract logistics fields]
+    C --> D[Nora<br/>sender -> CRM contact]
+    D --> E[Nora<br/>extract logistics fields]
     E --> F{Vera Validate<br/>weight, dims, times complete?}
     F -- No --> G[Cy Dispatch<br/>operational_tasks escalation]
     F -- Yes --> H[Quinn Quote<br/>resolve pricing + create quote]
     H --> I{Pricing gate<br/>price > 0?}
     I -- No --> G
     I -- Yes --> J[outbound_reply_queue<br/>send quote to customer]
-    J --> K[Rex Response<br/>interpret reply]
+    J --> K[Orion<br/>interpret reply]
     K -- accepted --> L[Carrier Intelligence<br/>4-stage pipeline]
     K -- revise --> H
     K -- reject --> Z1[quote: rejected]

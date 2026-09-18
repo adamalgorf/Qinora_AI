@@ -13,7 +13,7 @@ from qinora.application.read_models import (
 )
 
 AGENT_KEY = "carrier_offer_agent"
-AGENT_NAME = "Remy Rates"
+AGENT_NAME = "Quinn"
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class ParseCarrierOfferResult:
 class CarrierOfferParsingAgent:
     """Reads a carrier's (subcontractor's) free-text reply to a booking/rate
     request and proposes a structured offer. Auto-saves the offer only when
-    the "Remy Rates" agent config is enabled with auto_mode/min_confidence
+    the "Quinn" agent config is enabled with auto_mode/min_confidence
     that clear the draft's own confidence - otherwise the draft is logged
     for a human to review instead, matching the human-in-the-loop principle
     for assisted-mode agents.

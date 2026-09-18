@@ -574,7 +574,7 @@ def _email(
 def _parsek_config(config: dict | None = None) -> AgentConfigRecord:
     return AgentConfigRecord(
         agent_key="request_parsing_agent",
-        agent_name="Parsek",
+        agent_name="Nora",
         is_enabled=True,
         auto_mode="guarded_auto",
         min_confidence=0.74,
@@ -585,7 +585,7 @@ def _parsek_config(config: dict | None = None) -> AgentConfigRecord:
 def _carrier_offer_config(config: dict | None = None) -> AgentConfigRecord:
     return AgentConfigRecord(
         agent_key=CARRIER_OFFER_AGENT_KEY,
-        agent_name="Remy Rates",
+        agent_name="Quinn",
         is_enabled=True,
         auto_mode="guarded_auto",
         min_confidence=0.7,
@@ -815,7 +815,7 @@ def test_acceptance_shortcut_books_shipment_without_calling_llm() -> None:
     assert len(shipment_repository.created) == 1
     assert shipment_repository.created[0].quote_id == "quo-1"
     assert task_repository.created == []
-    # The deterministic keyword classifier handled this - Parsek's LLM was
+    # The deterministic keyword classifier handled this - Nora's LLM was
     # never invoked for the accept path.
     assert llm.calls == 0
 
@@ -1039,10 +1039,10 @@ def test_carrier_reply_matched_by_token_routes_to_remy_rates_not_parsek() -> Non
     assert result.classification == "carrier_offer"
     assert email_threads.classifications["mail-5"] == "carrier_offer"
     assert ("mail-5", "req-1", None) in email_threads.linked
-    # Remy Rates (carrier_offer_agent) parsed and saved the offer...
+    # Quinn (carrier_offer_agent) parsed and saved the offer...
     assert len(carrier_offer_repository.created) == 1
     assert carrier_offer_repository.created[0].request_id == "req-1"
-    # ...and the RFQ got linked to it via mark_responded, not Parsek.
+    # ...and the RFQ got linked to it via mark_responded, not Nora.
     assert carrier_rfq_repository.responded == [
         ("rfq-1", carrier_offer_repository.created[0].id)
     ]
@@ -1139,11 +1139,11 @@ def test_carrier_reply_matched_by_sender_email_fallback() -> None:
 
 
 def test_reply_on_unlinked_thread_still_sees_original_email_as_context() -> None:
-    """A reply answering Parsek's own clarification question (see
+    """A reply answering Nora's own clarification question (see
     request_parsing_agent.py's needs_review gate) has no request_id/quote_id
     yet - the original email was flagged for review, not turned into a
     request. thread_matching still resolves the anchor email via message-id
-    though, and the orchestrator should fall back to it so Parsek sees the
+    though, and the orchestrator should fall back to it so Nora sees the
     original request details alongside the reply instead of the reply text
     in isolation.
     """
@@ -1247,7 +1247,7 @@ def test_offer_report_marks_classification_before_finalizing_customer_quote() ->
 def test_offer_report_from_unconfigured_sender_is_not_matched() -> None:
     # A customer or a real carrier can't spoof the offer-report path just by
     # guessing the subject format - it must also come from the exact
-    # configured carrier mailbox. Falls through to normal Parsek handling
+    # configured carrier mailbox. Falls through to normal Nora handling
     # instead (here, an incomplete/unparseable draft -> "pending").
     request_id = "a1b2c3d4-0000-4000-8000-000000000002"
     email = _email(

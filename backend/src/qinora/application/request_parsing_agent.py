@@ -29,9 +29,9 @@ from qinora.application.request_intake import (
 from qinora.domain.transport_request import DEFAULT_REQUIRED_FIELDS, RequestValidationIssue
 
 AGENT_KEY = "request_parsing_agent"
-AGENT_NAME = "Parsek"
+AGENT_NAME = "Nora"
 
-# Swedish labels for the exact field names Parsek's own missing_fields list
+# Swedish labels for the exact field names Nora's own missing_fields list
 # uses (see infrastructure/llm/request_parsing.py's SYSTEM_PROMPT) - shown to
 # the customer in the auto-clarification email, so these stay in Swedish
 # rather than surfacing the raw field name.
@@ -71,7 +71,7 @@ class ParseFreeTextRequestResult:
 class RequestParsingAgent:
     """Reads a customer's free-text RFQ/booking email (or a full thread of
     them) and proposes a structured TransportRequestInput. Auto-creates or
-    auto-updates the request whenever the "Parsek" agent config (see
+    auto-updates the request whenever the "Nora" agent config (see
     application/agent_config.py) is enabled and not set to manual mode -
     the min_confidence bar only applies while something is still actually
     missing from the extraction (draft.missing_fields), since a merely-low
@@ -84,7 +84,7 @@ class RequestParsingAgent:
     This class is the *only* place application code talks to the LLM, via
     the RequestParsingLLM port. It has no idea OpenAI exists.
 
-    Parsek's own classify step (see infrastructure/llm/request_parsing.py)
+    Nora's own classify step (see infrastructure/llm/request_parsing.py)
     decides whether a thread is a new request ("create"), a follow-up on a
     request already on file ("update" - creates a new request instead if
     the caller, typically the email intake orchestrator, can't supply a
@@ -157,7 +157,7 @@ class RequestParsingAgent:
                 )
         elif not needs_review and command.matched_request_id and self._update_request is not None:
             # Trust application/thread_matching.py's deterministic match over
-            # Parsek's own "create" vs "update" call: thread_matching already
+            # Nora's own "create" vs "update" call: thread_matching already
             # knows this reply belongs to an existing request (message-id or
             # subject-line correlation, not a guess), so update it in place
             # rather than creating a duplicate - regardless of what draft.action
@@ -180,7 +180,7 @@ class RequestParsingAgent:
             )
         elif not needs_review:
             # Covers both a genuinely new request (draft.action == "create")
-            # and Parsek believing this continues an existing one but
+            # and Nora believing this continues an existing one but
             # thread_matching finding no confirmed match (draft.action ==
             # "update" with no matched_request_id) - rather than blocking on
             # a human to sort out which request this belongs to, create a
@@ -226,7 +226,7 @@ class RequestParsingAgent:
         # Every inbound email must get SOME reply - not_relevant is the only
         # deliberate exception (auto-replying to spam/bounces/out-of-office
         # risks mail loops). Every other case that leaves request_result
-        # None (missing fields, an "update" Parsek couldn't match to an
+        # None (missing fields, an "update" Nora couldn't match to an
         # existing request, or - most easily missed - a fully-extracted
         # draft that just isn't confident enough to auto-act on) previously
         # left the customer with total silence until a human happened to
@@ -250,7 +250,7 @@ class RequestParsingAgent:
         # request_result is not None here means CreateRequestUseCase/
         # UpdateRequestUseCase (application/request_intake.py) ran its own
         # domain-level validate_transport_request check - stricter than, and
-        # independent from, Parsek's own draft.missing_fields above (e.g. it
+        # independent from, Nora's own draft.missing_fields above (e.g. it
         # also requires a loading/unloading time). When THAT check finds the
         # request still incomplete, create_request.execute()/
         # update_request.execute() already opened an internal Control Tower
@@ -324,7 +324,7 @@ class RequestParsingAgent:
         command: ParseFreeTextRequestCommand,
     ) -> None:
         """Sent instead of a clarification request when there's nothing
-        concrete left to ask for - Parsek extracted the request fully but
+        concrete left to ask for - Nora extracted the request fully but
         just isn't confident enough to auto-act on it, or classified it as
         an update it couldn't match to an existing request. There's no
         missing_fields bullet list to show here, only a plain acknowledgment
@@ -360,7 +360,7 @@ def _missing_fields_from_issues(
 ) -> tuple[str, ...]:
     """Normalizes domain/transport_request.py's per-cargo-line issue fields
     (e.g. "cargo.0.weight_kg", "cargo.1.length_cm") down to the same small
-    set of keys MISSING_FIELD_LABELS_SV/Parsek's own missing_fields use, so
+    set of keys MISSING_FIELD_LABELS_SV/Nora's own missing_fields use, so
     both clarification-email code paths render identical Swedish labels
     instead of leaking a raw internal field path to the customer.
     """

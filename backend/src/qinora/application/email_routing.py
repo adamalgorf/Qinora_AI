@@ -1,6 +1,6 @@
 """Deterministic, no-I/O gates run before any agent touches an inbound
 email: which tenant it belongs to, and whether it's our own mail looping
-back to us. Both read their configuration from the "Parsek" agent's own
+back to us. Both read their configuration from the "Nora" agent's own
 config row (agent_key="request_parsing_agent", see
 application/agent_config.py) under three optional keys - inbound_address,
 allowed_domains, own_addresses - so no new config table is needed.
@@ -65,7 +65,7 @@ def resolve_tenant(
 
 
 def is_loop(*, sender: str, parsek_config: AgentConfigRecord | None) -> bool:
-    """True when `sender` is one of our own outbound identities (Parsek's
+    """True when `sender` is one of our own outbound identities (Nora's
     config own_addresses list), i.e. this message is our own mail bouncing
     back to us rather than a real customer/carrier reply. Unset
     own_addresses (today's default) never flags a loop.

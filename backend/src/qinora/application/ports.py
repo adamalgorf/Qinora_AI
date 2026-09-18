@@ -158,7 +158,7 @@ class AgentDispatcher(Protocol):
 class RequestParsingLLM(Protocol):
     """Turns free text (e.g. an RFQ email body) into a structured draft
     transport request. The only thing application code knows about the
-    "Parsek" agent - implementations live in infrastructure/llm/.
+    "Nora" agent - implementations live in infrastructure/llm/.
     """
 
     async def parse(self, *, raw_text: str) -> ParsedTransportRequestDraft:
@@ -167,7 +167,7 @@ class RequestParsingLLM(Protocol):
 
 class CarrierOfferParsingLLM(Protocol):
     """Turns free text (a carrier's reply to a booking request) into a
-    structured draft offer - the "Remy Rates" agent's only LLM dependency.
+    structured draft offer - the "Quinn" agent's only LLM dependency.
     """
 
     async def parse(self, *, raw_text: str) -> ParsedCarrierOfferDraft:
@@ -177,7 +177,7 @@ class CarrierOfferParsingLLM(Protocol):
 class QuoteReplyInterpretationLLM(Protocol):
     """Turns a customer's free-text reply to a quote into a structured
     intent (accept/revise/reject) plus any revised price mentioned - the
-    "Rex Response" agent's only LLM dependency.
+    "Orion" agent's only LLM dependency.
     """
 
     async def interpret(self, *, body_text: str) -> QuoteReplyInterpretation:
@@ -683,7 +683,7 @@ class CarrierOfferReportOutboundRepository(Protocol):
 class ClarificationOutboundRepository(Protocol):
     """Mirrors CarrierRfqOutboundRepository, but for the
     clarification_outbound table - queues the "please send the missing
-    details" email Parsek asks for when it can't auto-create a request
+    details" email Nora asks for when it can't auto-create a request
     (see application/request_parsing_agent.py). Keyed to the inbound email
     rather than a quote/carrier_rfq, so it too gets its own table instead of
     outbound_reply_queue's required quote_id.
