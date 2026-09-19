@@ -286,6 +286,11 @@ export type ContactListItem = {
   customs_contact_name: string | null;
   customs_contact_email: string | null;
   annual_volume_estimate: number | null;
+  org_number: string | null;
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  address: string | null;
 };
 
 export type ContactCreatePayload = {
@@ -304,6 +309,11 @@ export type ContactCreatePayload = {
   customs_contact_name?: string;
   customs_contact_email?: string;
   annual_volume_estimate?: number;
+  org_number?: string;
+  contact_person?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  address?: string;
 };
 
 export type ContactImportIssue = {

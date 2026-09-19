@@ -94,6 +94,7 @@ class FakeEmailThreadRepository:
     emails: dict
     linked: list = field(default_factory=list)
     classifications: dict = field(default_factory=dict)
+    history: list = field(default_factory=list)
 
     async def get(self, email_id):
         return self.emails.get(email_id)
@@ -108,7 +109,7 @@ class FakeEmailThreadRepository:
         return []
 
     async def list_thread_history(self, *, request_id, quote_id):
-        return []
+        return list(self.history)
 
     async def link_thread(self, email_id, *, request_id, quote_id):
         self.linked.append((email_id, request_id, quote_id))
@@ -613,8 +614,13 @@ def _build_orchestrator(
     thread_match_raises: Exception | None = None,
     clarification_outbound: FakeClarificationOutboundRepository | None = None,
     customer_mailbox: str | None = None,
+    customer_onboarding=None,
+    task_repository: FakeOperationalTaskWriteRepository | None = None,
+    email_history: list | None = None,
 ):
-    email_threads = FakeEmailThreadRepository(emails={email.id: email})
+    email_threads = FakeEmailThreadRepository(
+        emails={email.id: email}, history=list(email_history or [])
+    )
     contacts = FakeContactReadRepository(contact=contact)
     contact_matching = ContactMatchingUseCase(contacts, FakeAgentLogWriteRepository())
     agent_config = AgentConfigService(
@@ -643,7 +649,7 @@ def _build_orchestrator(
         outbound_repository,
     )
 
-    task_repository = FakeOperationalTaskWriteRepository()
+    task_repository = task_repository or FakeOperationalTaskWriteRepository()
 
     llm = FakeRequestParsingLLM(
         draft=llm_draft
@@ -717,6 +723,7 @@ def _build_orchestrator(
         carrier_mailbox=carrier_mailbox,
         clarification_outbound=clarification_outbound,
         customer_mailbox=customer_mailbox,
+        customer_onboarding=customer_onboarding,
     )
     return (
         orchestrator,

@@ -96,6 +96,16 @@ export function CustomersPage() {
                     {detail.customer_since ? ` · Kund sedan ${detail.customer_since}` : ""}
                   </p>
                 </div>
+                <DetailField label="Organisationsnummer" value={detail.org_number ?? "—"} />
+                <DetailField label="Adress" value={detail.address ?? "—"} />
+                <DetailField
+                  label="Kontaktperson"
+                  value={
+                    [detail.contact_person, detail.contact_phone, detail.contact_email]
+                      .filter(Boolean)
+                      .join(" · ") || "—"
+                  }
+                />
                 <DetailField label="Aktiv ruttoptimering" value={detail.active_route ?? "—"} />
                 <DetailField
                   label="Medelsvarstid AI"

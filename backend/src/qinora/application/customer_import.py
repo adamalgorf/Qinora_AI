@@ -57,6 +57,20 @@ _HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "annual_volume_estimate": (
         "annual_volume_estimate", "årlig_volym", "arlig_volym", "volym", "annual_volume",
     ),
+    "org_number": (
+        "org_number", "orgnr", "org_nr", "org.nr", "org.nummer", "organisationsnummer",
+        "organization_number", "vat", "vat_number", "momsnummer",
+    ),
+    "address": ("address", "adress", "postadress", "besöksadress", "besoksadress"),
+    "contact_person": ("contact_person", "kontaktperson", "kontakt", "contact"),
+    "contact_email": (
+        "contact_email", "kontaktperson_e-post", "kontaktperson_email", "kontakt_e-post",
+        "kontakt_email",
+    ),
+    "contact_phone": (
+        "contact_phone", "telefon", "telefonnummer", "tel", "mobil", "kontaktperson_telefon",
+        "kontakt_telefon", "phone",
+    ),
 }
 
 _HEALTH_ALIASES = {
@@ -71,6 +85,10 @@ ExistingContactsLoader = Callable[[], Awaitable[list[ContactRecord]]]
 
 class CustomerValidationError(ValueError):
     pass
+
+
+class DuplicateCustomerError(CustomerValidationError):
+    """A customer with the same e-mail address or name is already registered."""
 
 
 @dataclass(frozen=True)
@@ -90,6 +108,11 @@ class CustomerInput:
     customs_contact_name: str | None = None
     customs_contact_email: str | None = None
     annual_volume_estimate: float | None = None
+    org_number: str | None = None
+    contact_person: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    address: str | None = None
 
 
 @dataclass(frozen=True)
@@ -142,6 +165,12 @@ def normalize_customer_input(raw: CustomerInput) -> CustomerInput:
         if not _EMAIL_RE.match(customs_email):
             raise CustomerValidationError(f"Ogiltig e-post för tullkontakt: {customs_email}")
 
+    contact_email = _clean(raw.contact_email)
+    if contact_email is not None:
+        contact_email = contact_email.lower()
+        if not _EMAIL_RE.match(contact_email):
+            raise CustomerValidationError(f"Ogiltig e-post för kontaktperson: {contact_email}")
+
     customer_since = _clean(raw.customer_since)
     if customer_since is not None:
         try:
@@ -183,7 +212,28 @@ def normalize_customer_input(raw: CustomerInput) -> CustomerInput:
         customs_contact_name=_clean(raw.customs_contact_name),
         customs_contact_email=customs_email,
         annual_volume_estimate=raw.annual_volume_estimate,
+        org_number=normalize_org_number(raw.org_number),
+        contact_person=_clean(raw.contact_person),
+        contact_email=contact_email,
+        contact_phone=_clean(raw.contact_phone),
+        address=_clean(raw.address),
     )
+
+
+def normalize_org_number(value: str | None) -> str | None:
+    """Swedish organisation numbers are shown as NNNNNN-NNNN whether they
+    arrive as 5566778899, 556677-8899 or 16556677-8899 (12-digit form);
+    anything else (e.g. a foreign VAT number) is kept as typed, trimmed.
+    """
+    cleaned = _clean(value)
+    if cleaned is None:
+        return None
+    digits = re.sub(r"[\s-]", "", cleaned)
+    if digits.isdigit() and len(digits) == 12 and digits.startswith(("16", "19", "20")):
+        digits = digits[2:]
+    if digits.isdigit() and len(digits) == 10:
+        return f"{digits[:6]}-{digits[6:]}"
+    return cleaned
 
 
 def parse_customer_csv(
@@ -202,7 +252,7 @@ def parse_customer_csv(
 
     # Pick the delimiter from the header row alone - csv.Sniffer is easily
     # fooled by Swedish decimal commas ("12,5") in the data rows.
-    header_line = text.lstrip("﻿").splitlines()[0]
+    header_line = text.lstrip("\ufeff").splitlines()[0]
     delimiter = max(";	,", key=header_line.count)
     reader = csv.reader(io.StringIO(text), delimiter=delimiter)
 
@@ -249,7 +299,7 @@ class CustomerImportService:
         existing = await self._existing_contacts()
         duplicate = _duplicate_reason(customer, _DuplicateIndex.from_contacts(existing))
         if duplicate:
-            raise CustomerValidationError(duplicate)
+            raise DuplicateCustomerError(duplicate)
         return await self._contacts.create_contact(customer)
 
     async def import_rows(
@@ -320,6 +370,11 @@ def _customer_input_from_values(values: dict[str, str]) -> CustomerInput:
         customs_contact_name=values.get("customs_contact_name"),
         customs_contact_email=values.get("customs_contact_email"),
         annual_volume_estimate=_parse_number(values.get("annual_volume_estimate"), "Årlig volym"),
+        org_number=values.get("org_number"),
+        contact_person=values.get("contact_person"),
+        contact_email=values.get("contact_email"),
+        contact_phone=values.get("contact_phone"),
+        address=values.get("address"),
     )
 
 
@@ -353,7 +408,7 @@ def _map_header(header: list[str]) -> dict[int, str]:
 
 
 def _normalize_header(value: str) -> str:
-    return re.sub(r"[\s_]+", "_", value.strip().lstrip("﻿").lower())
+    return re.sub(r"[\s_]+", "_", value.strip().lstrip("\ufeff").lower())
 
 
 def _decode(content: bytes) -> str:

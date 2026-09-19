@@ -35,6 +35,7 @@ const TABS: Array<{ value: InboxTab; label: string }> = [
 function suggestedAction(classification: string): string {
   const c = classification.toLowerCase();
   if (c === "invoice") return "Granska faktura";
+  if (c === "customer_details") return "Kolla den nya kunden";
   if (c === "error") return "Automatisk hantering misslyckades - granska manuellt";
   if (c === "pending" || c === "unknown") return "Bearbeta";
   return "Öppna ärende";

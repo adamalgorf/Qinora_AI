@@ -444,6 +444,11 @@ class ContactListItem(BaseModel):
     customs_contact_name: str | None = None
     customs_contact_email: str | None = None
     annual_volume_estimate: float | None = None
+    org_number: str | None = None
+    contact_person: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    address: str | None = None
 
 
 class ContactCreateRequest(BaseModel):
@@ -462,6 +467,11 @@ class ContactCreateRequest(BaseModel):
     customs_contact_name: str | None = None
     customs_contact_email: str | None = None
     annual_volume_estimate: float | None = None
+    org_number: str | None = None
+    contact_person: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    address: str | None = None
 
 
 class ContactImportIssue(BaseModel):

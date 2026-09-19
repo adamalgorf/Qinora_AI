@@ -521,6 +521,11 @@ class PostgresOperationalReadRepository:
                     if row["annual_volume_estimate"] is not None
                     else None
                 ),
+                org_number=row["org_number"],
+                contact_person=row["contact_person"],
+                contact_email=row["contact_email"],
+                contact_phone=row["contact_phone"],
+                address=row["address"],
             )
             for row in self._fetch_all(
                 """
@@ -528,7 +533,8 @@ class PostgresOperationalReadRepository:
                   id, public_id, name, email, domain, default_markup_percent,
                   default_incoterms, payment_terms, segment, customer_since,
                   sla_tolerance_hours, account_owner, health_status, contract_note,
-                  customs_contact_name, customs_contact_email, annual_volume_estimate
+                  customs_contact_name, customs_contact_email, annual_volume_estimate,
+                  org_number, contact_person, contact_email, contact_phone, address
                 from public.contacts
                 where tenant_id = %s and is_active = true
                 order by name
@@ -744,7 +750,8 @@ class PostgresOperationalReadRepository:
                   id, public_id, name, email, domain, default_markup_percent,
                   default_incoterms, payment_terms, segment, customer_since,
                   sla_tolerance_hours, account_owner, health_status, contract_note,
-                  customs_contact_name, customs_contact_email, annual_volume_estimate
+                  customs_contact_name, customs_contact_email, annual_volume_estimate,
+                  org_number, contact_person, contact_email, contact_phone, address
                 from public.contacts
                 where tenant_id = %s and id = %s
                 """,
@@ -2399,9 +2406,13 @@ class PostgresContactWriteRepository:
                     tenant_id, public_id, name, email, domain, default_markup_percent,
                     default_incoterms, payment_terms, is_active, segment, customer_since,
                     sla_tolerance_hours, account_owner, health_status, contract_note,
-                    customs_contact_name, customs_contact_email, annual_volume_estimate
+                    customs_contact_name, customs_contact_email, annual_volume_estimate,
+                    org_number, contact_person, contact_email, contact_phone, address
                   )
-                values (%s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                values (
+                  %s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                  %s, %s, %s, %s, %s
+                )
                 returning id
                 """,
                 (
@@ -2422,6 +2433,11 @@ class PostgresContactWriteRepository:
                     customer.customs_contact_name,
                     customer.customs_contact_email,
                     customer.annual_volume_estimate,
+                    customer.org_number,
+                    customer.contact_person,
+                    customer.contact_email,
+                    customer.contact_phone,
+                    customer.address,
                 ),
             )
             contact_id = str(cursor.fetchone()["id"])
@@ -2444,6 +2460,11 @@ class PostgresContactWriteRepository:
             customs_contact_name=customer.customs_contact_name,
             customs_contact_email=customer.customs_contact_email,
             annual_volume_estimate=customer.annual_volume_estimate,
+            org_number=customer.org_number,
+            contact_person=customer.contact_person,
+            contact_email=customer.contact_email,
+            contact_phone=customer.contact_phone,
+            address=customer.address,
         )
 
 

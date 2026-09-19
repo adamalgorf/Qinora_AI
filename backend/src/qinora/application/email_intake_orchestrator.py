@@ -12,7 +12,10 @@ EmailWebhookUseCase) through the full automated intake pipeline:
   4. Contact matching - who is this, if anyone we know (ContactMatchingUseCase).
   5. Thread matching - which prior request/quote (if any) this continues.
   6. Acceptance shortcut - a deterministic "accept" reply on an open quote
-     books the shipment directly, no LLM call.
+     books the shipment directly, no LLM call. If the sender isn't a known
+     customer (step 4 found no contact), Nora also asks them for their
+     company details, and their reply on the accepted thread registers them
+     as a customer (application/customer_onboarding.py).
   7. Closed-thread gate - a reply on an already-closed quote/request/shipment
      is never auto-processed, only escalated for a human to handle.
   8. Otherwise, hand the full thread history to Nora (extended with a
@@ -38,6 +41,7 @@ from qinora.application.carrier_offer_agent import (
 )
 from qinora.application.carrier_rfq_collector import CarrierRfqCollector
 from qinora.application.contact_matching import ContactMatchingUseCase, MatchContactCommand
+from qinora.application.customer_onboarding import CustomerOnboardingService
 from qinora.application.email_routing import is_loop, resolve_tenant
 from qinora.application.greeting import greeting
 from qinora.application.operational_queries import OperationalQueries
@@ -68,6 +72,9 @@ PARSEK_AGENT_KEY = "request_parsing_agent"
 
 MANUAL_REVIEW_REASON = "granska och svara manuellt"
 CRASH_REVIEW_REASON = "automatisk hantering misslyckades - granska manuellt"
+CUSTOMER_DETAILS_REVIEW_REASON = (
+    "be kunden om företagsuppgifter manuellt (automatiskt mejl misslyckades)"
+)
 
 # Matches the subject line application/pricing_engine.py's _build_rfq_email
 # generates, e.g. "QiNora RFQ #A1B2C3D4 - Stockholm -> Hamburg, ltl" - also
@@ -110,6 +117,9 @@ OPEN_RFQ_STATUS = "sent"
 
 # Quote statuses a customer can still meaningfully reply to (accept/revise/reject).
 ACTIVE_QUOTE_STATUSES = frozenset({"sent", "viewed"})
+# Accepted quote statuses on whose thread a new customer's company details
+# may still arrive (see CustomerOnboardingService.handle_reply).
+ONBOARDING_QUOTE_STATUSES = frozenset({"accepted", "converted"})
 # Quote statuses where the thread is done - no further automated action.
 CLOSED_QUOTE_STATUSES = frozenset({"accepted", "rejected", "expired", "converted"})
 # Request statuses where the thread is done (mirrors OperationalQueries.dashboard_summary's
@@ -148,6 +158,7 @@ class EmailIntakeOrchestrator:
         carrier_mailbox: str | None = None,
         clarification_outbound: ClarificationOutboundRepository | None = None,
         customer_mailbox: str | None = None,
+        customer_onboarding: CustomerOnboardingService | None = None,
     ) -> None:
         self._agent_config = agent_config
         self._contact_matching = contact_matching
@@ -175,6 +186,10 @@ class EmailIntakeOrchestrator:
         # acknowledgments for their own (non-crash) silent-outcome gaps.
         self._clarification_outbound = clarification_outbound
         self._customer_mailbox = customer_mailbox
+        # Asks a not-yet-known sender who confirms an order for their company
+        # details and registers them as a customer once they answer. None
+        # (the default) skips this - the order is booked either way.
+        self._customer_onboarding = customer_onboarding
 
     async def handle(self, email_id: str) -> HandleInboundEmailResult:
         """Top-level entry point - see _handle() for the real pipeline.
@@ -268,8 +283,26 @@ class EmailIntakeOrchestrator:
                         await self._email_threads.link_thread(
                             email_id, request_id=request_id, quote_id=quote_id
                         )
+                        if contact is None:
+                            await self._request_customer_details(email)
                         return await self._finish(email_id, "accepted")
                 elif status in CLOSED_QUOTE_STATUSES:
+                    if (
+                        status in ONBOARDING_QUOTE_STATUSES
+                        and contact is None
+                        and self._customer_onboarding is not None
+                    ):
+                        # An unregistered sender answering our request for
+                        # company details - not a fresh inquiry.
+                        history = await self._email_threads.list_thread_history(
+                            request_id=request_id, quote_id=quote_id
+                        )
+                        onboarding = await self._customer_onboarding.handle_reply(email, history)
+                        if onboarding is not None:
+                            await self._email_threads.link_thread(
+                                email_id, request_id=request_id, quote_id=quote_id
+                            )
+                            return await self._finish(email_id, "customer_details")
                     # Still notify a human (a reply on a finished quote is
                     # worth a look), but don't block on one: the quote is
                     # done (accepted/rejected/expired/converted), so this
@@ -465,6 +498,27 @@ class EmailIntakeOrchestrator:
                 request_id=request_id,
             )
         )
+
+    async def _request_customer_details(self, email: InboundEmailRecord) -> None:
+        """Best-effort: the shipment is already booked and confirmed by now,
+        so a failure here must not turn a successful booking into a crash
+        (handle()'s safety net would tell the customer we hit a technical
+        problem). Falls back to a Control Tower task so a human asks instead.
+        """
+        if self._customer_onboarding is None:
+            return
+        try:
+            await self._customer_onboarding.request_details(email)
+        except Exception:  # noqa: BLE001 - see docstring above
+            log.error("Failed to request customer details for %s", email.id, exc_info=True)
+            try:
+                await self._task_repository.create_task(
+                    entity_type="email_inbound",
+                    entity_id=email.id,
+                    reason=CUSTOMER_DETAILS_REVIEW_REASON,
+                )
+            except Exception:  # noqa: BLE001
+                log.error("Failed to create customer-details task for %s", email.id, exc_info=True)
 
     async def _find_shipment_for_quote(self, quote_id: str) -> ShipmentRecord | None:
         shipments = await self._operational_queries.list_shipments()

@@ -35,6 +35,9 @@ const STATUS_TONE: Record<string, StatusTone> = {
   pending: "neutral",
   transport_request: "neutral",
   invoice: "neutral",
+  // a new customer's reply with their company details (see
+  // application/customer_onboarding.py)
+  customer_details: "positive",
   // resolved / positive
   parsed: "positive",
   quoted: "positive",

@@ -441,6 +441,14 @@ class SQLiteDatabase:
             _add_column_if_missing(connection, "contacts", "customs_contact_name", "text")
             _add_column_if_missing(connection, "contacts", "customs_contact_email", "text")
             _add_column_if_missing(connection, "contacts", "annual_volume_estimate", "real")
+            for column in (
+                "org_number",
+                "contact_person",
+                "contact_email",
+                "contact_phone",
+                "address",
+            ):
+                _add_column_if_missing(connection, "contacts", column, "text")
             self._seed(connection)
             self._seed_runtime_relationships(connection)
             self._seed_operational_tasks(connection)
@@ -1105,6 +1113,11 @@ class SQLiteOperationalReadRepository:
                 customs_contact_name=row["customs_contact_name"],
                 customs_contact_email=row["customs_contact_email"],
                 annual_volume_estimate=row["annual_volume_estimate"],
+                org_number=row["org_number"],
+                contact_person=row["contact_person"],
+                contact_email=row["contact_email"],
+                contact_phone=row["contact_phone"],
+                address=row["address"],
             )
             for row in self._fetch_all(
                 """
@@ -1112,7 +1125,8 @@ class SQLiteOperationalReadRepository:
                   id, public_id, display_name, email, domain, default_markup_percent,
                   default_incoterms, payment_terms, segment, customer_since,
                   sla_tolerance_hours, account_owner, health_status, contract_note,
-                  customs_contact_name, customs_contact_email, annual_volume_estimate
+                  customs_contact_name, customs_contact_email, annual_volume_estimate,
+                  org_number, contact_person, contact_email, contact_phone, address
                 from contacts
                 where is_active = 1
                 order by display_name
@@ -1282,7 +1296,8 @@ class SQLiteOperationalReadRepository:
               id, public_id, display_name, email, domain, default_markup_percent,
               default_incoterms, payment_terms, segment, customer_since,
               sla_tolerance_hours, account_owner, health_status, contract_note,
-              customs_contact_name, customs_contact_email, annual_volume_estimate
+              customs_contact_name, customs_contact_email, annual_volume_estimate,
+              org_number, contact_person, contact_email, contact_phone, address
             from contacts
             where id = ?
             """,
@@ -1382,9 +1397,10 @@ class SQLiteContactWriteRepository:
                     id, public_id, display_name, email, domain, default_markup_percent,
                     default_incoterms, payment_terms, is_active, segment, customer_since,
                     sla_tolerance_hours, account_owner, health_status, contract_note,
-                    customs_contact_name, customs_contact_email, annual_volume_estimate
+                    customs_contact_name, customs_contact_email, annual_volume_estimate,
+                    org_number, contact_person, contact_email, contact_phone, address
                   )
-                values (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     contact_id,
@@ -1404,6 +1420,11 @@ class SQLiteContactWriteRepository:
                     customer.customs_contact_name,
                     customer.customs_contact_email,
                     customer.annual_volume_estimate,
+                    customer.org_number,
+                    customer.contact_person,
+                    customer.contact_email,
+                    customer.contact_phone,
+                    customer.address,
                 ),
             )
         return _contact_record_from_input(contact_id, public_id, customer)
@@ -3263,6 +3284,11 @@ def _contact_record_from_input(
         customs_contact_name=customer.customs_contact_name,
         customs_contact_email=customer.customs_contact_email,
         annual_volume_estimate=customer.annual_volume_estimate,
+        org_number=customer.org_number,
+        contact_person=customer.contact_person,
+        contact_email=customer.contact_email,
+        contact_phone=customer.contact_phone,
+        address=customer.address,
     )
 
 

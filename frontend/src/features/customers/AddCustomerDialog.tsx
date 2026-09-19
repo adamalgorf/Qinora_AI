@@ -43,6 +43,11 @@ const EMPTY_CUSTOMER = {
   customsContactName: "",
   customsContactEmail: "",
   contractNote: "",
+  orgNumber: "",
+  address: "",
+  contactPerson: "",
+  contactEmail: "",
+  contactPhone: "",
 };
 
 type CustomerForm = typeof EMPTY_CUSTOMER;
@@ -99,6 +104,11 @@ export function AddCustomerDialog({
       customs_contact_name: optionalText(form.customsContactName),
       customs_contact_email: optionalText(form.customsContactEmail),
       contract_note: optionalText(form.contractNote),
+      org_number: optionalText(form.orgNumber),
+      address: optionalText(form.address),
+      contact_person: optionalText(form.contactPerson),
+      contact_email: optionalText(form.contactEmail),
+      contact_phone: optionalText(form.contactPhone),
     });
   }
 
@@ -117,7 +127,22 @@ export function AddCustomerDialog({
           <FormField className="sm:col-span-2" id="customer-name" label="Kundnamn *">
             <Input id="customer-name" {...field("displayName")} />
           </FormField>
-          <FormField id="customer-email" label="E-postadress">
+          <FormField id="customer-org-number" label="Organisationsnummer">
+            <Input id="customer-org-number" placeholder="556677-8899" {...field("orgNumber")} />
+          </FormField>
+          <FormField id="customer-address" label="Adress">
+            <Input id="customer-address" placeholder="Gata, postnummer, ort" {...field("address")} />
+          </FormField>
+          <FormField id="customer-contact-person" label="Kontaktperson">
+            <Input id="customer-contact-person" {...field("contactPerson")} />
+          </FormField>
+          <FormField id="customer-contact-phone" label="Kontaktpersonens telefon">
+            <Input id="customer-contact-phone" type="tel" {...field("contactPhone")} />
+          </FormField>
+          <FormField id="customer-contact-email" label="Kontaktpersonens e-post">
+            <Input id="customer-contact-email" type="email" {...field("contactEmail")} />
+          </FormField>
+          <FormField id="customer-email" label="E-postadress (för mejlmatchning)">
             <Input id="customer-email" type="email" {...field("email")} />
           </FormField>
           <FormField id="customer-domain" label="Domän">

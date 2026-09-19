@@ -27,6 +27,7 @@ from qinora.application import (
     UpdateRequestUseCase,
 )
 from qinora.application.customer_import import CustomerImportService
+from qinora.application.customer_onboarding import CustomerOnboardingService
 from qinora.application.email_intake_orchestrator import EmailIntakeOrchestrator
 from qinora.application.llm_ports import GraphExecutor
 from qinora.application.ports import (
@@ -38,6 +39,7 @@ from qinora.application.ports import (
     CarrierWriteRepository,
     CaseNoteRepository,
     ClarificationOutboundRepository,
+    CustomerDetailsParsingLLM,
     DocumentRepository,
     OutboundReplyRepository,
     QuoteReplyInterpretationLLM,
@@ -52,10 +54,12 @@ from qinora.application.thread_matching import ThreadMatchingUseCase
 from qinora.infrastructure.email_dispatch import EmailIntakeDispatcher
 from qinora.infrastructure.llm import (
     OpenAICarrierOfferParsingLLM,
+    OpenAICustomerDetailsParsingLLM,
     OpenAIGraphExecutor,
     OpenAIQuoteReplyInterpretationLLM,
     OpenAIRequestParsingLLM,
     StubCarrierOfferParsingLLM,
+    StubCustomerDetailsParsingLLM,
     StubGraphExecutor,
     StubQuoteReplyInterpretationLLM,
     StubRequestParsingLLM,
@@ -141,6 +145,12 @@ def build_quote_reply_interpretation_llm(settings: Settings) -> QuoteReplyInterp
     if settings.llm_provider is LLMProvider.OPENAI:
         return OpenAIQuoteReplyInterpretationLLM(settings)
     return StubQuoteReplyInterpretationLLM()
+
+
+def build_customer_details_parsing_llm(settings: Settings) -> CustomerDetailsParsingLLM:
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAICustomerDetailsParsingLLM(settings)
+    return StubCustomerDetailsParsingLLM()
 
 
 def build_graph_executor(settings: Settings) -> GraphExecutor:
@@ -306,6 +316,15 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         customer_mailbox=settings.customer_mailbox,
     )
 
+    customer_onboarding_service = CustomerOnboardingService(
+        parsing_llm=build_customer_details_parsing_llm(settings),
+        customers=customer_import_service,
+        clarification_outbound=clarification_outbound_repository,
+        task_repository=task_repository,
+        agent_logs=SQLiteAgentLogWriteRepository(database),
+        agent_config=agent_config_service,
+        customer_mailbox=settings.customer_mailbox,
+    )
     email_intake_orchestrator = EmailIntakeOrchestrator(
         agent_config_service,
         contact_matching,
@@ -323,6 +342,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_mailbox=settings.carrier_mailbox,
         clarification_outbound=clarification_outbound_repository,
         customer_mailbox=settings.customer_mailbox,
+        customer_onboarding=customer_onboarding_service,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)
@@ -514,6 +534,15 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         customer_mailbox=settings.customer_mailbox,
     )
 
+    customer_onboarding_service = CustomerOnboardingService(
+        parsing_llm=build_customer_details_parsing_llm(settings),
+        customers=customer_import_service,
+        clarification_outbound=clarification_outbound_repository,
+        task_repository=task_repository,
+        agent_logs=PostgresAgentLogWriteRepository(database),
+        agent_config=agent_config_service,
+        customer_mailbox=settings.customer_mailbox,
+    )
     email_intake_orchestrator = EmailIntakeOrchestrator(
         agent_config_service,
         contact_matching,
@@ -531,6 +560,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_mailbox=settings.carrier_mailbox,
         clarification_outbound=clarification_outbound_repository,
         customer_mailbox=settings.customer_mailbox,
+        customer_onboarding=customer_onboarding_service,
     )
     dispatcher: AgentDispatcher = EmailIntakeDispatcher(email_intake_orchestrator)
     graph_executor = build_graph_executor(settings)

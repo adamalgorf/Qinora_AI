@@ -82,6 +82,23 @@ class QuoteReplyInterpretation:
 
 
 @dataclass(frozen=True)
+class ParsedCustomerDetails:
+    """Output of a CustomerDetailsParsingLLM implementation - the company
+    details a not-yet-known customer sent in reply to our request for them.
+    Every field is None when the thread doesn't state it.
+    """
+
+    provides_details: bool
+    company_name: str | None
+    org_number: str | None
+    address: str | None
+    contact_person: str | None
+    contact_email: str | None
+    contact_phone: str | None
+    confidence: float
+
+
+@dataclass(frozen=True)
 class RequestRecord:
     id: str
     public_id: str
@@ -255,6 +272,14 @@ class ContactRecord:
     customs_contact_name: str | None = None
     customs_contact_email: str | None = None
     annual_volume_estimate: float | None = None
+    # Company details from migrations/0015_customer_company_details.sql,
+    # collected by application/customer_onboarding.py when a new customer
+    # confirms an order.
+    org_number: str | None = None
+    contact_person: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    address: str | None = None
 
 
 @dataclass(frozen=True)

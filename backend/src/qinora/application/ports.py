@@ -22,6 +22,7 @@ from qinora.application.read_models import (
     OperationalTaskRecord,
     OutboundReplyRecord,
     ParsedCarrierOfferDraft,
+    ParsedCustomerDetails,
     ParsedTransportRequestDraft,
     QuoteDetailRecord,
     QuoteRecord,
@@ -181,6 +182,16 @@ class QuoteReplyInterpretationLLM(Protocol):
     """
 
     async def interpret(self, *, body_text: str) -> QuoteReplyInterpretation:
+        pass
+
+
+class CustomerDetailsParsingLLM(Protocol):
+    """Extracts a new customer's company details (name, org number, address,
+    contact person) from the email thread that followed our request for
+    them - the "Nora" agent's customer-onboarding step.
+    """
+
+    async def parse(self, *, raw_text: str) -> ParsedCustomerDetails:
         pass
 
 
