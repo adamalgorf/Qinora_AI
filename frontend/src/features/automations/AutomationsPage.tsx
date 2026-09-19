@@ -102,7 +102,6 @@ export function AutomationsPage() {
           </div>
           <DataTable
             columns={[
-              { key: "agent_key", label: "Workflow-ID", mono: true },
               { key: "agent_name", label: "Flödesnamn" },
               { key: "trigger", label: "Trigger" },
               { key: "scope", label: "Område / Kanal" },
