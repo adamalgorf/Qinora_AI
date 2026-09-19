@@ -102,7 +102,7 @@ export function AutomationsPage() {
           </div>
           <DataTable
             columns={[
-              { key: "agent_name", label: "Flödesnamn" },
+              { key: "agent_name", label: "Agent" },
               { key: "trigger", label: "Trigger" },
               { key: "scope", label: "Område / Kanal" },
               {
