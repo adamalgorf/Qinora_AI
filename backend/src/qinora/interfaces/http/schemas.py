@@ -235,6 +235,9 @@ class QuoteListItem(BaseModel):
     currency: str
     parent_quote_id: str | None = None
     request_id: str | None = None
+    customer: str | None = None
+    lane: str | None = None
+    carrier_name: str | None = None
 
 
 class QuoteLineItem(BaseModel):

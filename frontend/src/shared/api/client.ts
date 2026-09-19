@@ -133,6 +133,9 @@ export type QuoteListItem = {
   currency: string;
   parent_quote_id: string | null;
   request_id: string | null;
+  customer: string | null;
+  lane: string | null;
+  carrier_name: string | null;
 };
 
 export type QuoteLineItem = {

@@ -946,9 +946,28 @@ class SQLiteOperationalReadRepository:
             QuoteRecord(**dict(row))
             for row in self._fetch_all(
                 """
-                select id, status, version, customer_price, currency, parent_quote_id, request_id
-                from quotes
-                order by id
+                select
+                  q.id, q.status, q.version, q.customer_price, q.currency, q.parent_quote_id,
+                  q.request_id, tr.customer, tr.lane,
+                  coalesce(
+                    (
+                      select c.display_name
+                      from shipments s join carriers c on c.id = s.carrier_id
+                      where s.quote_id = q.id
+                      order by s.public_id desc
+                      limit 1
+                    ),
+                    (
+                      select c.display_name
+                      from carrier_rfqs r join carriers c on c.id = r.carrier_id
+                      where r.request_id = q.request_id and r.status = 'responded'
+                      order by r.responded_at
+                      limit 1
+                    )
+                  ) as carrier_name
+                from quotes q
+                left join transport_requests tr on tr.id = q.request_id
+                order by q.id
                 """
             )
         ]

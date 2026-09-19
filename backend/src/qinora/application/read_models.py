@@ -138,6 +138,13 @@ class QuoteRecord:
     currency: str
     parent_quote_id: str | None
     request_id: str | None = None
+    # Display context, filled in by list_quotes only: who ordered the
+    # transport, the lane, and which carrier runs it - the booked shipment's
+    # carrier if booked, else the carrier whose RFQ offer priced the quote.
+    # None when not known yet (e.g. rate-profile quote not booked yet).
+    customer: str | None = None
+    lane: str | None = None
+    carrier_name: str | None = None
 
 
 @dataclass(frozen=True)

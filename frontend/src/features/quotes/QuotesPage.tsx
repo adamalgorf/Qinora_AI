@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
 import { DataTable } from "@/features/modules/DataTable";
-import { apiGet, type CaseListItem, type QuoteListItem } from "@/shared/api/client";
+import { apiGet, type QuoteListItem } from "@/shared/api/client";
 
 export function QuotesPage() {
   const navigate = useNavigate();
@@ -18,30 +18,19 @@ export function QuotesPage() {
     queryKey: ["quotes"],
     queryFn: () => apiGet<QuoteListItem[]>("/quotes"),
   });
-  const casesQuery = useQuery({
-    queryKey: ["cases"],
-    queryFn: () => apiGet<CaseListItem[]>("/cases"),
-  });
-
-  const caseByRequestId = useMemo(() => {
-    const map = new Map<string, CaseListItem>();
-    for (const c of casesQuery.data ?? []) map.set(c.id, c);
-    return map;
-  }, [casesQuery.data]);
 
   const rows = useMemo(() => {
-    const quotes = query.data ?? [];
-    const withCustomer = quotes.map((quote) => ({
+    const quotes = (query.data ?? []).map((quote) => ({
       ...quote,
-      customer: quote.request_id ? (caseByRequestId.get(quote.request_id)?.customer ?? "—") : "—",
-      lane: quote.request_id ? (caseByRequestId.get(quote.request_id)?.lane ?? "—") : "—",
+      title: `${quote.customer ?? "Okänd kund"} → ${quote.carrier_name ?? "Transportör ej vald"}`,
+      lane: quote.lane ?? "—",
     }));
-    if (!search.trim()) return withCustomer;
+    if (!search.trim()) return quotes;
     const needle = search.trim().toLowerCase();
-    return withCustomer.filter(
-      (q) => q.customer.toLowerCase().includes(needle) || q.id.toLowerCase().includes(needle),
+    return quotes.filter(
+      (q) => q.title.toLowerCase().includes(needle) || q.id.toLowerCase().includes(needle),
     );
-  }, [query.data, caseByRequestId, search]);
+  }, [query.data, search]);
 
   const today = rows.length;
   const converted = rows.filter((r) => r.status === "accepted" || r.status === "converted").length;
@@ -61,7 +50,7 @@ export function QuotesPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Input
               className="max-w-sm"
-              placeholder="Sök efter kund eller offert-ID…"
+              placeholder="Sök efter kund eller transportör…"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -71,8 +60,7 @@ export function QuotesPage() {
           </div>
           <DataTable
             columns={[
-              { key: "id", label: "Offert-ID", mono: true },
-              { key: "customer", label: "Kund" },
+              { key: "title", label: "Kund → Transportör" },
               { key: "lane", label: "Rutt" },
               {
                 key: "customer_price",

@@ -286,15 +286,46 @@ class PostgresOperationalReadRepository:
                 customer_price=float(row["customer_price"]),
                 currency=row["currency"],
                 parent_quote_id=str(row["parent_quote_id"]) if row["parent_quote_id"] else None,
+                request_id=row["request_id"],
+                customer=row["customer"],
+                lane=(
+                    row["lane"] or _lane(row["origin"], row["destination"])
+                    if row["request_id"]
+                    else None
+                ),
+                carrier_name=row["carrier_name"],
             )
             for row in self._fetch_all(
                 """
                 select
-                    id, status, version, customer_price, currency, parent_quote_id,
-                    coalesce(request_id::text, request_id_text) as request_id
-                from public.quotes
-                where tenant_id = %s
-                order by public_id
+                    q.id, q.status, q.version, q.customer_price, q.currency, q.parent_quote_id,
+                    coalesce(q.request_id::text, q.request_id_text) as request_id,
+                    tr.customer, tr.lane, tr.origin, tr.destination,
+                    coalesce(shipment_carrier.name, rfq_carrier.name) as carrier_name
+                from public.quotes q
+                left join public.transport_requests tr
+                  on tr.tenant_id = q.tenant_id
+                 and tr.id::text = coalesce(q.request_id::text, q.request_id_text)
+                left join lateral (
+                    select coalesce(c.name, s.carrier) as name
+                    from public.shipments s
+                    left join public.carriers c on c.id = s.carrier_id
+                    where s.tenant_id = q.tenant_id and s.quote_id = q.id
+                    order by s.created_at desc
+                    limit 1
+                ) shipment_carrier on true
+                left join lateral (
+                    select c.name
+                    from public.carrier_rfqs r
+                    join public.carriers c on c.id = r.carrier_id
+                    where r.tenant_id = q.tenant_id
+                      and r.request_id::text = coalesce(q.request_id::text, q.request_id_text)
+                      and r.status = 'responded'
+                    order by r.responded_at
+                    limit 1
+                ) rfq_carrier on true
+                where q.tenant_id = %s
+                order by q.public_id
                 """,
                 (self._database.tenant_id,),
             )
