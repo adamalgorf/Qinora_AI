@@ -8,14 +8,15 @@ unparsed text. OpenAIRequestParsingLLM is the real thing.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from qinora.application.agent_registry import NORA
 from qinora.application.read_models import ParsedCargoLine, ParsedTransportRequestDraft
-from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, require_openai_api_key
-from qinora.infrastructure.settings import Settings
+from qinora.infrastructure.llm.openai_client import KnowledgeGroundedLLM
 
 SYSTEM_PROMPT = """You are Nora, a transport-request parsing assistant for the \
 Qinora logistics platform. You read the full text of an email thread (which may \
@@ -115,20 +116,16 @@ class StubRequestParsingLLM:
         )
 
 
-class OpenAIRequestParsingLLM:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
+class OpenAIRequestParsingLLM(KnowledgeGroundedLLM):
+    agent_key = NORA.key
 
     async def parse(self, *, raw_text: str) -> ParsedTransportRequestDraft:
-        client = OpenAIStructuredClient(
-            require_openai_api_key(self._settings), self._settings.openai_model
-        )
-        result = await client.complete(
+        result, brief = await self._complete(
             system_prompt=SYSTEM_PROMPT,
             user_text=raw_text,
             schema=_TransportRequestSchema,
         )
-        return _to_draft(result)
+        return replace(_to_draft(result), consulted_documents=brief.document_titles)
 
 
 def _to_draft(schema: _TransportRequestSchema) -> ParsedTransportRequestDraft:

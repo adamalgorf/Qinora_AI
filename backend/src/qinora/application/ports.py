@@ -1,3 +1,4 @@
+from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING, Protocol
 
 from qinora.application.read_models import (
@@ -19,6 +20,10 @@ from qinora.application.read_models import (
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
+    KnowledgeChunkInput,
+    KnowledgeChunkRecord,
+    KnowledgeDocumentDetailRecord,
+    KnowledgeDocumentRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
     ParsedCarrierOfferDraft,
@@ -308,6 +313,57 @@ class DocumentRepository(Protocol):
         contact_id: str | None = None,
         uploaded_by: str | None = None,
     ) -> DocumentRecord:
+        pass
+
+
+class KnowledgeRepository(Protocol):
+    """The knowledge base the agents read before acting
+    (migrations/0016_knowledge_base.sql, application/knowledge.py).
+    """
+
+    async def create_document(
+        self,
+        *,
+        title: str,
+        domain: str,
+        source_filename: str | None,
+        text: str,
+        chunks: Sequence[KnowledgeChunkInput],
+        uploaded_by: str | None,
+    ) -> KnowledgeDocumentRecord:
+        pass
+
+    async def list_documents(self) -> list[KnowledgeDocumentRecord]:
+        pass
+
+    async def get_document(self, document_id: str) -> KnowledgeDocumentDetailRecord | None:
+        pass
+
+    async def delete_document(self, document_id: str) -> bool:
+        pass
+
+    async def list_chunks(self, domains: Collection[str]) -> list[KnowledgeChunkRecord]:
+        pass
+
+    async def revision(self) -> str:
+        """A cheap marker that changes whenever documents are added or
+        removed - lets retrieval cache chunks between agent calls."""
+        pass
+
+
+class TextEmbedder(Protocol):
+    """Turns text into embedding vectors for semantic retrieval. Returns
+    None when embeddings aren't available (no LLM configured, or the call
+    failed) - retrieval then falls back to keyword matching."""
+
+    async def embed(self, texts: Sequence[str]) -> list[list[float]] | None:
+        pass
+
+
+class DocumentTextExtractor(Protocol):
+    """Pulls plain text out of an uploaded knowledge file (txt/md/csv/pdf)."""
+
+    def extract(self, *, filename: str, content: bytes) -> str:
         pass
 
 

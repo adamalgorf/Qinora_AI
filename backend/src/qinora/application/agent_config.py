@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from qinora.application.agent_registry import AGENTS
 from qinora.application.ports import AgentConfigRepository
 from qinora.application.read_models import AgentConfigRecord
 
@@ -21,12 +22,18 @@ class DefaultAgentConfig:
 
 # Every other business step (matching, pricing, booking, dispatch, invoice
 # audit) is deterministic code, not an LLM call, so it doesn't get a config
-# row here - there's nothing to gate. Only the 3 steps that actually read
-# unstructured human text get a real agent with a confidence threshold.
-DEFAULT_AGENT_CONFIGS = (
-    DefaultAgentConfig("request_parsing_agent", "Nora", AgentAutoMode.GUARDED_AUTO, 0.74),
-    DefaultAgentConfig("carrier_offer_agent", "Quinn", AgentAutoMode.GUARDED_AUTO, 0.7),
-    DefaultAgentConfig("quote_response_agent", "Orion", AgentAutoMode.GUARDED_AUTO, 0.7),
+# row here - there's nothing to gate. Only the agent roles that actually read
+# unstructured human text get a config with a confidence threshold - one row
+# per AgentDefinition in application/agent_registry.py, the one place agents
+# are defined.
+DEFAULT_AGENT_CONFIGS = tuple(
+    DefaultAgentConfig(
+        agent.key,
+        agent.name,
+        AgentAutoMode(agent.default_auto_mode),
+        agent.default_min_confidence,
+    )
+    for agent in AGENTS
 )
 
 # Names used before the agents were aligned with qinora.se (Nora = intake &

@@ -729,3 +729,62 @@ class AnalyticsSummaryResponse(BaseModel):
     kpis: list[AnalyticsKpiItem]
     workload_by_weekday: list[WorkloadByWeekdayItem]
     top_exception_categories: list[ExceptionCategoryItem]
+
+
+class KnowledgeAgentItem(BaseModel):
+    key: str
+    name: str
+    role: str
+    domains: list[str]
+
+
+class KnowledgeDomainItem(BaseModel):
+    key: str
+    label: str
+    description: str
+    agents: list[str]
+    document_count: int
+
+
+class KnowledgeOverviewResponse(BaseModel):
+    domains: list[KnowledgeDomainItem]
+    agents: list[KnowledgeAgentItem]
+
+
+class KnowledgeDocumentItem(BaseModel):
+    id: str
+    public_id: str
+    title: str
+    domain: str
+    domain_label: str
+    read_by: list[str]
+    source_filename: str | None
+    char_count: int
+    chunk_count: int
+    embedded: bool
+    uploaded_by: str | None
+    created_at: str
+
+
+class KnowledgeDocumentDetailResponse(BaseModel):
+    document: KnowledgeDocumentItem
+    text: str
+
+
+class KnowledgePreviewRequest(BaseModel):
+    agent_key: str
+    text: str = Field(min_length=1, max_length=20_000)
+
+
+class KnowledgeSnippetItem(BaseModel):
+    document_id: str
+    title: str
+    domain: str
+    domain_label: str
+    text: str
+    score: float
+
+
+class KnowledgePreviewResponse(BaseModel):
+    agent: KnowledgeAgentItem
+    snippets: list[KnowledgeSnippetItem]

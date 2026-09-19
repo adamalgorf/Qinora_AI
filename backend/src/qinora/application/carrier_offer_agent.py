@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
 from qinora.application.agent_config import AgentConfigService, should_auto_act
+from qinora.application.agent_registry import QUINN
+from qinora.application.knowledge import with_consulted_documents
 from qinora.application.ports import (
     AgentLogWriteRepository,
     CarrierOfferParsingLLM,
@@ -12,8 +14,8 @@ from qinora.application.read_models import (
     ParsedCarrierOfferDraft,
 )
 
-AGENT_KEY = "carrier_offer_agent"
-AGENT_NAME = "Quinn"
+AGENT_KEY = QUINN.key
+AGENT_NAME = QUINN.name
 
 
 @dataclass(frozen=True)
@@ -86,7 +88,7 @@ class CarrierOfferParsingAgent:
         agent_log = await self._agent_logs.record(
             agent_key=AGENT_KEY,
             agent_name=AGENT_NAME,
-            step=step,
+            step=with_consulted_documents(step, draft.consulted_documents),
             entity_id=entity_id,
             confidence=draft.confidence,
         )

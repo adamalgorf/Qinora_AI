@@ -468,6 +468,58 @@ export type AnalyticsSummaryResponse = {
 const AUTH_TOKEN_KEY = "qinora.authToken";
 const LAST_EMAIL_KEY = "qinora.lastLoginEmail";
 
+export type KnowledgeAgent = {
+  key: string;
+  name: string;
+  role: string;
+  domains: string[];
+};
+
+export type KnowledgeDomain = {
+  key: string;
+  label: string;
+  description: string;
+  agents: string[];
+  document_count: number;
+};
+
+export type KnowledgeOverview = {
+  domains: KnowledgeDomain[];
+  agents: KnowledgeAgent[];
+};
+
+export type KnowledgeDocumentItem = {
+  id: string;
+  public_id: string;
+  title: string;
+  domain: string;
+  domain_label: string;
+  read_by: string[];
+  source_filename: string | null;
+  char_count: number;
+  chunk_count: number;
+  embedded: boolean;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type KnowledgeDocumentDetail = {
+  document: KnowledgeDocumentItem;
+  text: string;
+};
+
+export type KnowledgePreviewResponse = {
+  agent: KnowledgeAgent;
+  snippets: Array<{
+    document_id: string;
+    title: string;
+    domain: string;
+    domain_label: string;
+    text: string;
+    score: number;
+  }>;
+};
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -574,6 +626,17 @@ export async function apiUpload<TResponse>(path: string, formData: FormData): Pr
   }
 
   return (await response.json()) as TResponse;
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: jsonHeaders(),
+  });
+
+  if (!response.ok) {
+    throw await toApiProblem(response);
+  }
 }
 
 /** Fetches a file with the user's auth token and saves it via the browser. */

@@ -30,6 +30,8 @@ class Settings:
     default_markup_percent: float
     customer_mailbox: str | None
     carrier_mailbox: str | None
+    # Used to rank knowledge-base excerpts (application/knowledge.py).
+    openai_embedding_model: str = "text-embedding-3-small"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -68,6 +70,9 @@ class Settings:
             # means "any bridge instance may send it".
             customer_mailbox=os.getenv("QINORA_CUSTOMER_MAILBOX") or None,
             carrier_mailbox=os.getenv("QINORA_CARRIER_MAILBOX") or None,
+            openai_embedding_model=os.getenv(
+                "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
+            ),
         )
 
 

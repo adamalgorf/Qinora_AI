@@ -1,5 +1,7 @@
 import secrets
+from collections.abc import Collection, Sequence
 from typing import Any
+from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
@@ -26,6 +28,10 @@ from qinora.application.read_models import (
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
+    KnowledgeChunkInput,
+    KnowledgeChunkRecord,
+    KnowledgeDocumentDetailRecord,
+    KnowledgeDocumentRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteAcceptanceEventRecord,
@@ -52,6 +58,7 @@ from qinora.domain import (
     assert_shipment_transition,
     next_quote_revision,
 )
+from qinora.infrastructure.knowledge_text import knowledge_revision
 
 
 class PostgresDatabase:
@@ -962,6 +969,190 @@ class PostgresDocumentRepository:
             )
             row = cursor.fetchone()
         return _document_from_postgres_row(row)
+
+
+class PostgresKnowledgeRepository:
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._database = database
+
+    async def create_document(
+        self,
+        *,
+        title: str,
+        domain: str,
+        source_filename: str | None,
+        text: str,
+        chunks: Sequence[KnowledgeChunkInput],
+        uploaded_by: str | None,
+    ) -> KnowledgeDocumentRecord:
+        tenant_id = self._database.tenant_id
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            # max()+1 rather than _next_public_id's count()+1: knowledge
+            # documents get deleted, and a count-based id would then collide.
+            cursor.execute(
+                """
+                select coalesce(max(substring(public_id from 4)::int), 0) + 1 as sequence
+                from public.knowledge_documents
+                where tenant_id = %s
+                """,
+                (tenant_id,),
+            )
+            sequence = int(cursor.fetchone()["sequence"])
+            cursor.execute(
+                """
+                insert into public.knowledge_documents
+                  (tenant_id, public_id, title, domain, source_filename, body_text, uploaded_by)
+                values (%s, %s, %s, %s, %s, %s, %s)
+                returning id
+                """,
+                (
+                    tenant_id,
+                    f"KB-{sequence:04d}",
+                    title,
+                    domain,
+                    source_filename,
+                    text,
+                    uploaded_by,
+                ),
+            )
+            document_id = str(cursor.fetchone()["id"])
+            cursor.executemany(
+                """
+                insert into public.knowledge_chunks
+                  (tenant_id, document_id, ordinal, body_text, embedding)
+                values (%s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        tenant_id,
+                        document_id,
+                        chunk.ordinal,
+                        chunk.text,
+                        list(chunk.embedding) if chunk.embedding else None,
+                    )
+                    for chunk in chunks
+                ],
+            )
+            cursor.execute(
+                _PG_KNOWLEDGE_DOCUMENT_BY_ID,
+                (tenant_id, document_id),
+            )
+            row = cursor.fetchone()
+        return _pg_knowledge_document_from_row(row)
+
+    async def list_documents(self) -> list[KnowledgeDocumentRecord]:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                _PG_KNOWLEDGE_DOCUMENT_SELECT
+                + " where d.tenant_id = %s group by d.id order by d.created_at desc",
+                (self._database.tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return [_pg_knowledge_document_from_row(row) for row in rows]
+
+    async def get_document(self, document_id: str) -> KnowledgeDocumentDetailRecord | None:
+        if not _is_uuid(document_id):
+            return None
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                _PG_KNOWLEDGE_DOCUMENT_BY_ID,
+                (self._database.tenant_id, document_id),
+            )
+            row = cursor.fetchone()
+            cursor.execute(
+                "select body_text from public.knowledge_documents where tenant_id = %s and id = %s",
+                (self._database.tenant_id, document_id),
+            )
+            text = cursor.fetchone()
+        if row is None or text is None:
+            return None
+        return KnowledgeDocumentDetailRecord(
+            document=_pg_knowledge_document_from_row(row), text=text["body_text"]
+        )
+
+    async def delete_document(self, document_id: str) -> bool:
+        if not _is_uuid(document_id):
+            return False
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "delete from public.knowledge_documents where tenant_id = %s and id = %s",
+                (self._database.tenant_id, document_id),
+            )
+            return cursor.rowcount > 0
+
+    async def list_chunks(self, domains: Collection[str]) -> list[KnowledgeChunkRecord]:
+        if not domains:
+            return []
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select c.document_id, d.title, d.domain, c.ordinal, c.body_text, c.embedding
+                from public.knowledge_chunks c
+                join public.knowledge_documents d on d.id = c.document_id
+                where d.tenant_id = %s and d.domain = any(%s)
+                order by d.created_at, d.public_id, c.ordinal
+                """,
+                (self._database.tenant_id, list(domains)),
+            )
+            rows = cursor.fetchall()
+        return [
+            KnowledgeChunkRecord(
+                document_id=str(row["document_id"]),
+                document_title=row["title"],
+                domain=row["domain"],
+                ordinal=row["ordinal"],
+                text=row["body_text"],
+                embedding=tuple(row["embedding"]) if row["embedding"] else None,
+            )
+            for row in rows
+        ]
+
+    async def revision(self) -> str:
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "select id from public.knowledge_documents where tenant_id = %s order by id",
+                (self._database.tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return knowledge_revision(str(row["id"]) for row in rows)
+
+
+_PG_KNOWLEDGE_DOCUMENT_SELECT = """
+    select d.id, d.public_id, d.title, d.domain, d.source_filename,
+      length(d.body_text) as char_count, count(c.id) as chunk_count,
+      coalesce(bool_or(c.embedding is not null), false) as embedded,
+      d.uploaded_by, d.created_at
+    from public.knowledge_documents d
+    left join public.knowledge_chunks c on c.document_id = d.id
+"""
+
+
+_PG_KNOWLEDGE_DOCUMENT_BY_ID = (
+    _PG_KNOWLEDGE_DOCUMENT_SELECT + " where d.tenant_id = %s and d.id = %s group by d.id"
+)
+
+
+def _pg_knowledge_document_from_row(row: dict[str, Any]) -> KnowledgeDocumentRecord:
+    return KnowledgeDocumentRecord(
+        id=str(row["id"]),
+        public_id=row["public_id"],
+        title=row["title"],
+        domain=row["domain"],
+        source_filename=row["source_filename"],
+        char_count=int(row["char_count"] or 0),
+        chunk_count=int(row["chunk_count"] or 0),
+        embedded=bool(row["embedded"]),
+        uploaded_by=row["uploaded_by"],
+        created_at=str(row["created_at"]),
+    )
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 class PostgresCaseNoteRepository:

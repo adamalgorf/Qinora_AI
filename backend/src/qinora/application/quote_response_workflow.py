@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 
 from qinora.application.agent_config import AgentConfigService, should_auto_act
+from qinora.application.agent_registry import ORION
 from qinora.application.booking_workflow import BookingResult, BookingWorkflow, BookQuoteCommand
+from qinora.application.knowledge import with_consulted_documents
 from qinora.application.ports import (
     AgentLogWriteRepository,
     QuoteReplyInterpretationLLM,
@@ -10,8 +12,8 @@ from qinora.application.ports import (
 )
 from qinora.application.read_models import QuoteRecord, QuoteReplyIntent, QuoteResponseEventRecord
 
-AGENT_KEY = "quote_response_agent"
-AGENT_NAME = "Orion"
+AGENT_KEY = ORION.key
+AGENT_NAME = ORION.name
 
 
 @dataclass(frozen=True)
@@ -71,10 +73,13 @@ class QuoteResponseWorkflow:
         await self._agent_logs.record(
             agent_key=AGENT_KEY,
             agent_name=AGENT_NAME,
-            step=(
-                f"Interpreted quote {command.quote_id} reply as {intent.value}"
-                if not needs_review
-                else f"Low-confidence reply for quote {command.quote_id}, flagged for review"
+            step=with_consulted_documents(
+                (
+                    f"Interpreted quote {command.quote_id} reply as {intent.value}"
+                    if not needs_review
+                    else f"Low-confidence reply for quote {command.quote_id}, flagged for review"
+                ),
+                interpretation.consulted_documents,
             ),
             entity_id=command.quote_id,
             confidence=interpretation.confidence,

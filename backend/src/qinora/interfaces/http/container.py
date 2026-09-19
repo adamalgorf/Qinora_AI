@@ -29,6 +29,7 @@ from qinora.application import (
 from qinora.application.customer_import import CustomerImportService
 from qinora.application.customer_onboarding import CustomerOnboardingService
 from qinora.application.email_intake_orchestrator import EmailIntakeOrchestrator
+from qinora.application.knowledge import AgentKnowledge, KnowledgeBaseService
 from qinora.application.llm_ports import GraphExecutor
 from qinora.application.ports import (
     AgentDispatcher,
@@ -47,11 +48,13 @@ from qinora.application.ports import (
     RequestParsingLLM,
     RequestWriteRepository,
     ShipmentWriteRepository,
+    TextEmbedder,
     UserRepository,
 )
 from qinora.application.pricing_engine import PricingEngine
 from qinora.application.thread_matching import ThreadMatchingUseCase
 from qinora.infrastructure.email_dispatch import EmailIntakeDispatcher
+from qinora.infrastructure.knowledge_text import PlainTextAndPdfExtractor
 from qinora.infrastructure.llm import (
     OpenAICarrierOfferParsingLLM,
     OpenAICustomerDetailsParsingLLM,
@@ -64,6 +67,7 @@ from qinora.infrastructure.llm import (
     StubQuoteReplyInterpretationLLM,
     StubRequestParsingLLM,
 )
+from qinora.infrastructure.llm.embeddings import OpenAITextEmbedder, StubTextEmbedder
 from qinora.infrastructure.migrations import iter_migration_files, run_migrations
 from qinora.infrastructure.outbound_mailer import RecordingOutboundMailer
 from qinora.infrastructure.postgres import (
@@ -83,6 +87,7 @@ from qinora.infrastructure.postgres import (
     PostgresEmailThreadRepository,
     PostgresInboundEmailRepository,
     PostgresInvoiceWriteRepository,
+    PostgresKnowledgeRepository,
     PostgresOperationalReadRepository,
     PostgresOperationalTaskWriteRepository,
     PostgresOutboundReplyRepository,
@@ -114,6 +119,7 @@ from qinora.infrastructure.sqlite import (
     SQLiteEmailThreadRepository,
     SQLiteInboundEmailRepository,
     SQLiteInvoiceWriteRepository,
+    SQLiteKnowledgeRepository,
     SQLiteOperationalReadRepository,
     SQLiteOperationalTaskWriteRepository,
     SQLiteOutboundReplyRepository,
@@ -129,28 +135,42 @@ from qinora.infrastructure.sqlite import (
 )
 
 
-def build_request_parsing_llm(settings: Settings) -> RequestParsingLLM:
+def build_request_parsing_llm(
+    settings: Settings, knowledge: AgentKnowledge | None = None
+) -> RequestParsingLLM:
     if settings.llm_provider is LLMProvider.OPENAI:
-        return OpenAIRequestParsingLLM(settings)
+        return OpenAIRequestParsingLLM(settings, knowledge)
     return StubRequestParsingLLM()
 
 
-def build_carrier_offer_parsing_llm(settings: Settings) -> CarrierOfferParsingLLM:
+def build_carrier_offer_parsing_llm(
+    settings: Settings, knowledge: AgentKnowledge | None = None
+) -> CarrierOfferParsingLLM:
     if settings.llm_provider is LLMProvider.OPENAI:
-        return OpenAICarrierOfferParsingLLM(settings)
+        return OpenAICarrierOfferParsingLLM(settings, knowledge)
     return StubCarrierOfferParsingLLM()
 
 
-def build_quote_reply_interpretation_llm(settings: Settings) -> QuoteReplyInterpretationLLM:
+def build_quote_reply_interpretation_llm(
+    settings: Settings, knowledge: AgentKnowledge | None = None
+) -> QuoteReplyInterpretationLLM:
     if settings.llm_provider is LLMProvider.OPENAI:
-        return OpenAIQuoteReplyInterpretationLLM(settings)
+        return OpenAIQuoteReplyInterpretationLLM(settings, knowledge)
     return StubQuoteReplyInterpretationLLM()
 
 
-def build_customer_details_parsing_llm(settings: Settings) -> CustomerDetailsParsingLLM:
+def build_customer_details_parsing_llm(
+    settings: Settings, knowledge: AgentKnowledge | None = None
+) -> CustomerDetailsParsingLLM:
     if settings.llm_provider is LLMProvider.OPENAI:
-        return OpenAICustomerDetailsParsingLLM(settings)
+        return OpenAICustomerDetailsParsingLLM(settings, knowledge)
     return StubCustomerDetailsParsingLLM()
+
+
+def build_text_embedder(settings: Settings) -> TextEmbedder:
+    if settings.llm_provider is LLMProvider.OPENAI:
+        return OpenAITextEmbedder(settings)
+    return StubTextEmbedder()
 
 
 def build_graph_executor(settings: Settings) -> GraphExecutor:
@@ -202,6 +222,8 @@ class AppContainer:
     case_note_repository: CaseNoteRepository
     case_notes_service: CaseNotesService
     user_repository: UserRepository
+    knowledge_base_service: KnowledgeBaseService
+    agent_knowledge: AgentKnowledge
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -213,6 +235,12 @@ def build_container(settings: Settings | None = None) -> AppContainer:
 
 def _build_sqlite_container(settings: Settings) -> AppContainer:
     database = SQLiteDatabase(settings.sqlite_path)
+    text_embedder = build_text_embedder(settings)
+    knowledge_repository = SQLiteKnowledgeRepository(database)
+    agent_knowledge = AgentKnowledge(knowledge_repository, text_embedder)
+    knowledge_base_service = KnowledgeBaseService(
+        knowledge_repository, PlainTextAndPdfExtractor(), text_embedder
+    )
     outbound_mailer = RecordingOutboundMailer()
     agent_config_service = AgentConfigService(SQLiteAgentConfigRepository(database))
     operational_queries = OperationalQueries(SQLiteOperationalReadRepository(database))
@@ -287,7 +315,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     )
 
     request_parsing_agent = RequestParsingAgent(
-        build_request_parsing_llm(settings),
+        build_request_parsing_llm(settings, agent_knowledge),
         create_request,
         agent_log_repository,
         agent_config_service,
@@ -297,7 +325,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         customer_mailbox=settings.customer_mailbox,
     )
     carrier_offer_agent = CarrierOfferParsingAgent(
-        build_carrier_offer_parsing_llm(settings),
+        build_carrier_offer_parsing_llm(settings, agent_knowledge),
         carrier_offer_repository,
         agent_log_repository,
         agent_config_service,
@@ -317,7 +345,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
     )
 
     customer_onboarding_service = CustomerOnboardingService(
-        parsing_llm=build_customer_details_parsing_llm(settings),
+        parsing_llm=build_customer_details_parsing_llm(settings, agent_knowledge),
         customers=customer_import_service,
         clarification_outbound=clarification_outbound_repository,
         task_repository=task_repository,
@@ -338,7 +366,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         carrier_offer_agent,
         carrier_rfq_collector,
-        build_quote_reply_interpretation_llm(settings),
+        build_quote_reply_interpretation_llm(settings, agent_knowledge),
         carrier_mailbox=settings.carrier_mailbox,
         clarification_outbound=clarification_outbound_repository,
         customer_mailbox=settings.customer_mailbox,
@@ -380,7 +408,7 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
             quote_repository,
             quote_response_repository,
             booking_workflow,
-            build_quote_reply_interpretation_llm(settings),
+            build_quote_reply_interpretation_llm(settings, agent_knowledge),
             agent_log_repository,
             agent_config_service,
         ),
@@ -421,6 +449,8 @@ def _build_sqlite_container(settings: Settings) -> AppContainer:
         case_note_repository=case_note_repository,
         case_notes_service=case_notes_service,
         user_repository=SQLiteUserRepository(database),
+        knowledge_base_service=knowledge_base_service,
+        agent_knowledge=agent_knowledge,
     )
 
 
@@ -431,6 +461,12 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     run_migrations(settings.database_url, iter_migration_files(Path("migrations")))
 
     database = PostgresDatabase(settings.database_url, settings.postgres_tenant_id)
+    text_embedder = build_text_embedder(settings)
+    knowledge_repository = PostgresKnowledgeRepository(database)
+    agent_knowledge = AgentKnowledge(knowledge_repository, text_embedder)
+    knowledge_base_service = KnowledgeBaseService(
+        knowledge_repository, PlainTextAndPdfExtractor(), text_embedder
+    )
     outbound_mailer = RecordingOutboundMailer()
     agent_config_service = AgentConfigService(PostgresAgentConfigRepository(database))
     operational_queries = OperationalQueries(PostgresOperationalReadRepository(database))
@@ -505,7 +541,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     )
 
     request_parsing_agent = RequestParsingAgent(
-        build_request_parsing_llm(settings),
+        build_request_parsing_llm(settings, agent_knowledge),
         create_request,
         agent_log_repository,
         agent_config_service,
@@ -515,7 +551,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         customer_mailbox=settings.customer_mailbox,
     )
     carrier_offer_agent = CarrierOfferParsingAgent(
-        build_carrier_offer_parsing_llm(settings),
+        build_carrier_offer_parsing_llm(settings, agent_knowledge),
         carrier_offer_repository,
         agent_log_repository,
         agent_config_service,
@@ -535,7 +571,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
     )
 
     customer_onboarding_service = CustomerOnboardingService(
-        parsing_llm=build_customer_details_parsing_llm(settings),
+        parsing_llm=build_customer_details_parsing_llm(settings, agent_knowledge),
         customers=customer_import_service,
         clarification_outbound=clarification_outbound_repository,
         task_repository=task_repository,
@@ -556,7 +592,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         carrier_rfq_repository,
         carrier_offer_agent,
         carrier_rfq_collector,
-        build_quote_reply_interpretation_llm(settings),
+        build_quote_reply_interpretation_llm(settings, agent_knowledge),
         carrier_mailbox=settings.carrier_mailbox,
         clarification_outbound=clarification_outbound_repository,
         customer_mailbox=settings.customer_mailbox,
@@ -598,7 +634,7 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
             quote_repository,
             quote_response_repository,
             booking_workflow,
-            build_quote_reply_interpretation_llm(settings),
+            build_quote_reply_interpretation_llm(settings, agent_knowledge),
             agent_log_repository,
             agent_config_service,
         ),
@@ -639,4 +675,6 @@ def _build_postgres_container(settings: Settings) -> AppContainer:
         case_note_repository=case_note_repository,
         case_notes_service=case_notes_service,
         user_repository=PostgresUserRepository(database),
+        knowledge_base_service=knowledge_base_service,
+        agent_knowledge=agent_knowledge,
     )

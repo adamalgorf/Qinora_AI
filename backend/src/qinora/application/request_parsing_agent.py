@@ -5,7 +5,9 @@ from qinora.application.agent_config import (
     is_agent_enabled_for_auto,
     should_auto_act,
 )
+from qinora.application.agent_registry import NORA
 from qinora.application.greeting import greeting
+from qinora.application.knowledge import with_consulted_documents
 from qinora.application.ports import (
     AgentLogWriteRepository,
     ClarificationOutboundRepository,
@@ -28,8 +30,8 @@ from qinora.application.request_intake import (
 )
 from qinora.domain.transport_request import DEFAULT_REQUIRED_FIELDS, RequestValidationIssue
 
-AGENT_KEY = "request_parsing_agent"
-AGENT_NAME = "Nora"
+AGENT_KEY = NORA.key
+AGENT_NAME = NORA.name
 
 # Swedish labels for the exact field names Nora's own missing_fields list
 # uses (see infrastructure/llm/request_parsing.py's SYSTEM_PROMPT) - shown to
@@ -218,7 +220,7 @@ class RequestParsingAgent:
         agent_log = await self._agent_logs.record(
             agent_key=AGENT_KEY,
             agent_name=AGENT_NAME,
-            step=step,
+            step=with_consulted_documents(step, draft.consulted_documents),
             entity_id=entity_id,
             confidence=draft.confidence,
         )

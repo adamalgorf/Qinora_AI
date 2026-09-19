@@ -9,11 +9,17 @@ what keeps token usage, and therefore cost, low.
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from qinora.application.knowledge import (
+    EMPTY_BRIEF,
+    AgentKnowledge,
+    KnowledgeBrief,
+    compose_system_prompt,
+)
 from qinora.infrastructure.settings import Settings
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
@@ -56,3 +62,40 @@ class OpenAIStructuredClient:
         if parsed is None:
             raise RuntimeError("OpenAI response did not include parsed structured output")
         return parsed
+
+
+class KnowledgeGroundedLLM:
+    """Base class for every agent's OpenAI adapter.
+
+    Before each call it reads the agent's knowledge-base domains
+    (application/agent_registry.py -> application/knowledge.py) and adds
+    the relevant excerpts to the system prompt. Doing it here - the one
+    place every agent talks to the model - means no call site can skip it,
+    and a new agent gets it by subclassing and setting agent_key.
+    """
+
+    agent_key: ClassVar[str]
+
+    def __init__(self, settings: Settings, knowledge: AgentKnowledge | None = None) -> None:
+        self._settings = settings
+        self._knowledge = knowledge
+
+    async def _complete(
+        self,
+        *,
+        system_prompt: str,
+        user_text: str,
+        schema: type[SchemaT],
+    ) -> tuple[SchemaT, KnowledgeBrief]:
+        brief = EMPTY_BRIEF
+        if self._knowledge is not None:
+            brief = await self._knowledge.brief_for(self.agent_key, user_text)
+        client = OpenAIStructuredClient(
+            require_openai_api_key(self._settings), self._settings.openai_model
+        )
+        result = await client.complete(
+            system_prompt=compose_system_prompt(system_prompt, brief),
+            user_text=user_text,
+            schema=schema,
+        )
+        return result, brief

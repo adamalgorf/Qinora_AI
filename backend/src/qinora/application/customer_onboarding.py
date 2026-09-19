@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from qinora.application.agent_config import AgentConfigService, should_auto_act
+from qinora.application.agent_registry import NORA
 from qinora.application.customer_import import (
     CustomerImportService,
     CustomerInput,
@@ -31,6 +32,7 @@ from qinora.application.customer_import import (
     DuplicateCustomerError,
 )
 from qinora.application.greeting import greeting
+from qinora.application.knowledge import with_consulted_documents
 from qinora.application.ports import (
     AgentLogWriteRepository,
     ClarificationOutboundRepository,
@@ -44,10 +46,10 @@ from qinora.application.read_models import (
 )
 
 AGENT_KEY = "customer_onboarding_agent"
-AGENT_NAME = "Nora"
+AGENT_NAME = NORA.name
 # Nora's own agent config (auto_mode / min_confidence) governs whether a
 # parsed reply is trusted enough to register a customer without a human.
-NORA_CONFIG_KEY = "request_parsing_agent"
+NORA_CONFIG_KEY = NORA.key
 
 ACCEPTED_CLASSIFICATION = "accepted"
 
@@ -141,7 +143,11 @@ class CustomerOnboardingService:
             await self._ask_for_missing(email, missing)
             await self._log(
                 email,
-                f"Kunduppgifter från {email.sender} ofullständiga - saknar {', '.join(missing)}",
+                with_consulted_documents(
+                    f"Kunduppgifter från {email.sender} ofullständiga - "
+                    f"saknar {', '.join(missing)}",
+                    parsed.consulted_documents,
+                ),
                 parsed.confidence,
             )
             return OnboardingOutcome("incomplete")
@@ -165,7 +171,10 @@ class CustomerOnboardingService:
         await self._agent_logs.record(
             agent_key=AGENT_KEY,
             agent_name=AGENT_NAME,
-            step=f"Registrerade ny kund {contact.display_name} ({contact.org_number})",
+            step=with_consulted_documents(
+                f"Registrerade ny kund {contact.display_name} ({contact.org_number})",
+                parsed.consulted_documents,
+            ),
             entity_id=contact.public_id,
             confidence=parsed.confidence,
         )

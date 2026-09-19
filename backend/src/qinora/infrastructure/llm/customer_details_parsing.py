@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from qinora.application.agent_registry import NORA
 from qinora.application.read_models import ParsedCustomerDetails
-from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, require_openai_api_key
-from qinora.infrastructure.settings import Settings
+from qinora.infrastructure.llm.openai_client import KnowledgeGroundedLLM
 
 SYSTEM_PROMPT = """You are Nora, an assistant for the Qinora logistics platform. A new \
 customer has just confirmed a transport order by email, and we asked them to send \
@@ -79,15 +79,11 @@ class StubCustomerDetailsParsingLLM:
         )
 
 
-class OpenAICustomerDetailsParsingLLM:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
+class OpenAICustomerDetailsParsingLLM(KnowledgeGroundedLLM):
+    agent_key = NORA.key
 
     async def parse(self, *, raw_text: str) -> ParsedCustomerDetails:
-        client = OpenAIStructuredClient(
-            require_openai_api_key(self._settings), self._settings.openai_model
-        )
-        result = await client.complete(
+        result, brief = await self._complete(
             system_prompt=SYSTEM_PROMPT,
             user_text=raw_text,
             schema=_CustomerDetailsSchema,
@@ -101,6 +97,7 @@ class OpenAICustomerDetailsParsingLLM:
             contact_email=_blank_to_none(result.contact_email),
             contact_phone=_blank_to_none(result.contact_phone),
             confidence=result.confidence,
+            consulted_documents=brief.document_titles,
         )
 
 

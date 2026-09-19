@@ -23,6 +23,20 @@ A separate RFQ-analysis graph (`POST /rfq/analyze`) uses the same OpenAI client.
 enabled/disabled, switched between manual / assisted / guarded-auto mode and given
 a minimum confidence threshold from the **Automationer** page.
 
+Agents are defined in one place, `application/agent_registry.py`: each role's config key, default
+auto mode and the knowledge areas it reads. Adding an agent means adding a registry entry plus an
+LLM adapter that subclasses `KnowledgeGroundedLLM`.
+
+**Knowledge base (Dokument → Kunskapsbank).** Staff add reference material (customers, routes,
+carriers, terms, procedures, general) as pasted text or `.txt/.md/.csv/.pdf` files. Before every
+LLM call, the agent reads the excerpts from its own areas (`application/knowledge.py`): all of them
+when they fit the prompt budget, otherwise ranked by embeddings (`OPENAI_EMBEDDING_MODEL`) blended
+with keyword matching, or keywords alone in `stub` mode. Retrieval can never block email handling: any
+failure means the agent acts without extra knowledge. The agent log records which documents were
+read, and `POST /knowledge/preview` shows exactly what an agent would read for a given email. Prices
+don't belong in the knowledge base. The agents are told never to take amounts from it; rate profiles
+own pricing.
+
 Typical email flow:
 
 1. A mailbox bridge forwards inbound mail to `POST /webhooks/email` (HMAC-signed, idempotent).

@@ -31,6 +31,9 @@ class ParsedTransportRequestDraft:
     confidence: float
     missing_fields: tuple[str, ...]
     action: str = "create"
+    # Titles of the knowledge-base documents the agent read before parsing
+    # (application/knowledge.py) - surfaced in the agent log for traceability.
+    consulted_documents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,7 @@ class ParsedCarrierOfferDraft:
     notes: str | None
     confidence: float
     missing_fields: tuple[str, ...]
+    consulted_documents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,7 @@ class QuoteReplyInterpretation:
     intent: QuoteReplyIntent
     revised_price: float | None
     confidence: float
+    consulted_documents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -96,6 +101,7 @@ class ParsedCustomerDetails:
     contact_email: str | None
     contact_phone: str | None
     confidence: float
+    consulted_documents: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -576,3 +582,44 @@ class QuoteDocumentRecord:
     acceptance_events: tuple[QuoteAcceptanceEventRecord, ...]
     request: RequestDetailRecord | None
     sent_email: OutboundReplyRecord | None
+
+
+@dataclass(frozen=True)
+class KnowledgeDocumentRecord:
+    """One knowledge-base document (migrations/0016_knowledge_base.sql) -
+    reference material the agents read before acting, not case paperwork
+    (that's DocumentRecord)."""
+
+    id: str
+    public_id: str
+    title: str
+    domain: str
+    source_filename: str | None
+    char_count: int
+    chunk_count: int
+    embedded: bool
+    uploaded_by: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
+class KnowledgeDocumentDetailRecord:
+    document: KnowledgeDocumentRecord
+    text: str
+
+
+@dataclass(frozen=True)
+class KnowledgeChunkInput:
+    ordinal: int
+    text: str
+    embedding: tuple[float, ...] | None
+
+
+@dataclass(frozen=True)
+class KnowledgeChunkRecord:
+    document_id: str
+    document_title: str
+    domain: str
+    ordinal: int
+    text: str
+    embedding: tuple[float, ...] | None

@@ -1,6 +1,7 @@
 import json
 import secrets
 import sqlite3
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,10 @@ from qinora.application.read_models import (
     InboxDetailRecord,
     InboxRecord,
     InvoiceRecord,
+    KnowledgeChunkInput,
+    KnowledgeChunkRecord,
+    KnowledgeDocumentDetailRecord,
+    KnowledgeDocumentRecord,
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteAcceptanceEventRecord,
@@ -53,6 +58,7 @@ from qinora.domain import (
     assert_shipment_transition,
     next_quote_revision,
 )
+from qinora.infrastructure.knowledge_text import knowledge_revision
 
 
 class SQLiteDatabase:
@@ -330,6 +336,27 @@ class SQLiteDatabase:
                   contact_id text,
                   uploaded_by text,
                   created_at text not null default current_timestamp
+                );
+
+                create table if not exists knowledge_documents (
+                  id text primary key,
+                  public_id text not null unique,
+                  title text not null,
+                  domain text not null,
+                  source_filename text,
+                  body_text text not null,
+                  uploaded_by text,
+                  created_at text not null default current_timestamp
+                );
+
+                create table if not exists knowledge_chunks (
+                  id text primary key,
+                  document_id text not null references knowledge_documents(id)
+                    on delete cascade,
+                  ordinal integer not null,
+                  body_text text not null,
+                  embedding text,
+                  unique (document_id, ordinal)
                 );
 
                 create table if not exists case_notes (
@@ -1522,6 +1549,153 @@ class SQLiteDocumentRepository:
                 ),
             ).fetchone()
         return _document_from_sqlite_row(row)
+
+
+class SQLiteKnowledgeRepository:
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
+
+    async def create_document(
+        self,
+        *,
+        title: str,
+        domain: str,
+        source_filename: str | None,
+        text: str,
+        chunks: Sequence[KnowledgeChunkInput],
+        uploaded_by: str | None,
+    ) -> KnowledgeDocumentRecord:
+        document_id = str(uuid4())
+        with self._database.connect() as connection:
+            last = connection.execute(
+                "select public_id from knowledge_documents order by public_id desc limit 1"
+            ).fetchone()
+            sequence = int(last["public_id"].split("-")[1]) + 1 if last else 1
+            connection.execute(
+                """
+                insert into knowledge_documents
+                  (id, public_id, title, domain, source_filename, body_text, uploaded_by)
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    document_id,
+                    f"KB-{sequence:04d}",
+                    title,
+                    domain,
+                    source_filename,
+                    text,
+                    uploaded_by,
+                ),
+            )
+            connection.executemany(
+                """
+                insert into knowledge_chunks (id, document_id, ordinal, body_text, embedding)
+                values (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        str(uuid4()),
+                        document_id,
+                        chunk.ordinal,
+                        chunk.text,
+                        json.dumps(list(chunk.embedding)) if chunk.embedding else None,
+                    )
+                    for chunk in chunks
+                ],
+            )
+            row = connection.execute(
+                _SQLITE_KNOWLEDGE_DOCUMENT_SELECT + " where d.id = ? group by d.id",
+                (document_id,),
+            ).fetchone()
+        return _knowledge_document_from_row(row)
+
+    async def list_documents(self) -> list[KnowledgeDocumentRecord]:
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                _SQLITE_KNOWLEDGE_DOCUMENT_SELECT + " group by d.id order by d.created_at desc, "
+                "d.public_id desc"
+            ).fetchall()
+        return [_knowledge_document_from_row(row) for row in rows]
+
+    async def get_document(self, document_id: str) -> KnowledgeDocumentDetailRecord | None:
+        with self._database.connect() as connection:
+            row = connection.execute(
+                _SQLITE_KNOWLEDGE_DOCUMENT_SELECT + " where d.id = ? group by d.id",
+                (document_id,),
+            ).fetchone()
+            text = connection.execute(
+                "select body_text from knowledge_documents where id = ?", (document_id,)
+            ).fetchone()
+        if row is None or text is None:
+            return None
+        return KnowledgeDocumentDetailRecord(
+            document=_knowledge_document_from_row(row), text=text["body_text"]
+        )
+
+    async def delete_document(self, document_id: str) -> bool:
+        with self._database.connect() as connection:
+            connection.execute("delete from knowledge_chunks where document_id = ?", (document_id,))
+            cursor = connection.execute(
+                "delete from knowledge_documents where id = ?", (document_id,)
+            )
+        return cursor.rowcount > 0
+
+    async def list_chunks(self, domains: Collection[str]) -> list[KnowledgeChunkRecord]:
+        if not domains:
+            return []
+        placeholders = ", ".join("?" for _ in domains)
+        with self._database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                select c.document_id, d.title, d.domain, c.ordinal, c.body_text, c.embedding
+                from knowledge_chunks c
+                join knowledge_documents d on d.id = c.document_id
+                where d.domain in ({placeholders})
+                order by d.created_at, d.public_id, c.ordinal
+                """,
+                tuple(domains),
+            ).fetchall()
+        return [
+            KnowledgeChunkRecord(
+                document_id=row["document_id"],
+                document_title=row["title"],
+                domain=row["domain"],
+                ordinal=row["ordinal"],
+                text=row["body_text"],
+                embedding=tuple(json.loads(row["embedding"])) if row["embedding"] else None,
+            )
+            for row in rows
+        ]
+
+    async def revision(self) -> str:
+        with self._database.connect() as connection:
+            rows = connection.execute("select id from knowledge_documents order by id").fetchall()
+        return knowledge_revision(row["id"] for row in rows)
+
+
+_SQLITE_KNOWLEDGE_DOCUMENT_SELECT = """
+    select d.id, d.public_id, d.title, d.domain, d.source_filename,
+      length(d.body_text) as char_count, count(c.id) as chunk_count,
+      coalesce(max(c.embedding is not null), 0) as embedded,
+      d.uploaded_by, d.created_at
+    from knowledge_documents d
+    left join knowledge_chunks c on c.document_id = d.id
+"""
+
+
+def _knowledge_document_from_row(row: Any) -> KnowledgeDocumentRecord:
+    return KnowledgeDocumentRecord(
+        id=str(row["id"]),
+        public_id=row["public_id"],
+        title=row["title"],
+        domain=row["domain"],
+        source_filename=row["source_filename"],
+        char_count=int(row["char_count"] or 0),
+        chunk_count=int(row["chunk_count"] or 0),
+        embedded=bool(row["embedded"]),
+        uploaded_by=row["uploaded_by"],
+        created_at=str(row["created_at"]),
+    )
 
 
 class SQLiteCaseNoteRepository:

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from qinora.application.agent_registry import QUINN
 from qinora.application.read_models import ParsedCarrierOfferDraft
-from qinora.infrastructure.llm.openai_client import OpenAIStructuredClient, require_openai_api_key
-from qinora.infrastructure.settings import Settings
+from qinora.infrastructure.llm.openai_client import KnowledgeGroundedLLM
 
 SYSTEM_PROMPT = """You are Quinn, an assistant that reads a carrier's (subcontractor's) \
 free-text reply to a booking/rate request and extracts a structured offer for the \
@@ -62,15 +62,11 @@ class StubCarrierOfferParsingLLM:
         )
 
 
-class OpenAICarrierOfferParsingLLM:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
+class OpenAICarrierOfferParsingLLM(KnowledgeGroundedLLM):
+    agent_key = QUINN.key
 
     async def parse(self, *, raw_text: str) -> ParsedCarrierOfferDraft:
-        client = OpenAIStructuredClient(
-            require_openai_api_key(self._settings), self._settings.openai_model
-        )
-        result = await client.complete(
+        result, brief = await self._complete(
             system_prompt=SYSTEM_PROMPT,
             user_text=raw_text,
             schema=_CarrierOfferSchema,
@@ -83,4 +79,5 @@ class OpenAICarrierOfferParsingLLM:
             notes=result.notes,
             confidence=result.confidence,
             missing_fields=tuple(result.missing_fields),
+            consulted_documents=brief.document_titles,
         )
