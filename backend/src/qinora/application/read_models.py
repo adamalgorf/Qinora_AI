@@ -537,3 +537,17 @@ class CaseNoteRecord:
     author: str
     body_text: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class QuoteDocumentRecord:
+    """Everything shown when opening a quote (Offerter page) and rendered into
+    its downloadable PDF - the quote with its customer/lane/carrier context,
+    the request it answers (mode, weight, cargo) and the email it was sent in.
+    """
+
+    quote: QuoteRecord
+    line_items: tuple[QuoteLineItemRecord, ...]
+    acceptance_events: tuple[QuoteAcceptanceEventRecord, ...]
+    request: RequestDetailRecord | None
+    sent_email: OutboundReplyRecord | None

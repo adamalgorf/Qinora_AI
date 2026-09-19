@@ -11,9 +11,12 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DataTable } from "@/features/modules/DataTable";
 import { apiGet, type QuoteListItem } from "@/shared/api/client";
 
+import { QuoteDetailSheet } from "./QuoteDetailSheet";
+
 export function QuotesPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [openQuoteId, setOpenQuoteId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["quotes"],
     queryFn: () => apiGet<QuoteListItem[]>("/quotes"),
@@ -78,12 +81,12 @@ export function QuotesPage() {
             ]}
             loading={query.isLoading}
             rows={rows}
-            onRowClick={(row) =>
-              row.request_id ? navigate(`/cases/${row.request_id}`) : undefined
-            }
+            onRowClick={(row) => setOpenQuoteId(row.id)}
           />
         </CardContent>
       </Card>
+
+      <QuoteDetailSheet quoteId={openQuoteId} onClose={() => setOpenQuoteId(null)} />
     </PageShell>
   );
 }

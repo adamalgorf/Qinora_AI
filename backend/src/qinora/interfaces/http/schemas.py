@@ -258,8 +258,11 @@ class QuoteAcceptanceEventItem(BaseModel):
 
 class QuoteDetailResponse(BaseModel):
     quote: QuoteListItem
+    reference: str
     line_items: list[QuoteLineItem]
     acceptance_events: list[QuoteAcceptanceEventItem]
+    request: RequestDetailResponse | None = None
+    sent_email: OutboundReplyItem | None = None
 
 
 class SearchResultItem(BaseModel):

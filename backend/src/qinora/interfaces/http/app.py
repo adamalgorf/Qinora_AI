@@ -15,6 +15,9 @@ def create_app() -> FastAPI:
         allow_origins=list(container.settings.cors_allowed_origins),
         allow_methods=["*"],
         allow_headers=["*"],
+        # Lets the frontend read the server-chosen filename of downloads
+        # (e.g. GET /quotes/{id}/pdf) when it runs on another origin.
+        expose_headers=["Content-Disposition"],
     )
 
     for router in routers:

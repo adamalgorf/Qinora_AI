@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from urllib.parse import quote as url_quote
+
+from fastapi import APIRouter, HTTPException, Response, status
 
 from qinora.application import (
     AuthContext,
@@ -13,6 +15,7 @@ from qinora.application import (
     Role,
     SendQuoteCommand,
 )
+from qinora.infrastructure.quote_pdf import quote_filename, quote_reference, render_quote_pdf
 from qinora.interfaces.http.auth import require_roles
 from qinora.interfaces.http.container import AppContainer
 from qinora.interfaces.http.dependencies import AUTH_CONTEXT, CONTAINER
@@ -30,6 +33,9 @@ from qinora.interfaces.http.schemas import (
     QuoteReplyPayload,
     QuoteReplyResponse,
     QuoteResponseEventItem,
+    RequestCargoLineItem,
+    RequestDetailResponse,
+    RequestListItem,
     SendQuoteResponse,
     ShipmentListItem,
 )
@@ -50,16 +56,53 @@ async def quote_detail(
     quote_id: str,
     container: AppContainer = CONTAINER,
 ) -> QuoteDetailResponse:
-    detail = await container.operational_queries.get_quote_detail(quote_id)
-    if detail is None:
+    document = await container.operational_queries.get_quote_document(quote_id)
+    if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found")
 
+    request = document.request
     return QuoteDetailResponse(
-        quote=QuoteListItem(**detail.quote.__dict__),
-        line_items=[QuoteLineItem(**item.__dict__) for item in detail.line_items],
+        quote=QuoteListItem(**document.quote.__dict__),
+        reference=quote_reference(document),
+        line_items=[QuoteLineItem(**item.__dict__) for item in document.line_items],
         acceptance_events=[
-            QuoteAcceptanceEventItem(**item.__dict__) for item in detail.acceptance_events
+            QuoteAcceptanceEventItem(**item.__dict__) for item in document.acceptance_events
         ],
+        request=(
+            RequestDetailResponse(
+                request=RequestListItem(**request.request.__dict__),
+                review_reason=request.review_reason,
+                created_at=request.created_at,
+                cargo_lines=[RequestCargoLineItem(**line.__dict__) for line in request.cargo_lines],
+            )
+            if request
+            else None
+        ),
+        sent_email=OutboundReplyItem(**document.sent_email.__dict__)
+        if document.sent_email
+        else None,
+    )
+
+
+@router.get("/quotes/{quote_id}/pdf")
+async def quote_pdf(
+    quote_id: str,
+    container: AppContainer = CONTAINER,
+) -> Response:
+    document = await container.operational_queries.get_quote_document(quote_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found")
+
+    filename = quote_filename(document)
+    return Response(
+        content=render_quote_pdf(document),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{filename.encode('ascii', 'replace').decode()}\"; "
+                f"filename*=UTF-8''{url_quote(filename)}"
+            )
+        },
     )
 
 

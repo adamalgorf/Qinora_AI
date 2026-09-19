@@ -16,6 +16,7 @@ from qinora.application.read_models import (
     OperationalTaskRecord,
     OutboundReplyRecord,
     QuoteDetailRecord,
+    QuoteDocumentRecord,
     QuoteRecord,
     RequestDetailRecord,
     RequestRecord,
@@ -180,6 +181,35 @@ class OperationalQueries:
 
     async def get_quote_detail(self, quote_id: str) -> QuoteDetailRecord | None:
         return await self._repository.get_quote_detail(quote_id)
+
+    async def get_quote_document(self, quote_id: str) -> QuoteDocumentRecord | None:
+        detail = await self._repository.get_quote_detail(quote_id)
+        if detail is None:
+            return None
+
+        # list_quotes is the one query that resolves customer/lane/carrier,
+        # so reuse it rather than duplicating those joins per adapter.
+        quote = next(
+            (item for item in await self._repository.list_quotes() if item.id == quote_id),
+            detail.quote,
+        )
+        request = (
+            await self._repository.get_request_detail(quote.request_id)
+            if quote.request_id
+            else None
+        )
+        sent_emails = [
+            reply
+            for reply in await self._repository.list_outbound_replies()
+            if reply.quote_id == quote_id
+        ]
+        return QuoteDocumentRecord(
+            quote=quote,
+            line_items=detail.line_items,
+            acceptance_events=detail.acceptance_events,
+            request=request,
+            sent_email=max(sent_emails, key=lambda reply: reply.created_at, default=None),
+        )
 
     async def list_shipments(self) -> list[ShipmentRecord]:
         return await self._repository.list_shipments()

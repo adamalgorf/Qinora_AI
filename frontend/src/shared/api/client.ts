@@ -138,6 +138,15 @@ export type QuoteListItem = {
   carrier_name: string | null;
 };
 
+export type QuoteDetailResponse = {
+  quote: QuoteListItem;
+  reference: string;
+  line_items: QuoteLineItem[];
+  acceptance_events: QuoteAcceptanceEventItem[];
+  request: RequestDetailResponse | null;
+  sent_email: OutboundReplyItem | null;
+};
+
 export type QuoteLineItem = {
   id: string;
   quote_id: string;
@@ -555,6 +564,28 @@ export async function apiUpload<TResponse>(path: string, formData: FormData): Pr
   }
 
   return (await response.json()) as TResponse;
+}
+
+/** Fetches a file with the user's auth token and saves it via the browser. */
+export async function apiDownload(path: string, fallbackFilename: string): Promise<void> {
+  const token = getAuthToken();
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw await toApiProblem(response);
+  }
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const filename = encoded ? decodeURIComponent(encoded) : fallbackFilename;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function jsonHeaders(): HeadersInit {
