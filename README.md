@@ -1,19 +1,75 @@
 # Qinora AI / QiNora TMS
 
-Workflow-first Transport Management System for 4PL operators and freight forwarders.
+Workflow-first Transport Management System for 4PL operators and freight forwarders. Qinora reads
+incoming customer and carrier email, turns it into structured transport cases, sources carrier
+prices, quotes the customer and follows the order through booking, delivery and invoice audit.
 
-QiNora is intentionally not built as an always-on multi-agent model. The core product is a
-deterministic order-to-cash workflow with clean architecture boundaries. AI can be added later
-for targeted extraction or summarization, but the MVP keeps cost, latency and operational risk low.
+Production runs at **app.qinora.se** (Google Cloud, region `europe-north2`).
+
+## How it works
+
+The core product is a deterministic order-to-cash workflow with clean architecture boundaries.
+AI is used only for narrow tasks (parsing free-text requests, reading carrier offers, interpreting
+customer replies) and sits behind ports, so it can be swapped for a stub. Three agents do that work:
+
+| Agent | Key | Job |
+| --- | --- | --- |
+| **Nora** | `request_parsing_agent` | Parses new inbound RFQ emails into a transport request |
+| **Quinn** | `carrier_offer_agent` | Reads carrier replies to freight requests |
+| **Orion** | `quote_response_agent` | Interprets the customer's reply to a quote |
+
+Each agent can be enabled/disabled, switched between manual / assisted / guarded-auto mode and given
+a minimum confidence threshold from the **Automationer** page.
+
+Typical email flow:
+
+1. A mailbox bridge forwards inbound mail to `POST /webhooks/email` (HMAC-signed, idempotent).
+2. Nora parses it into a case. Missing data creates a clarification request; unknown carriers'
+   prices are sourced through automatic carrier RFQs (`sourcing` status).
+3. A quote is created, sent to the customer (queued in the outbound queue) and Orion handles the reply
+   (accepted / revised / rejected). Unknown senders who confirm an order are registered as customers.
+4. Accepted quotes become shipments, which follow the shipment status machine to delivery and an
+   invoice audit.
+
+See [docs/architecture.md](docs/architecture.md) for layers and the dependency rule.
 
 ## Stack
 
-- Backend: Python, FastAPI, Pydantic v2, clean architecture
-- Frontend: TypeScript, React, Vite, React Query
-- UI: shadcn-style local components with Tailwind CSS v4
-- Tests: pytest, ruff, TypeScript build
+- **Backend:** Python 3.12+, FastAPI, Pydantic v2, raw SQL (psycopg for Postgres, a parallel SQLite
+  adapter for local dev), plain `.sql` migrations
+- **Frontend:** TypeScript, React 19, Vite, Tailwind CSS 4, shadcn/Radix components, React Query,
+  React Router. Font is Inter; colors are semantic HSL tokens in `frontend/src/app/styles.css`
+- **Infra:** Cloud Run, Cloud SQL (Postgres), GCS + Cloud CDN, HTTPS load balancer, all via Terraform
+  in `infra/gcp/`
+- **Tests/lint:** pytest, ruff, `tsc` typecheck
 
-## Run Backend
+## Repository layout
+
+```text
+backend/            FastAPI app, workers, migrations, tests
+  src/qinora/domain          pure business rules
+  src/qinora/application     use cases and ports
+  src/qinora/infrastructure  SQLite/Postgres, LLM adapters, PDF, settings
+  src/qinora/interfaces/http routers, auth, container (composition root)
+  src/qinora/workers         one-shot job entrypoints
+  migrations/                numbered .sql migrations
+frontend/           React operator UI (feature slices under src/features)
+integrations/       mailbox bridges (Outlook/Microsoft 365, Gmail Apps Script)
+infra/gcp/          Terraform for production
+docs/               architecture notes
+docker-compose.yml  local full stack
+```
+
+## Frontend pages
+
+Overview, Inbox (Inkorg), Cases (Ärenden, incl. case detail), Quotes (Offerter, with quote detail and
+PDF download), Automations (Automationer), Documents (Dokument), Customers (Kunder, with manual
+create and CSV import), Analytics, Carriers (Transportörer) and Settings (profile). A login screen is
+shown when the backend requires authentication.
+
+## Run locally
+
+### Backend
 
 ```powershell
 cd backend
@@ -21,27 +77,59 @@ python -m pip install -e ".[dev]"
 python -m uvicorn qinora.interfaces.http.app:app --reload
 ```
 
-## Database
+By default the API uses SQLite at `data/qinora.dev.sqlite3` (override with `QINORA_SQLITE_PATH`) and
+the stub LLM provider, so it runs with no external services.
 
-The first Postgres/Supabase migration lives in:
+### Frontend
 
-```text
-backend/migrations/0001_initial.sql
+```powershell
+npm install
+npm.cmd run dev:web
 ```
 
-It defines the tenant-scoped core schema, operational indexes, shipment status trigger, webhook
-idempotency table and RLS enablement. The current API uses a seed adapter while the Postgres
-repository adapter is wired in.
+The Vite dev server (http://localhost:5173) proxies `/api` to `http://127.0.0.1:8000`.
 
-For local development, the API also boots a SQLite adapter at `data/qinora.dev.sqlite3` by
-default. Override it with `QINORA_SQLITE_PATH`.
+### Full stack with Docker
 
-Set `QINORA_AUTH_TOKEN_SECRET` for signed Bearer tokens. The development UI can issue a local
-dev token through `POST /auth/dev-token`; production auth can replace that endpoint without
-changing the RBAC use cases.
+```powershell
+docker compose up --build
+```
 
-Set `QINORA_PERSISTENCE=postgres` with `DATABASE_URL` to run the API against Postgres. Apply
-migrations first:
+The frontend is served at http://127.0.0.1:8080 (proxying `/api` to the backend) and the backend at
+http://127.0.0.1:8000. `tracking-simulator` and `stale-request-escalator` run as looping services next
+to it. For local Postgres:
+
+```powershell
+docker compose --profile postgres up --build
+```
+
+then set `QINORA_PERSISTENCE=postgres` and apply the migrations against that database.
+
+To run the Outlook bridges too, fill in the `OUTLOOK_*` values in `.env` and use
+`docker compose --profile outlook up`. See
+[integrations/outlook-intake-bridge/README.md](integrations/outlook-intake-bridge/README.md).
+
+## Configuration
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `QINORA_PERSISTENCE` | `sqlite` or `postgres` | `sqlite` |
+| `DATABASE_URL` | Postgres connection string (required for `postgres`) | – |
+| `QINORA_POSTGRES_TENANT_ID` | Tenant id used for tenant-scoped rows | fixed dev UUID |
+| `QINORA_SQLITE_PATH` | SQLite file path | `data/qinora.dev.sqlite3` |
+| `QINORA_AUTH_TOKEN_SECRET` | Signing secret for Bearer tokens – **set in production** | `dev-auth-secret` |
+| `QINORA_REQUIRE_AUTH` | Force login on/off | on with Postgres, off with SQLite |
+| `EMAIL_WEBHOOK_SECRET` | HMAC secret shared with the mailbox bridges – **set in production** | `dev-secret` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins | `*` |
+| `LLM_PROVIDER` | `stub` or `openai` | `stub` |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | Used when `LLM_PROVIDER=openai` | – / `gpt-4o-mini` |
+| `QINORA_DEFAULT_MARKUP_PERCENT` | Default markup on carrier price | `10` |
+| `QINORA_CUSTOMER_MAILBOX` / `QINORA_CARRIER_MAILBOX` | Sender mailboxes for customer / carrier mail | – |
+
+## Database and migrations
+
+Migrations live in `backend/migrations/` (`0001_initial.sql` … currently up to `0015`) and are
+applied in order:
 
 ```powershell
 cd backend
@@ -49,94 +137,62 @@ $env:DATABASE_URL="postgres://postgres:postgres@localhost:5432/qinora"
 python -m qinora.infrastructure.migrations
 ```
 
-## Run Frontend
+In production a Cloud Run migration job runs them; it is re-run whenever a new file is added.
 
-```powershell
-npm install
-npm.cmd run dev:web
-```
+## Authentication and users
 
-The Vite dev server proxies `/api` to `http://127.0.0.1:8000`.
+Login is per-user with roles (`shipper`, `carrier`, `4pl_tower`, `admin`, `superadmin`). Endpoints: `POST /auth/login`,
+`GET /auth/me`, `POST /auth/change-password`, and user management under `/users` (admin only).
+`POST /auth/dev-token` issues a local dev token and is for development only.
 
-## Run Workers
-
-`docker compose up` (below) now runs all three of these continuously, each looping its
-one-shot entrypoint on an interval (30s/60s/300s) against the same data volume as the
-`backend` service. Use the commands below only when running the backend outside Docker.
-
-Process queued outbound customer replies:
+The first account cannot be created through the API (creating users needs a logged-in admin), so
+bootstrap it from the CLI:
 
 ```powershell
 cd backend
-python -m qinora.workers.outbound_mailer
+python -m qinora.infrastructure.bootstrap_admin --email you@example.com --full-name "Name" --password "<password>" --role admin
 ```
 
-Run the tracking simulator, which advances in-transit shipments and creates invoice audits:
+## Workers
 
-```powershell
-cd backend
-python -m qinora.workers.tracking_simulator
-```
+Workers are one-shot entrypoints (`python -m qinora.workers.<name>`), run on a schedule in
+production (Cloud Run Jobs + Cloud Scheduler) and in a loop in Docker Compose.
 
-Escalate stale clarification requests into Control Tower tasks:
+| Worker | Job |
+| --- | --- |
+| `outlook_bridge` | Forwards unread Outlook mail to `/webhooks/email`, sends queued outbound mail through Microsoft Graph and acks it back. **This is the real mail sender.** |
+| `carrier_rfq_collector` | Sweeps sent carrier RFQs for replies |
+| `tracking_simulator` | Advances in-transit shipments and creates invoice audits |
+| `stale_request_escalator` | Escalates stale clarification requests into Control Tower tasks |
+| `outbound_mailer` | **Test double only.** Marks queued mail as sent without delivering it. Never run it against real data next to the Outlook bridge |
 
-```powershell
-cd backend
-python -m qinora.workers.stale_request_escalator
-```
+> `docker-compose.yml` deliberately does not include `outbound_mailer`: running it next to the
+> Outlook bridge silently swallows real customer emails. Note that `infra/gcp/main.tf` still defines a
+> scheduled `outbound_mailer` job – see the comment in
+> `backend/src/qinora/interfaces/http/routers/outbound.py` before enabling it.
 
-## Run Full Stack With Docker
+## API overview
 
-```powershell
-docker compose up --build
-```
+Interactive docs are served by FastAPI at `/docs`. Main route groups:
 
-The containerized frontend is served at `http://127.0.0.1:8080` and proxies `/api` to the
-backend service. The backend remains reachable at `http://127.0.0.1:8000`.
-Compose waits for backend readiness before starting the frontend service, and before
-starting the three worker services (`outbound-mailer`, `tracking-simulator`,
-`stale-request-escalator`), which then run continuously alongside it.
+- **Health / auth:** `/health`, `/ready`, `/auth/*`, `/users`
+- **Work:** `/inbox/pending`, `/inbox/{id}`, `/requests` (incl. `/requests/parse`), `/cases`,
+  `/cases/{id}`, `/cases/{id}/notes`, `/tasks`, `/search`
+- **Quotes:** `/quotes`, `/quotes/{id}`, `/quotes/{id}/pdf`, `/quotes/{id}/send`,
+  `/quotes/{id}/reply`, `/quotes/{id}/accept`
+- **Shipments / invoices:** `/shipments`, `/shipments/{id}/status`, `/shipments/{id}/override`,
+  `/shipments/{id}/timeline`, `/shipments/{id}/invoice`, `/invoices`
+- **CRM:** `/contacts`, `/contacts/{id}`, `/contacts/import`
+- **Carriers / pricing:** `/carriers`, `/carriers/intelligence`, `/rate-profiles`
+- **Documents:** `/documents`, `/documents/{id}`, `/documents/{id}/content`
+- **Automation / analytics:** `/automations`, `/agents/configs`, `/agents/{key}/config`,
+  `/agents/logs`, `/analytics/summary`, `/dashboard/summary`
+- **Email plumbing (HMAC-signed):** `/webhooks/email`, `/outbound/next-queued`,
+  `/outbound/{queue}/{id}/ack`, `/outbound/{queue}/{id}/fail`, `/outbound/collect-carrier-rfqs`,
+  `/emails/outbound`
 
-To run a local Postgres service for production-style persistence:
-
-```powershell
-docker compose --profile postgres up --build
-```
-
-Then set `QINORA_PERSISTENCE=postgres` and run the migrations against the compose Postgres URL
-before starting the backend against that database.
-
-## API Modules
-
-- `POST /demo/flow`
-- `GET /health`
-- `GET /ready`
-- `GET /dashboard/summary`
-- `GET /requests`
-- `GET /contacts`
-- `GET /quotes`
-- `GET /quotes/{id}`
-- `GET /shipments`
-- `POST /shipments/{id}/override`
-- `GET /carriers`
-- `POST /carriers/intelligence`
-- `GET /inbox/pending`
-- `GET /agents/logs`
-- `GET /agents/configs`
-- `POST /agents/{key}/config`
-- `POST /webhooks/email`
-- `GET /auth/me`
-- `POST /auth/dev-token`
-- `GET /emails/outbound`
-- `POST /emails/outbound/process`
-- `POST /shipments/tracking-simulator/run`
-
-## MVP Flow
-
-The simplest end-to-end path is exposed as `POST /demo/flow`. It creates a transport request,
-prices and sends a quote, processes the outbound queue, books a shipment, advances it to delivered,
-and audits the invoice. The Control Tower page has a `Run demo flow` button that calls this endpoint
-and refreshes the operational lists.
+`POST /demo/flow` still exists as a backend smoke-test endpoint that runs a request-to-invoice
+scenario; it is no longer exposed in the UI.
 
 ## Verify
 
@@ -149,3 +205,19 @@ cd ..
 npm.cmd run typecheck
 npm.cmd run build
 ```
+
+The same checks run in GitHub Actions (`ci.yml`).
+
+## Deployment
+
+Every push to `main` runs `.github/workflows/deploy-gcp.yml`:
+
+1. Lint and test the backend.
+2. Build the backend image, push it to Artifact Registry and deploy it to Cloud Run with 0% traffic.
+3. Health-check the candidate revision, then promote it to 100% (automatic rollback on failure).
+4. Build the frontend with `VITE_API_URL=/api`, sync it to the GCS bucket, set no-cache on
+   `index.html` and invalidate the CDN.
+
+The load balancer routes `/api/*` to Cloud Run and everything else to the static site. Infrastructure
+is described in [infra/gcp/README.md](infra/gcp/README.md). `render.yaml` is an older Render/Supabase
+deployment description and is not used for production.
