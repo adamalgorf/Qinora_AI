@@ -230,5 +230,4 @@ Every push to `main` runs `.github/workflows/deploy-gcp.yml`:
    `index.html` and invalidate the CDN.
 
 The load balancer routes `/api/*` to Cloud Run and everything else to the static site. Infrastructure
-is described in [infra/gcp/README.md](infra/gcp/README.md). `render.yaml` is a leftover Render/Supabase
-deployment description from before the move to GCP; it is not used and can be removed.
+is described in [infra/gcp/README.md](infra/gcp/README.md).

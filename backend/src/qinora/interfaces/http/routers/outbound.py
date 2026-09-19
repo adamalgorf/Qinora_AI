@@ -183,7 +183,7 @@ async def collect_carrier_rfqs(
     existing HTTP-triggered cron pattern in this codebase to follow instead
     (workers/stale_request_escalator.py and workers/outbound_mailer.py are
     both standalone scripts, not endpoints); workers/carrier_rfq_collector.py
-    mirrors that standalone-script convention too, for a Render Cron Job or
+    mirrors that standalone-script convention too, for a Cloud Run Job or
     a manual run, in case Code.gs turns out not to be the right scheduler
     for this in production.
     """

@@ -29,10 +29,10 @@
  *      Code.gs contents with this file.
  *   2. Project Settings (gear icon) -> Script Properties -> add:
  *        QINORA_WEBHOOK_SECRET = <the EMAIL_WEBHOOK_SECRET value from the
- *          qinora-backend service's Environment tab on Render>
- *        QINORA_WEBHOOK_URL    = https://qinora-backend.onrender.com/webhooks/email
+ *          backend's Secret Manager entry on GCP>
+ *        QINORA_WEBHOOK_URL    = https://app.qinora.se/api/webhooks/email
  *          (optional - this is also the default if you skip it)
- *        QINORA_OUTBOUND_BASE_URL = https://qinora-backend.onrender.com/outbound
+ *        QINORA_OUTBOUND_BASE_URL = https://app.qinora.se/api/outbound
  *          (optional - this is also the default if you skip it; used for
  *          next-queued/ack/fail/collect-carrier-rfqs, all under this prefix)
  *   3. Run the `installTrigger` function once from the editor (Run menu).
@@ -84,7 +84,7 @@ function forwardNewMail() {
   var secret = getRequiredProperty_("QINORA_WEBHOOK_SECRET");
   var webhookUrl =
     PropertiesService.getScriptProperties().getProperty("QINORA_WEBHOOK_URL") ||
-    "https://qinora-backend.onrender.com/webhooks/email";
+    "https://app.qinora.se/api/webhooks/email";
   var label = getOrCreateLabel_(LABEL_NAME);
 
   var threads = GmailApp.search(GMAIL_SEARCH_QUERY, 0, MAX_MESSAGES_PER_RUN);
@@ -285,7 +285,7 @@ function collectCarrierRfqs_(baseUrl, secret) {
 function getOutboundBaseUrl_() {
   return (
     PropertiesService.getScriptProperties().getProperty("QINORA_OUTBOUND_BASE_URL") ||
-    "https://qinora-backend.onrender.com/outbound"
+    "https://app.qinora.se/api/outbound"
   );
 }
 
