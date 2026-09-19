@@ -10,16 +10,13 @@ in parallel — see git history / session notes if the "why" behind a specific
 choice (e.g. secrets declared inline in `main.tf` rather than a generic
 `modules/secrets` map) looks surprising.
 
-This lives alongside `infra/aws/`, which has a real, previously-applied
-deployment (`terraform.tfstate` present). **Do not delete `infra/aws/`**
-until this GCP stack is live and verified — and when you do, `terraform
-destroy` it first so you don't leave billed AWS resources running with no
-IaC tracking them.
+Production runs entirely on GCP (`qinora-prod`, region `europe-north2`).
+There is no AWS deployment in this repository.
 
 ## Corrections from the original spec
 
-- **Region**: `eu-north1` is AWS's Stockholm code. GCP's equivalent is
-  **`europe-north2`** (Stockholm); `europe-north1` is Finland.
+- **Region**: the stack uses **`europe-north2`** (Stockholm); `europe-north1`
+  is Finland.
 - **Cloud SQL tier**: there's no `db-e2-micro` Cloud SQL tier (`e2-micro` is a
   Compute Engine machine type). The shared-core, dev-friendly Cloud SQL tier
   is **`db-f1-micro`**, used here.
@@ -62,18 +59,24 @@ variable.
 
 ## Background workers
 
-Your docker-compose runs 4 background workers as `while true; do python -m
-qinora.workers.X; sleep N; done` loops. The GCP equivalent of AWS's ECS
-scheduled tasks (`infra/aws/ecs_workers.tf`) is **Cloud Run Jobs + Cloud
-Scheduler** (`modules/scheduled_job`, instantiated once per worker in
-`main.tf`): each job runs the same backend image with its entrypoint
-overridden to one `workers/*.py` batch pass, triggered on a cron schedule.
+Locally, docker-compose runs the background workers as `while true; do python
+-m qinora.workers.X; sleep N; done` loops. On GCP each worker is a **Cloud Run
+Job triggered by Cloud Scheduler** (`modules/scheduled_job`, instantiated once
+per worker in `main.tf`): each job runs the same backend image with its
+entrypoint overridden to one `workers/*.py` batch pass, on a cron schedule.
+Jobs defined today: `outbound-mailer`, `tracking-simulator`,
+`stale-request-escalator` and `outlook-bridge` (every minute, except the
+escalator every 5 minutes), plus a one-off `migrate` job that applies
+`backend/migrations` (re-run it whenever a migration file is added).
 
-Cloud Scheduler's minimum granularity is 1 minute, so `outbound-mailer`
-moves from a 30s poll to 60s — already-queued emails go out up to 30s later
-than before, not a functional change. `tracking-simulator` and
-`outlook-bridge` (60s) and `stale-request-escalator` (5 min) keep their
-existing cadence exactly.
+Cloud Scheduler's minimum granularity is 1 minute.
+
+> **Warning:** `outbound-mailer` runs `workers/outbound_mailer.py`, which uses
+> the `RecordingOutboundMailer` test double: it marks queued outbound mail as
+> sent without delivering it. Real delivery goes through `outlook-bridge`. See
+> the module docstring in
+> `backend/src/qinora/interfaces/http/routers/outbound.py` and the note in
+> `docker-compose.yml` before keeping this job enabled.
 
 `outlook-bridge` needs `outlook_tenant_id`/`outlook_client_id` plus either
 `outlook_client_secret` (application auth) or `outlook_refresh_token`
@@ -148,8 +151,10 @@ output.
 
 ## Deploying the frontend
 
-The static site bucket has no CI wiring here since none was requested;
-build and sync the React app from your GitHub Actions workflow, e.g.:
+The `deploy-frontend` job in `.github/workflows/deploy-gcp.yml` does this on
+every push to `main` (build with `VITE_API_URL=/api`, sync to the bucket, set
+no-cache on `index.html`, invalidate the CDN cache). The equivalent manual
+commands are:
 
 ```bash
 gcloud storage rsync ./frontend/dist gs://<frontend_bucket_name> --delete-unmatched-destination-objects
@@ -160,8 +165,8 @@ gcloud storage objects update "gs://<frontend_bucket_name>/index.html" --cache-c
 
 ## Deploying the backend from GitHub Actions
 
-`.github/workflows/deploy-gcp.yml` already exists and is design-agnostic —
-it does a 0%-traffic canary deploy, health-checks `/ready`, promotes on
+`.github/workflows/deploy-gcp.yml` runs on every push to `main`. It runs the
+tests, then does a 0%-traffic canary deploy, health-checks `/ready`, promotes on
 success, and rolls back on failure. It expects these **GitHub repo
 variables** (Settings → Secrets and variables → Actions → Variables), which
 map directly to this stack's outputs:
@@ -174,6 +179,8 @@ map directly to this stack's outputs:
 | `GCP_SERVICE`                  | `cloud_run_service_name`                |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `workload_identity_provider`          |
 | `GCP_SERVICE_ACCOUNT`          | `github_actions_service_account_email`  |
+| `GCP_FRONTEND_BUCKET`          | `frontend_bucket_name`                  |
+| `GCP_LOAD_BALANCER_URL_MAP`    | the load balancer's URL map name        |
 
 No long-lived service account key is created or needed — GitHub Actions
 authenticates via Workload Identity Federation (OIDC), scoped to this repo
@@ -182,12 +189,13 @@ only.
 ## IAM summary
 
 - **Cloud Run runtime SA**: `roles/cloudsql.client` and
-  `roles/secretmanager.secretAccessor` scoped to only its 4 secrets — not
+  `roles/secretmanager.secretAccessor` scoped to only its own secrets — not
   project-wide. No Vertex AI role (unused — see "Corrections" above).
 - **GitHub Actions deploy SA**: `roles/artifactregistry.writer`,
-  `roles/run.developer`, and `roles/iam.serviceAccountUser` on the Cloud Run
-  SA (needed to deploy revisions running as it). Bound to this repo only via
-  Workload Identity Federation's `attribute_condition`.
+  `roles/run.developer`, `roles/compute.loadBalancerAdmin` (CDN invalidation),
+  a storage grant on the frontend bucket, and `roles/iam.serviceAccountUser`
+  on the Cloud Run SA (needed to deploy revisions running as it). Bound to
+  this repo only via Workload Identity Federation's `attribute_condition`.
 
 ## What's intentionally not here
 

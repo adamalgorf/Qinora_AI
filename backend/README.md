@@ -35,6 +35,11 @@ python -m pytest
 
 ```powershell
 cd backend
-python -m qinora.workers.outbound_mailer
+python -m qinora.workers.outlook_bridge          # real mail in/out via Microsoft Graph
+python -m qinora.workers.carrier_rfq_collector
 python -m qinora.workers.tracking_simulator
+python -m qinora.workers.stale_request_escalator
 ```
+
+`qinora.workers.outbound_mailer` is a test double that marks queued mail as sent without delivering
+it - do not run it against real data. See the [root README](../README.md) for the full picture.

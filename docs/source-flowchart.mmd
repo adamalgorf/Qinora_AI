@@ -3,9 +3,9 @@ flowchart TD
     B --> C[Nora Intake<br/>classify intent + language]
     C --> D[Nora<br/>sender -> CRM contact]
     D --> E[Nora<br/>extract logistics fields]
-    E --> F{Vera Validate<br/>weight, dims, times complete?}
-    F -- No --> G[Cy Dispatch<br/>operational_tasks escalation]
-    F -- Yes --> H[Quinn Quote<br/>resolve pricing + create quote]
+    E --> F{Validation<br/>weight, dims, times complete?}
+    F -- No --> G[Escalation<br/>operational_tasks escalation]
+    F -- Yes --> H[Pricing engine<br/>resolve pricing + create quote]
     H --> I{Pricing gate<br/>price > 0?}
     I -- No --> G
     I -- Yes --> J[outbound_reply_queue<br/>send quote to customer]
@@ -15,13 +15,13 @@ flowchart TD
     K -- reject --> Z1[quote: rejected]
     L --> M{Overall confidence<br/>>= min_confidence?}
     M -- No --> N[requires_manual_review]
-    M -- Yes --> O[Bex Booking<br/>shipment: booked]
+    M -- Yes --> O[Booking<br/>shipment: booked]
     N --> O
-    O --> P[Trak Flow<br/>in_transit -> delivered]
+    O --> P[Tracking<br/>in_transit -> delivered]
     O --> U{Nora<br/>sender a known customer?}
     U -- No --> V[Nora<br/>ask for company name, org nr,<br/>contact person, address]
     V --> W[Customer replies<br/>Nora registers the new customer]
     P --> Q[tracking-simulator<br/>auto-create invoice]
-    Q --> R[Auri Audit<br/>discrepancy vs quote]
+    Q --> R[Invoice audit<br/>discrepancy vs quote]
     R -- <= max_discrepancy --> S[invoice_approved]
     R -- > max_discrepancy --> T[invoice_disputed]

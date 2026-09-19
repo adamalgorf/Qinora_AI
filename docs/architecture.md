@@ -13,13 +13,14 @@ beats rules and structured parsing.
 - `backend/src/qinora/interfaces/http`: FastAPI routes, signed Bearer auth, HMAC webhooks, idempotency, and HTTP DTO mapping.
 - `backend/src/qinora/interfaces/http/routers`: feature routers that keep HTTP endpoints modular.
 - `backend/src/qinora/interfaces/http/container.py`: composition root for application use cases and infrastructure adapters.
-- `backend/src/qinora/workers`: scheduled and queued job entrypoints for outbound email, tracking simulation, invoice audit, and stale escalation.
+- `backend/src/qinora/workers`: one-shot job entrypoints: Outlook mail bridge (inbound forwarding and real outbound sending), carrier RFQ collection, tracking simulation and invoice audit, and stale escalation. `outbound_mailer` is a test double, not a real sender.
 - `frontend/src`: React/Vite operator interface with feature slices.
-- `backend/migrations`: Postgres/Supabase schema migrations.
-- `docker-compose.yml`: local full-stack deployment wiring Nginx, React, FastAPI, and SQLite volume persistence.
+- `backend/migrations`: numbered Postgres schema migrations (the SQLite adapter mirrors the schema for local development).
+- `docker-compose.yml`: local full-stack deployment wiring an Nginx container serving the React build, FastAPI, the workers and SQLite volume persistence (optional Postgres and Outlook-bridge profiles).
+- `infra/gcp`: Terraform for production on Google Cloud (see `infra/gcp/README.md`).
 
 The local development adapter uses SQLite so the app runs without external services. Production
-persistence uses the Postgres schema in `backend/migrations`, behind the same application ports.
+persistence is Postgres (Cloud SQL) using the schema in `backend/migrations`, behind the same application ports.
 `QINORA_PERSISTENCE` selects the adapter in the composition root; HTTP routes and use cases do
 not know which database is active.
 
@@ -36,12 +37,13 @@ frontend -> HTTP API contract
 
 ## Stack
 
-- Backend API: Python 3.12+, FastAPI, Pydantic v2
+- Backend API: Python 3.12+, FastAPI, Pydantic v2, psycopg 3 (raw SQL), bcrypt for passwords, OpenAI SDK for the agents (or a deterministic stub)
 - Backend tests: pytest
 - Workers: Python async workers behind application ports
-- Frontend: TypeScript, React, Vite
-- Container runtime: Docker Compose with Nginx proxying `/api` to FastAPI
-- Database target: Postgres 15+ with RLS
+- Frontend: TypeScript, React 19, Vite 7, Tailwind CSS 4, shadcn/Radix components, React Query, React Router
+- Local container runtime: Docker Compose with Nginx proxying `/api` to FastAPI
+- Production: Cloud Run (API and worker jobs), Cloud SQL Postgres, GCS + Cloud CDN for the static frontend and an external HTTPS load balancer routing `/api/*` to Cloud Run, all defined in Terraform
+- Mail: Microsoft 365 / Outlook via Graph (`workers/outlook_bridge.py`); the Gmail Apps Script bridge is legacy
 
 ## Core Rules Captured First
 
@@ -63,12 +65,11 @@ frontend -> HTTP API contract
 - Email webhooks require HMAC and idempotency at the API boundary.
 - HTTP auth accepts signed Bearer tokens and maps them into framework-free RBAC context.
 - `/health` proves the HTTP process is alive; `/ready` verifies the active persistence adapter.
-- Frontend modules consume backend API endpoints through the Vite `/api` proxy.
+- The frontend calls the backend under `/api`: through the Vite proxy in development, Nginx in Docker Compose and the load balancer in production.
 - SQLite and Postgres repositories implement the same application ports, preserving the dependency rule.
 
-## MVP Flow
+## Smoke-test flow
 
 - `DemoFlowUseCase` is a thin application-layer orchestration over existing use cases.
-- `POST /demo/flow` creates a complete request-to-invoice scenario for local demos and smoke tests.
+- `POST /demo/flow` runs a complete request-to-invoice scenario as a backend smoke test. It is no longer exposed in the UI.
 - The flow is deterministic: request validation, pricing gate, carrier scoring, shipment FSM and invoice audit all run through ordinary domain/application rules.
-- This endpoint is for demonstration and onboarding; production workflows should keep the same use-case boundaries and replace demo inputs with real operator/customer inputs.

@@ -10,7 +10,8 @@ Production runs at **app.qinora.se** (Google Cloud, region `europe-north2`).
 
 The core product is a deterministic order-to-cash workflow with clean architecture boundaries.
 AI is used only for narrow tasks (parsing free-text requests, reading carrier offers, interpreting
-customer replies) and sits behind ports, so it can be swapped for a stub. Three agents do that work:
+customer replies, analysing RFQs) and sits behind ports, so it can be swapped for a stub. Three
+named agents do that work:
 
 | Agent | Key | Job |
 | --- | --- | --- |
@@ -18,7 +19,8 @@ customer replies) and sits behind ports, so it can be swapped for a stub. Three 
 | **Quinn** | `carrier_offer_agent` | Reads carrier replies to freight requests |
 | **Orion** | `quote_response_agent` | Interprets the customer's reply to a quote |
 
-Each agent can be enabled/disabled, switched between manual / assisted / guarded-auto mode and given
+A separate RFQ-analysis graph (`POST /rfq/analyze`) uses the same OpenAI client. Each agent can be
+enabled/disabled, switched between manual / assisted / guarded-auto mode and given
 a minimum confidence threshold from the **Automationer** page.
 
 Typical email flow:
@@ -35,13 +37,22 @@ See [docs/architecture.md](docs/architecture.md) for layers and the dependency r
 
 ## Stack
 
-- **Backend:** Python 3.12+, FastAPI, Pydantic v2, raw SQL (psycopg for Postgres, a parallel SQLite
-  adapter for local dev), plain `.sql` migrations
-- **Frontend:** TypeScript, React 19, Vite, Tailwind CSS 4, shadcn/Radix components, React Query,
-  React Router. Font is Inter; colors are semantic HSL tokens in `frontend/src/app/styles.css`
-- **Infra:** Cloud Run, Cloud SQL (Postgres), GCS + Cloud CDN, HTTPS load balancer, all via Terraform
-  in `infra/gcp/`
-- **Tests/lint:** pytest, ruff, `tsc` typecheck
+- **Backend:** Python 3.12+, FastAPI, Pydantic v2, uvicorn. Persistence is raw SQL through psycopg 3
+  (Postgres) with a parallel SQLite adapter for local dev, and plain numbered `.sql` migrations (no
+  ORM). Passwords are hashed with bcrypt, quote PDFs are rendered in-process.
+- **AI:** OpenAI API (`gpt-4o-mini` by default) for the agents, behind ports with a deterministic
+  `stub` provider for local dev and tests. No Vertex AI/Bedrock and no agent framework.
+- **Frontend:** TypeScript, React 19, Vite 7, Tailwind CSS 4, shadcn/Radix components, React Query,
+  React Router 7, lucide icons. Font is Inter; colors are semantic HSL tokens in
+  `frontend/src/app/styles.css`. Built with Node 24 in CI/Docker.
+- **Mail:** Microsoft 365 / Outlook through Microsoft Graph (`workers/outlook_bridge.py`). The Gmail
+  Apps Script bridge in `integrations/gmail-intake-bridge/` is legacy.
+- **Production (Google Cloud only):** Cloud Run (API and worker jobs), Cloud SQL Postgres, Secret
+  Manager, Artifact Registry, GCS + Cloud CDN for the static frontend, an external HTTPS load balancer
+  with Cloud Armor, Cloud Scheduler, all defined in Terraform in `infra/gcp/`. CI/CD is GitHub Actions
+  with Workload Identity Federation.
+- **Local containers:** Docker Compose, with Nginx serving the frontend build.
+- **Tests/lint:** pytest (with pytest-asyncio), ruff, `tsc` typecheck.
 
 ## Repository layout
 
@@ -161,7 +172,7 @@ production (Cloud Run Jobs + Cloud Scheduler) and in a loop in Docker Compose.
 | Worker | Job |
 | --- | --- |
 | `outlook_bridge` | Forwards unread Outlook mail to `/webhooks/email`, sends queued outbound mail through Microsoft Graph and acks it back. **This is the real mail sender.** |
-| `carrier_rfq_collector` | Sweeps sent carrier RFQs for replies |
+| `carrier_rfq_collector` | Sweeps sent carrier RFQs for replies (also triggered by the Outlook bridge on every pass via `/outbound/collect-carrier-rfqs`) |
 | `tracking_simulator` | Advances in-transit shipments and creates invoice audits |
 | `stale_request_escalator` | Escalates stale clarification requests into Control Tower tasks |
 | `outbound_mailer` | **Test double only.** Marks queued mail as sent without delivering it. Never run it against real data next to the Outlook bridge |
@@ -169,7 +180,7 @@ production (Cloud Run Jobs + Cloud Scheduler) and in a loop in Docker Compose.
 > `docker-compose.yml` deliberately does not include `outbound_mailer`: running it next to the
 > Outlook bridge silently swallows real customer emails. Note that `infra/gcp/main.tf` still defines a
 > scheduled `outbound_mailer` job – see the comment in
-> `backend/src/qinora/interfaces/http/routers/outbound.py` before enabling it.
+> `backend/src/qinora/interfaces/http/routers/outbound.py` before keeping it enabled.
 
 ## API overview
 
@@ -219,5 +230,5 @@ Every push to `main` runs `.github/workflows/deploy-gcp.yml`:
    `index.html` and invalidate the CDN.
 
 The load balancer routes `/api/*` to Cloud Run and everything else to the static site. Infrastructure
-is described in [infra/gcp/README.md](infra/gcp/README.md). `render.yaml` is an older Render/Supabase
-deployment description and is not used for production.
+is described in [infra/gcp/README.md](infra/gcp/README.md). `render.yaml` is a leftover Render/Supabase
+deployment description from before the move to GCP; it is not used and can be removed.
